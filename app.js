@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.5.0';
+const APP_VER = '2.5.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -215,14 +215,19 @@ function feeCfg(market) {
   return Object.assign({}, DEFAULT_FEES[market] || DEFAULT_FEES.sz, cfg[market] || {});
 }
 function calcFees(amount, type, market) {
+  /* 口径与 trade-manager calcAshareCost 一致：
+     最低费用 min 针对规费(过户+经手+证管)+佣金 合计，不足时由佣金补足；印花税不参与 */
   const f = feeCfg(market);
   const r4 = x => Math.round(x * 10000) / 10000;
-  const commission = Math.max(r4(amount * f.rate / 1000), Number(f.min) || 0);
-  const stamp = type === 'sell' ? r4(amount * f.stamp / 1000) : 0;
-  const transfer = r4(amount * f.transfer / 1000);
-  const handling = r4(amount * f.handling / 1000);
-  const gov = r4(amount * (f.gov || 0) / 1000);
-  return { commission, stamp, transfer, handling, gov, total: r4(commission + stamp + transfer + handling + gov) };
+  const stamp = type === 'sell' ? amount * f.stamp / 1000 : 0;
+  const transfer = amount * f.transfer / 1000;
+  const gov = amount * (f.gov || 0) / 1000;
+  const handling = amount * f.handling / 1000;
+  const rawComm = amount * f.rate / 1000;
+  const fixTotal = transfer + gov + handling;
+  const minFee = Number(f.min) || 0;
+  const comm = amount > 0 && (fixTotal + rawComm) < minFee ? Math.max(minFee - fixTotal, 0) : rawComm;
+  return { commission: r4(comm), stamp: r4(stamp), transfer: r4(transfer), handling: r4(handling), gov: r4(gov), total: r4(stamp + fixTotal + comm) };
 }
 function buildTradeRow({ type, code, name, market, price, qty, time, note }) {
   const gross = Math.round(price * qty * 10000) / 10000;
@@ -1007,7 +1012,7 @@ function renderHoldings() {
     return `<tr data-code="${esc(h.code)}">
       <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${esc(h.code)} · ${MKT_NAME[h.market] || ''}</span></div></td>
       <td class="num">${h.qty}</td>
-      <td class="num">${fmt2(costPrice)}</td>
+      <td class="num">${fmtP(costPrice)}</td>
       <td class="num price-cell">${price != null ? fmt2(price) : NA}</td>
       <td class="num">${mv != null ? fmt2(mv) : NA}</td>
       <td class="num ${float != null ? pnlCls(float) : ''}">${float != null ? (float >= 0 ? '+' : '') + fmt2(float) : NA}</td>
@@ -1520,6 +1525,15 @@ function bindEvents() {
   /* 持仓：刷新 / 改价 / 明细 */
   $('refreshHoldBtn').addEventListener('click', async () => { await loadAll(); await refreshQuotes(true); toast('已刷新行情'); });
   $('holdRecBtn').addEventListener('click', () => openRecModal());
+  /* 持仓页自动刷新行情 */
+  let holdTimer = null;
+  function setHoldAuto() {
+    if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
+    const sec = parseInt($('holdAuto').value, 10) || 0;
+    if (sec > 0) holdTimer = setInterval(() => { refreshQuotes(true).catch(() => { /* */ }); }, sec * 1000);
+  }
+  $('holdAuto').addEventListener('change', setHoldAuto);
+  setHoldAuto();
   $('holdDetailClose').addEventListener('click', () => { $('holdDetail').hidden = true; });
   $('holdTable').querySelector('tbody').addEventListener('click', e => {
     const sp = e.target.closest('.set-price');

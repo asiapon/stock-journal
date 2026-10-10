@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.5.0">
+<link rel="stylesheet" href="style.css?v=2.5.1">
 </head>
 <body>
 
@@ -139,7 +139,13 @@
       <div class="card">
         <div class="card-title-row">
           <span class="card-title">当前持仓</span>
-          <div style="display:flex;gap:8px">
+          <div style="display:flex;gap:8px;align-items:center">
+            <select id="holdAuto" title="自动刷新行情">
+              <option value="5" selected>自动刷新 5秒</option>
+              <option value="10">10秒</option>
+              <option value="30">30秒</option>
+              <option value="0">关闭</option>
+            </select>
             <button class="btn primary sm" id="holdRecBtn" type="button">＋ 记一笔</button>
             <button class="btn ghost sm" id="refreshHoldBtn" type="button">刷新</button>
           </div>
@@ -507,6 +513,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.5.0"></script>
+<script src="app.js?v=2.5.1"></script>
 </body>
 </html>
