@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.5.5';
+const APP_VER = '2.5.6';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -525,7 +525,11 @@ const ModelMgr = {
       inner = '<option value="">（暂无可选模型）</option>';
     } else {
       const grp = (list, title) => list.length
-        ? `<optgroup label="${title}">` + list.map(m => `<option value="${esc(this.modelId(m))}">${esc(this.shortLabel(m))}</option>`).join('') + '</optgroup>'
+        ? `<optgroup label="${title}">` + list.map(m => {
+            const c = this.creditsText(m);   // 下拉选项带费率，便于挑选；顶栏徽章不带
+            const fee = m.custom ? '' : (c ? `（费率 ${c}）` : '');
+            return `<option value="${esc(this.modelId(m))}">${esc(this.shortLabel(m) + fee)}</option>`;
+          }).join('') + '</optgroup>'
         : '';
       inner = grp(this.platform.map(m => Object.assign({ platform: true }, m)), 'WorkBuddy 平台模型（消耗平台积分）')
             + grp(this.custom.map(c => Object.assign({ custom: true }, c)), '自定义模型（自己的 API Key）');
