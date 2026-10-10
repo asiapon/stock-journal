@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.5.2">
+<link rel="stylesheet" href="style.css?v=2.5.3">
 </head>
 <body>
 
@@ -379,6 +379,7 @@
         <div class="btn-row">
           <button class="btn ghost" id="exportBtn" type="button">导出 JSON 备份</button>
           <button class="btn ghost" id="importBtn" type="button">导入 JSON</button>
+          <button class="btn ghost" id="feeRecalcBtn" type="button">按当前费率重算历史费用</button>
           <button class="btn ghost" id="seedBtn" type="button">载入演示数据</button>
           <button class="btn danger" id="clearBtn" type="button">清空全部数据</button>
           <input type="file" id="importFile" accept=".json" hidden>
@@ -513,6 +514,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.5.2"></script>
+<script src="app.js?v=2.5.3"></script>
 </body>
 </html>

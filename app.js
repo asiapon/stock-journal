@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.5.2';
+const APP_VER = '2.5.3';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1738,6 +1738,24 @@ function bindEvents() {
       await loadAll(); renderAll();
       toast('已清空全部数据');
     } catch (err) { toast(err.message || '清空失败', 'warn'); }
+  });
+  $('feeRecalcBtn').addEventListener('click', () => {
+    confirmDlg('重算历史费用', `将按当前费率设置与最新费用口径（最低佣金由佣金补足规费差额）重新计算 ${S.trades.length} 条交易的费用与发生金额，持仓成本/盈亏随之变化。确定执行？`, async () => {
+      try {
+        let n = 0;
+        for (const t of S.trades) {
+          const fee = calcFees(t.gross_amount, t.transaction_type, t.market);
+          const net = t.transaction_type === 'buy' ? t.gross_amount + fee.total : t.gross_amount - fee.total;
+          if (JSON.stringify(t.fee) !== JSON.stringify(fee) || Number(t.net_amount) !== net) {
+            await store.update('trades', t.id, { fee, net_amount: net });
+            n++;
+          }
+        }
+        await store.log('update', `按当前费率重算历史费用（${n} 条变更）`);
+        await loadAll(); renderAll(); refreshQuotes();
+        toast(`已重算：${n} 条费用有变更`);
+      } catch (err) { toast(err.message || '重算失败', 'warn'); }
+    }, '重算');
   });
   $('seedBtn').addEventListener('click', async () => {
     confirmDlg('载入演示数据', '将写入 2 只持仓、5 条交易记录、3 只自选股及其现价（不影响现有数据，可随时清空）。', async () => {
