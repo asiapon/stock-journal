@@ -68,6 +68,128 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
+const APP_VER = '2.2.0';
+
+/* ============================================================
+   全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
+   与 trade-manager 同源数据：stock-dict.json 5573 条全市场
+   基础数据随应用发布，localStorage 缓存 7 天；用户数据持续学习。
+   ============================================================ */
+const StockDict = {
+  d: {},          // code -> {name, py, mkt}
+  ready: false,
+  async init() {
+    const SEED_KEY = 'sj_stock_dict_seed', AT_KEY = 'sj_stock_dict_at';
+    const TTL = 7 * 24 * 3600 * 1000;
+    let seeded = false;
+    try {
+      const at = Number(localStorage.getItem(AT_KEY) || 0);
+      const seed = localStorage.getItem(SEED_KEY);
+      if (seed && at && Date.now() - at < TTL) { seeded = this.apply(seed) >= 1000; }
+    } catch (e) { /* */ }
+    if (!seeded) {
+      try {
+        const res = await fetch('stock-dict.json?v=' + APP_VER, { cache: 'no-cache' });
+        const raw = await res.text();
+        if (this.apply(raw) >= 1000) {
+          try { localStorage.setItem(SEED_KEY, raw); localStorage.setItem(AT_KEY, String(Date.now())); } catch (e) { /* 配额满 */ }
+        }
+      } catch (e) { /* 拉取失败：仅用已学到的条目 */ }
+    }
+    this.ready = true;
+    this.learnFromState();
+  },
+  apply(raw) {
+    let j = null;
+    try { j = JSON.parse(raw); } catch (e) { return 0; }
+    const arr = (j && j.d) || [];
+    let n = 0;
+    for (const row of arr) {
+      const code = String(row[0] || ''), name = String(row[1] || ''), py = String(row[2] || '');
+      if (!/^\d{6}$/.test(code) || !name) continue;
+      this.d[code] = { name, py, mkt: inferMarket(code) };
+      n++;
+    }
+    return n;
+  },
+  learn(code, name) {
+    code = String(code || '').trim(); name = String(name || '').trim();
+    if (!/^\d{6}$/.test(code) || !name) return;
+    const old = this.d[code];
+    if (old && old.name === name) return;
+    this.d[code] = { name, py: (old && old.py) || '', mkt: inferMarket(code) };
+  },
+  learnFromState() {
+    if (!this.ready) return;
+    (S.trades || []).forEach(t => this.learn(t.stock_code, t.stock_name));
+    (S.watchlist || []).forEach(w => this.learn(w.stock_code, w.stock_name));
+    (S.quotes || []).forEach(q => { if (q && q.stock_code) this.learn(q.stock_code, q.stock_name); });
+  },
+  /* 匹配优先级：代码前缀 > 拼音首字母前缀 > 名称包含 > 拼音包含 */
+  search(txt, limit) {
+    txt = String(txt || '').trim().toLowerCase();
+    if (!txt) return [];
+    const out = [];
+    for (const code in this.d) {
+      const d = this.d[code];
+      const nm = d.name.toLowerCase();
+      const py = d.py || '';
+      let r = -1;
+      if (code.indexOf(txt) === 0) r = 0;
+      else if (py && py.indexOf(txt) === 0) r = 1;
+      else if (nm.indexOf(txt) >= 0) r = 2;
+      else if (py && py.indexOf(txt) >= 0) r = 3;
+      if (r < 0) continue;
+      out.push({ code, name: d.name, mkt: d.mkt, _r: r });
+    }
+    out.sort((a, b) => a._r - b._r || (a.code < b.code ? -1 : 1));
+    const res = out.slice(0, limit || 8);
+    res.forEach(x => delete x._r);
+    return res;
+  },
+  /* 「600519 贵州茅台」/「600519」/「gzmt」/「贵州茅台」统一解析 */
+  resolve(txt) {
+    txt = String(txt || '').trim();
+    const m = txt.match(/^(\d{5,6})(?:[\s·、,，]+(.*))?$/);
+    if (m) {
+      const code = m[1];
+      const name = (m[2] && m[2].trim()) || (this.d[code] && this.d[code].name) || '';
+      return { code, name, mkt: inferMarket(code) };
+    }
+    const hits = this.search(txt, 1);
+    return hits.length ? hits[0] : null;
+  }
+};
+
+/* ---------- 通用联想下拉（自选 / 交易表单共用） ---------- */
+function bindSuggest(inputId, boxId, onPick) {
+  const inp = $(inputId), box = $(boxId);
+  let items = [];
+  const close = () => { box.hidden = true; box.innerHTML = ''; items = []; };
+  inp.addEventListener('input', () => {
+    const v = inp.value.trim();
+    if (!v || !StockDict.ready) { close(); return; }
+    items = StockDict.search(v, 8);
+    if (!items.length) {
+      box.innerHTML = '<div class="sug-empty">无匹配结果，可直接手动录入</div>';
+      box.hidden = false;
+      return;
+    }
+    box.innerHTML = items.map(h =>
+      `<div class="sug-item" data-code="${esc(h.code)}" data-name="${esc(h.name)}" data-mkt="${esc(h.mkt)}"><b>${esc(h.code)}</b>${esc(h.name)}<span>${esc(MKT_NAME[h.mkt] || '')}</span></div>`
+    ).join('');
+    box.hidden = false;
+  });
+  box.addEventListener('mousedown', e => {
+    const it = e.target.closest('.sug-item');
+    if (!it) return;
+    e.preventDefault();
+    onPick({ code: it.dataset.code, name: it.dataset.name, mkt: it.dataset.mkt });
+    close();
+  });
+  inp.addEventListener('keydown', e => { if (e.key === 'Escape') close(); });
+  inp.addEventListener('blur', () => setTimeout(close, 120));
+}
 
 /* 确认模态 */
 let confirmCb = null;
@@ -269,16 +391,52 @@ const ModelMgr = {
     if (m.custom) return `${m.name}·${m.model}（自定义）`;
     return (m.name || m.id) + (m.vendor ? ' · ' + m.vendor : '');
   },
+  /* 当前模型以「ID 字符串」持久化（与 trade-manager 一致），目录未加载时绝不降级覆盖，
+     避免刷新后因目录缓存为空/过期把用户选择冲掉。 */
   loadCur() {
-    try { this.cur = JSON.parse(localStorage.getItem('sj_model_cur') || 'null'); } catch (e) { this.cur = null; }
+    let saved = localStorage.getItem('sj_model_cur') || '';
+    if (saved.startsWith('{')) {
+      // 旧版存的是完整对象 → 迁移为 ID
+      try { const o = JSON.parse(saved); saved = o.custom ? 'c:' + o.key : (o.id ? 'p:' + o.id : ''); } catch (e) { saved = ''; }
+      if (saved) localStorage.setItem('sj_model_cur', saved);
+    }
+    this.savedId = saved || null;
     const all = this.all();
-    if (!this.cur || !all.some(m => this.modelId(m) === this.modelId(this.cur))) this.cur = all[0] || null;
-    if (this.cur) localStorage.setItem('sj_model_cur', JSON.stringify(this.cur));
+    const found = saved ? all.find(m => this.modelId(m) === saved) : null;
+    if (found) {
+      this.cur = found;
+    } else if (saved && !this.loaded) {
+      this.cur = null;          // 目录还没就绪：保留 savedId，等 reload 后再解析
+    } else {
+      this.cur = all[0] || null;
+      if (this.cur) { this.savedId = this.modelId(this.cur); localStorage.setItem('sj_model_cur', this.savedId); }
+    }
   },
   setCur(idStr) {
     const m = this.all().find(x => this.modelId(x) === idStr) || null;
-    if (m) { this.cur = m; localStorage.setItem('sj_model_cur', JSON.stringify(m)); }
+    if (m) {
+      this.cur = m; this.savedId = idStr;
+      localStorage.setItem('sj_model_cur', idStr);
+      this.persistCloud();
+    }
     this.render();
+  },
+  /* 云端 settings 为权威（同 trade-manager 的 app_config 机制），写失败不阻塞 UI */
+  async persistCloud() {
+    if (S.mode !== 'cloud' || !this.cur) return;
+    try { await saveSetting('model_config', JSON.stringify({ cur: this.modelId(this.cur) })); } catch (e) { /* */ }
+  },
+  /* 登录后调用：云端有配置时以云端为准（跨设备一致），本地仅作缓存 */
+  applyCloudConfig() {
+    const raw = S.settings && S.settings['model_config'];
+    if (!raw) return;
+    try {
+      const v = JSON.parse(raw);
+      if (v && v.cur) {
+        localStorage.setItem('sj_model_cur', v.cur);
+        this.savedId = v.cur;
+      }
+    } catch (e) { /* */ }
   },
   render() {
     const all = this.all();
@@ -565,16 +723,19 @@ async function enterApp(user) {
   $('aboutStorage').textContent = S.mode === 'cloud'
     ? '数据存储：WorkBuddy 云数据库（按账号隔离，跨设备同步）'
     : '数据存储：浏览器 localStorage（仅本机，请定期导出备份）';
-  /* 模型初始化：先用缓存渲染下拉，再后台刷新目录 */
+  await loadAll();
+  /* 模型初始化：先同步云端配置 → 缓存渲染 → 后台刷新目录（云端为权威，同 trade-manager） */
   if (!cloudLlm) cloudLlm = initCloudLlm();
-  ModelMgr.loadCache(); ModelMgr.loadCustom(); ModelMgr.loadCur(); ModelMgr.render();
+  ModelMgr.loadCache(); ModelMgr.loadCustom();
+  ModelMgr.applyCloudConfig();
+  ModelMgr.loadCur(); ModelMgr.render();
   if (cloudLlm) {
     ModelMgr.reload().catch(e => {
       const st = $('modelStatus');
       if (st) st.textContent = '模型列表加载失败：' + (e.message || e);
     });
   }
-  await loadAll();
+  StockDict.init();
   renderAll();
 }
 function switchAuthForm(id) {
@@ -598,8 +759,8 @@ async function loadAll() {
     store.query('settings'), store.query('op_logs')
   ]);
   S.trades = trades; S.watchlist = watchlist; S.quotes = quotes; S.opLogs = opLogs;
-  S.settings = {};
-  for (const s of settings) S.settings[s.key] = s.value;
+  S.settings = {}; S._settingRows = {};
+  for (const s of settings) { S.settings[s.key] = s.value; S._settingRows[s.key] = s; }
 }
 
 /* 设置项 upsert */
@@ -897,19 +1058,22 @@ function renderWatch() {
 }
 function fillWatchForm(w) {
   S.editingWatchId = w.id;
+  $('wfInput').value = `${w.stock_code} ${w.stock_name || ''}`;
   $('wfCode').value = w.stock_code;
   $('wfName').value = w.stock_name || '';
   $('wfPrice').value = w.cur_price ?? '';
   $('wfPrev').value = w.prev_close ?? '';
   $('wfGroup').value = w.group_name || '默认';
   $('wfNote').value = w.note || '';
-  $('wfSubmit').textContent = '保存修改';
+  $('wfSaveAdv').textContent = '保存修改';
   $('wfCancel').hidden = false;
+  const adv = $('wfAdv'); if (adv) adv.open = true;
 }
 function resetWatchForm() {
   S.editingWatchId = null;
   $('watchForm').reset();
-  $('wfSubmit').textContent = '添加';
+  const inp = $('wfInput'); inp.value = ''; delete inp.dataset.picked;
+  $('wfSaveAdv').textContent = '保存';
   $('wfCancel').hidden = true;
 }
 
@@ -1072,7 +1236,37 @@ function bindEvents() {
     ModelMgr.loadCur(); ModelMgr.render();
   });
 
+  /* 应用设置：分类页签切换 */
+  $('setTabs').addEventListener('click', e => {
+    const b = e.target.closest('.set-tab');
+    if (!b) return;
+    document.querySelectorAll('#setTabs .set-tab').forEach(x => x.classList.toggle('active', x === b));
+    document.querySelectorAll('#view-me .set-pane').forEach(p => { p.hidden = p.dataset.pane !== b.dataset.set; });
+  });
+
+  /* NL 示例词条：点击填入输入框 */
+  $('quickChips').addEventListener('click', e => {
+    const c = e.target.closest('.chip');
+    if (c) { $('quickNl').value = c.dataset.nl; $('quickNl').focus(); }
+  });
+  $('tradeChips').addEventListener('click', e => {
+    const c = e.target.closest('.chip');
+    if (c) { $('tradeNl').value = c.dataset.nl; $('tradeNl').focus(); }
+  });
+
   /* 交易表单 */
+  bindSuggest('tfCode', 'tfCodeSug', h => {
+    $('tfCode').value = h.code;
+    $('tfName').value = h.name;
+    $('tfMarket').value = h.mkt;
+    updateFeePreview();
+  });
+  bindSuggest('tfName', 'tfNameSug', h => {
+    $('tfCode').value = h.code;
+    $('tfName').value = h.name;
+    $('tfMarket').value = h.mkt;
+    updateFeePreview();
+  });
   $('tfType').addEventListener('change', updateFeePreview);
   $('tfMarket').addEventListener('change', updateFeePreview);
   $('tfPrice').addEventListener('input', updateFeePreview);
@@ -1177,9 +1371,40 @@ function bindEvents() {
     inp.addEventListener('blur', commit);
   }
 
-  /* 自选 */
+  /* 自选：快捷添加（联想）+ 高级编辑 双路径 */
+  bindSuggest('wfInput', 'wfSug', h => {
+    $('wfInput').value = `${h.code} ${h.name}`;
+    $('wfInput').dataset.picked = h.code;
+  });
   $('watchForm').addEventListener('submit', async e => {
     e.preventDefault();
+    if (S.editingWatchId) { await saveWatchAdvanced(); return; }
+    /* 快捷添加：联想命中 / 「代码 名称」/ 纯代码 / 名称拼音 */
+    const inp = $('wfInput');
+    const picked = inp.dataset.picked;
+    const txt = inp.value.trim();
+    let hit = null;
+    if (picked && txt.startsWith(picked)) hit = { code: picked, name: txt.slice(picked.length).trim() };
+    else hit = StockDict.resolve(txt);
+    if (!hit || !hit.code) { toast('未识别股票，可在「高级选项」手动录入', 'warn'); return; }
+    if (!hit.name) hit.name = hit.code;
+    const row = {
+      stock_code: hit.code,
+      stock_name: hit.name,
+      group_name: '默认',
+      note: '', cur_price: null, prev_close: null
+    };
+    try {
+      await store.insert('watchlist', row);
+      await store.log('watch', `添加自选 ${row.stock_name}（${row.stock_code}）`);
+      toast(`已添加自选 ${row.stock_name}`);
+      inp.value = ''; delete inp.dataset.picked;
+      resetWatchForm();
+      await loadAll(); renderWatch(); renderToday();
+    } catch (err) { toast(err.message || '保存失败', 'warn'); }
+  });
+  $('wfSaveAdv').addEventListener('click', () => saveWatchAdvanced());
+  async function saveWatchAdvanced() {
     const row = {
       stock_code: $('wfCode').value.trim(),
       stock_name: $('wfName').value.trim(),
@@ -1188,6 +1413,7 @@ function bindEvents() {
       cur_price: $('wfPrice').value ? parseFloat($('wfPrice').value) : null,
       prev_close: $('wfPrev').value ? parseFloat($('wfPrev').value) : null
     };
+    if (!row.stock_code || !row.stock_name) { toast('请填写代码与名称', 'warn'); return; }
     try {
       if (S.editingWatchId) {
         await store.update('watchlist', S.editingWatchId, row);
@@ -1201,7 +1427,7 @@ function bindEvents() {
       resetWatchForm();
       await loadAll(); renderWatch(); renderToday();
     } catch (err) { toast(err.message || '保存失败', 'warn'); }
-  });
+  }
   $('wfCancel').addEventListener('click', resetWatchForm);
   $('watchTable').querySelector('tbody').addEventListener('click', async e => {
     const starBtn = e.target.closest('.star-watch');

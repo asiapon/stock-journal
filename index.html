@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.1.1">
+<link rel="stylesheet" href="style.css?v=2.2.0">
 </head>
 <body>
 
@@ -108,6 +108,11 @@
             <input type="text" id="quickNl" placeholder="例：40 块卖了 5 手中兴通讯">
             <button class="btn primary" id="quickParseBtn" type="button">AI 解析</button>
           </div>
+          <div class="chips" id="quickChips">
+            <span class="chip" data-nl="买了1000股中兴通讯单价39.5">买了1000股中兴通讯单价39.5</span>
+            <span class="chip" data-nl="40块卖了5手中兴通讯">40块卖了5手中兴通讯</span>
+            <span class="chip" data-nl="昨天12.3买入2000股三峡能源，今天13块止盈一半">昨天买入·今日止盈一半</span>
+          </div>
           <div id="quickHint" class="quick-hint" hidden></div>
           <button class="btn ghost block" id="openFormBtn" type="button">手动填写完整表单</button>
         </div>
@@ -170,6 +175,11 @@
             <input type="text" id="tradeNl" placeholder="例：昨天12.3买入2000股三峡能源，今天13块止盈一半">
             <button class="btn primary" id="tradeParseBtn" type="button">AI 解析</button>
           </div>
+          <div class="chips" id="tradeChips">
+            <span class="chip" data-nl="买了1000股中兴通讯单价39.5">买了1000股中兴通讯单价39.5</span>
+            <span class="chip" data-nl="40块卖了5手中兴通讯">40块卖了5手中兴通讯</span>
+            <span class="chip" data-nl="昨天12.3买入2000股三峡能源，今天13块止盈一半">昨天买入手今止盈一半</span>
+          </div>
           <div id="tradeHint" class="quick-hint" hidden></div>
         <form id="tradeForm" class="form-grid">
           <label>方向
@@ -178,11 +188,13 @@
               <option value="sell">卖出</option>
             </select>
           </label>
-          <label>股票代码
-            <input type="text" id="tfCode" placeholder="如 000063" required pattern="[0-9A-Za-z]{5,6}">
+          <label class="sug-anchor">股票代码
+            <input type="text" id="tfCode" placeholder="如 000063" required pattern="[0-9A-Za-z]{5,6}" autocomplete="off">
+            <div id="tfCodeSug" class="sug-box" hidden></div>
           </label>
-          <label>名称
-            <input type="text" id="tfName" placeholder="中兴通讯">
+          <label class="sug-anchor">名称
+            <input type="text" id="tfName" placeholder="输入代码自动带出，可手改" autocomplete="off">
+            <div id="tfNameSug" class="sug-box" hidden></div>
           </label>
           <label>市场
             <select id="tfMarket">
@@ -243,30 +255,40 @@
     <section id="view-watch" class="view">
       <div class="card">
         <div class="card-title">添加自选</div>
-        <form id="watchForm" class="form-grid">
-          <label>代码
-            <input type="text" id="wfCode" placeholder="如 600519" required pattern="[0-9A-Za-z]{5,6}">
-          </label>
-          <label>名称
-            <input type="text" id="wfName" placeholder="贵州茅台" required>
-          </label>
-          <label>现价（选填）
-            <input type="number" id="wfPrice" step="0.001" min="0" placeholder="手动录入">
-          </label>
-          <label>昨收（选填）
-            <input type="number" id="wfPrev" step="0.001" min="0" placeholder="用于计算涨跌幅">
-          </label>
-          <label>分组
-            <input type="text" id="wfGroup" placeholder="默认 / 科技 / 消费…" list="groupList">
-            <datalist id="groupList"></datalist>
-          </label>
-          <label class="span2">备注 / 加入理由
-            <input type="text" id="wfNote" placeholder="选填，如：人形机器人跟踪">
-          </label>
-          <div class="form-actions span2">
-            <button type="submit" class="btn primary" id="wfSubmit">添加</button>
-            <button type="button" class="btn ghost" id="wfCancel" hidden>取消编辑</button>
+        <form id="watchForm">
+          <div class="add-row sug-anchor">
+            <input type="text" id="wfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt（回车添加）">
+            <div id="wfSug" class="sug-box" hidden></div>
+            <button type="submit" class="btn primary sm" id="wfSubmit">添加</button>
           </div>
+          <details class="cm-details" id="wfAdv">
+            <summary>高级选项（分组 / 备注 / 手动价格）与编辑</summary>
+            <div class="form-grid">
+              <label>代码
+                <input type="text" id="wfCode" placeholder="如 600519" required pattern="[0-9A-Za-z]{5,6}">
+              </label>
+              <label>名称
+                <input type="text" id="wfName" placeholder="贵州茅台" required>
+              </label>
+              <label>现价（选填）
+                <input type="number" id="wfPrice" step="0.001" min="0" placeholder="手动录入">
+              </label>
+              <label>昨收（选填）
+                <input type="number" id="wfPrev" step="0.001" min="0" placeholder="用于计算涨跌幅">
+              </label>
+              <label>分组
+                <input type="text" id="wfGroup" placeholder="默认 / 科技 / 消费…" list="groupList">
+                <datalist id="groupList"></datalist>
+              </label>
+              <label class="span2">备注 / 加入理由
+                <input type="text" id="wfNote" placeholder="选填，如：人形机器人跟踪">
+              </label>
+              <div class="form-actions span2">
+                <button type="button" class="btn primary" id="wfSaveAdv">保存</button>
+                <button type="button" class="btn ghost" id="wfCancel" hidden>取消编辑</button>
+              </div>
+            </div>
+          </details>
         </form>
       </div>
       <div class="card">
@@ -289,19 +311,30 @@
 
     <!-- ============ 应用设置 ============ -->
     <section id="view-me" class="view">
+      <!-- 设置分类页签（参考 trade-manager）：窄屏自动等分 -->
+      <div class="set-tabs" id="setTabs">
+        <button class="set-tab active" data-set="model" type="button">模型</button>
+        <button class="set-tab" data-set="cost" type="button">交易费用</button>
+        <button class="set-tab" data-set="user" type="button">用户与账号</button>
+        <button class="set-tab" data-set="data" type="button">数据管理</button>
+        <button class="set-tab" data-set="log" type="button">操作日志</button>
+      </div>
+
+      <div class="set-pane" data-pane="model">
       <div class="card">
         <div class="card-title-row">
-          <span class="card-title">AI 模型</span>
+          <span class="card-title">大模型设置</span>
           <button class="btn ghost sm" id="modelReloadBtn" type="button">刷新模型列表</button>
         </div>
+        <p class="hint" id="modelStatus">模型用于「记一笔」自然语言解析，云端免密钥调用。</p>
         <div class="form-grid">
           <label class="span2">当前使用模型
             <select id="modelCurSel"><option value="">（加载中）</option></select>
           </label>
         </div>
-        <p class="hint" id="modelStatus">模型用于「记一笔」自然语言解析，云端免密钥调用。</p>
-        <div class="custom-model">
-          <div class="card-title" style="font-size:14px;margin:12px 0 8px">自定义模型（OpenAI 兼容接口）</div>
+        <details class="cm-details" open>
+          <summary>自定义模型（OpenAI 兼容接口）</summary>
+          <p class="hint">接入任意 OpenAI 接口兼容的服务（DeepSeek、硅基流动等），使用你自己的 Token。API Key 仅保存在本机浏览器，不会上传云端。</p>
           <form id="customModelForm" class="form-grid">
             <label>名称<input type="text" id="cmName" placeholder="如 DeepSeek" required></label>
             <label class="span2">Base URL<input type="text" id="cmBaseUrl" placeholder="https://api.deepseek.com/v1" required></label>
@@ -310,8 +343,11 @@
             <div class="form-actions span2"><button type="submit" class="btn ghost">添加自定义模型</button></div>
           </form>
           <div id="customModelList" class="mini-list"></div>
-        </div>
+        </details>
       </div>
+      </div>
+
+      <div class="set-pane" data-pane="cost" hidden>
       <div class="card">
         <div class="card-title-row">
           <span class="card-title">费率设置</span>
@@ -334,6 +370,9 @@
           <div id="calcResult" class="fee-preview"></div>
         </div>
       </div>
+      </div>
+
+      <div class="set-pane" data-pane="user" hidden>
       <div class="card" id="userMgmtCard" hidden>
         <div class="card-title-row">
           <span class="card-title">用户管理</span>
@@ -375,6 +414,9 @@
           <div class="form-actions"><button type="button" class="btn ghost" id="chPwdBtn">修改密码</button></div>
         </div>
       </div>
+      </div>
+
+      <div class="set-pane" data-pane="data" hidden>
       <div class="card">
         <div class="card-title">数据管理</div>
         <div class="btn-row">
@@ -393,6 +435,9 @@
           </div>
         </div>
       </div>
+      </div>
+
+      <div class="set-pane" data-pane="log" hidden>
       <div class="card">
         <div class="card-title-row">
           <span class="card-title">操作日志</span>
@@ -402,9 +447,10 @@
       </div>
       <div class="card">
         <div class="card-title">关于</div>
-        <p class="about-line">操作日记 v2.1.1 · 重构版（stock-journal）</p>
+        <p class="about-line">操作日记 v2.2.0 · 重构版（stock-journal）</p>
         <p class="about-line" id="aboutStorage">数据存储：—</p>
         <p class="about-line">费用口径与 trade-manager 一致：佣金（双向，最低收费）、印花税（卖出）、过户费、经手费、证管费，三市独立配置。成本核算采用移动加权平均法，费用计入买入成本。</p>
+      </div>
       </div>
     </section>
   </main>
@@ -449,6 +495,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.1.1"></script>
+<script src="app.js?v=2.2.0"></script>
 </body>
 </html>

@@ -423,3 +423,52 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   .main { max-width: 1200px; padding: 8px 24px 60px; }
   #view-today .grid-2 { grid-template-columns: 5fr 4fr; }
 }
+
+/* ---------- 设置分类页签（参考 trade-manager） ---------- */
+.set-tabs { display: flex; gap: 6px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+.set-tabs::-webkit-scrollbar { display: none; }
+.set-tab {
+  flex: none; border: 1px solid var(--line); background: var(--card);
+  color: var(--ink-2); padding: 8px 14px; font-size: 13.5px; font-weight: 500;
+  border-radius: 10px; white-space: nowrap; transition: background .15s, color .15s, border-color .15s;
+}
+.set-tab:hover { color: var(--blue); border-color: var(--blue); }
+.set-tab.active { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); font-weight: 600; }
+@media (max-width: 720px) {
+  .set-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; padding-bottom: 10px; overflow-x: visible; }
+  .set-tab { min-width: 0; padding: 8px 4px; font-size: 12px; border-radius: 9px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+
+/* ---------- 股票联想下拉 ---------- */
+.add-row { display: flex; gap: 8px; margin-bottom: 12px; }
+.add-row.sug-anchor { position: relative; }
+.add-row input {
+  flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line-strong);
+  border-radius: var(--radius-sm); background: #FBFCFD; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.add-row input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
+.sug-box {
+  position: absolute; top: 100%; left: 0; right: 0; z-index: 30; background: var(--card);
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm); margin-top: 4px;
+  box-shadow: 0 8px 24px rgba(23, 30, 38, .12); max-height: 264px; overflow-y: auto;
+}
+.sug-item { display: flex; align-items: center; gap: 8px; padding: 9px 12px; font-size: 13.5px; cursor: pointer; color: var(--ink); }
+.sug-item b { color: var(--blue); flex-shrink: 0; font-weight: 600; }
+.sug-item span { margin-left: auto; font-size: 12px; color: var(--ink-3); flex-shrink: 0; }
+.sug-item:hover, .sug-item.on { background: var(--blue-bg); }
+.sug-empty { padding: 10px 12px; font-size: 12.5px; color: var(--ink-3); }
+
+/* ---------- NL 示例词条 ---------- */
+.chips { display: flex; gap: 8px; flex-wrap: wrap; margin: 10px 0 4px; }
+.chip {
+  font-size: 12px; color: var(--blue); background: var(--blue-bg);
+  border: 1px solid transparent; border-radius: 999px; padding: 4px 12px; cursor: pointer;
+  transition: border-color .15s, background .15s;
+}
+.chip:hover { border-color: var(--blue); }
+
+/* ---------- 折叠面板 ---------- */
+.cm-details { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 12px; background: #FBFCFD; }
+.cm-details > summary { cursor: pointer; font-size: 13.5px; font-weight: 500; color: var(--ink-2); user-select: none; }
+.cm-details[open] > summary { margin-bottom: 10px; }
