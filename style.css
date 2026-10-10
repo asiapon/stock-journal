@@ -362,8 +362,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 }
 .bnav-item svg { width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.7; }
 .bnav-item.active { color: var(--blue); }
-.bnav-item.bnav-add { color: var(--blue); font-weight: 600; }
-.bnav-item.bnav-add svg { stroke-width: 2.2; }
+.bnav-item.bnav-add svg { stroke-width: 2; }   /* 仅图标略粗，颜色随选中态 */
 
 /* ---------- 模态 ---------- */
 .modal-mask {
