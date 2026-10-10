@@ -591,3 +591,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 }
 .wtab.on i { background: #fff; color: var(--blue); }
 .wtab-add { padding: 6px 10px; font-weight: 600; }
+
+/* ---------- v2.7.1 添加自选分组框 + 手机端两行布局 ---------- */
+.wg-quick { flex: 0 0 130px; }
+@media (max-width: 639px) {
+  .add-row { flex-wrap: wrap; }
+  .add-row input { flex: 1 1 100%; }
+  .wg-quick { flex: 1 1 100%; }
+}

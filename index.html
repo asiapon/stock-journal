@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.7.0">
+<link rel="stylesheet" href="style.css?v=2.7.1">
 </head>
 <body>
 
@@ -216,7 +216,7 @@
           <div class="add-row sug-anchor">
             <input type="text" id="wfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt（回车添加）">
             <div id="wfSug" class="sug-box" hidden></div>
-            <input type="text" id="wfGroupQuick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名" style="flex:0 0 130px">
+            <input type="text" id="wfGroupQuick" class="wg-quick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名">
             <button type="submit" class="btn primary sm" id="wfSubmit">添加</button>
           </div>
           <details class="cm-details" id="wfAdv">
@@ -252,13 +252,14 @@
       <div class="card">
         <div class="card-title-row">
           <span class="card-title">自选列表</span>
+          <button class="btn ghost sm" id="delGroupBtn" type="button" hidden>删除该分组</button>
           <span class="hint">点分组 Tab 切换；当前分组下添加股票自动归组</span>
         </div>
         <div class="wtabs" id="watchTabs"></div>
         <div class="table-scroll">
           <table class="tbl" id="watchTable">
             <thead><tr>
-              <th>股票</th><th>分组</th><th class="num">现价</th><th class="num">涨跌幅</th>
+              <th>股票</th><th class="num">现价</th><th class="num">涨跌幅</th>
               <th class="num">今开</th><th class="num">最高</th><th class="num">最低</th><th class="num">昨收</th>
               <th class="num">自选收益</th><th>自选日</th><th>备注 / 理由</th><th class="num">操作</th>
             </tr></thead>
@@ -511,6 +512,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.7.0"></script>
+<script src="app.js?v=2.7.1"></script>
 </body>
 </html>

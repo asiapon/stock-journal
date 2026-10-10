@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.7.0';
+const APP_VER = '2.7.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1187,8 +1187,7 @@ function renderWatch() {
     const d = w.created_at ? new Date(w.created_at) : null;
     const addDate = d && !isNaN(d) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '—';
     return `<tr data-id="${w.id}">
-      <td><div class="stock-cell"><span class="sc-name">${esc(w.stock_name || '')}</span><span class="sc-code">${esc(w.stock_code)}${w.starred ? ' · <span class="tag star">关注</span>' : ''}</span></div></td>
-      <td>${esc(w.group_name || '默认')}</td>
+      <td><div class="stock-cell"><span class="sc-name">${esc(w.stock_name || '')}</span><span class="sc-code">${esc(w.stock_code)}</span></div></td>
       <td class="num">${price != null ? fmt2(price) : FAIL}</td>
       <td class="num ${chg != null ? pnlCls(chg) : ''}">${chg != null ? fmtPct(chg) : FAIL}</td>
       <td class="num">${q && q.open != null ? fmt2(q.open) : '—'}</td>
@@ -1199,7 +1198,6 @@ function renderWatch() {
       <td class="hint">${addDate}</td>
       <td class="hint">${esc(w.note || '')}</td>
       <td><div class="row-actions">
-        <button class="icon-btn star-watch" data-id="${w.id}">${w.starred ? '取消关注' : '关注'}</button>
         <button class="icon-btn edit-watch" data-id="${w.id}">编辑</button>
         <button class="icon-btn del del-watch" data-id="${w.id}">删除</button>
       </div></td>
@@ -1208,6 +1206,9 @@ function renderWatch() {
   // 分组 datalist（含「默认」与当前 Tab，供「添加自选」分组输入联想，可输入新分组）
   $('groupList').innerHTML = [...new Set(['默认', ...groups, watchTab])].filter(Boolean).map(g => `<option value="${esc(g)}">`).join('');
   $('watchEmpty').textContent = watchTab ? `分组「${watchTab}」暂无自选，在上方添加会自动归入此分组` : '暂无自选股';
+  /* 当前在具体分组 Tab 时显示「删除该分组」 */
+  const dgb = $('delGroupBtn');
+  if (dgb) dgb.hidden = !watchTab;
 }
 function fillWatchForm(w) {
   S.editingWatchId = w.id;
@@ -1643,18 +1644,26 @@ function bindEvents() {
     renderWatch();
     $('wfGroupQuick').value = g || '';   // 当前分组即默认归组，可手动改
   });
+  /* 删除当前分组：组内股票移回「默认」 */
+  $('delGroupBtn').addEventListener('click', () => {
+    if (!watchTab) return;
+    const n = S.watchlist.filter(w => (w.group_name || '默认') === watchTab).length;
+    confirmDlg('删除分组', `确认删除分组「${watchTab}」？${n ? `组内 ${n} 只自选将移回「默认」分组` : '该分组当前为空'}。`, async () => {
+      try {
+        for (const w of S.watchlist.filter(w => (w.group_name || '默认') === watchTab)) {
+          await store.update('watchlist', w.id, { group_name: '默认' });
+        }
+        await store.log('update', `删除分组「${watchTab}」（${n} 只移回默认）`);
+        watchTab = '';
+        $('wfGroupQuick').value = '';
+        await loadAll(); renderWatch(); renderToday();
+        toast('分组已删除');
+      } catch (err) { toast(err.message || '删除失败', 'warn'); }
+    }, '删除');
+  });
   $('watchTable').querySelector('tbody').addEventListener('click', async e => {
-    const starBtn = e.target.closest('.star-watch');
     const editBtn = e.target.closest('.edit-watch');
     const delBtn = e.target.closest('.del-watch');
-    if (starBtn) {
-      const w = S.watchlist.find(x => x.id == starBtn.dataset.id);
-      try {
-        await store.update('watchlist', w.id, { starred: !w.starred });
-        await loadAll(); renderWatch(); renderToday();
-      } catch (err) { toast(err.message || '操作失败', 'warn'); }
-      return;
-    }
     if (editBtn) {
       const w = S.watchlist.find(x => x.id == editBtn.dataset.id);
       if (w) { fillWatchForm(w); $('watchForm').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
