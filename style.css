@@ -646,3 +646,10 @@ select { padding-right: 6px; }
 /* ---------- v2.8.4 记一笔：手动录入收起 + 方向Tab ---------- */
 #tfTypeTabs { gap: 6px; }
 #tfTypeTabs .wtab { flex: 0 0 auto; padding: 4px 14px; }
+
+/* ---------- v2.8.5 记一笔弹窗内容可滚动(手动录入展开后被裁) ---------- */
+#recModal .modal-lg { overflow-y: auto; max-height: 94vh; -webkit-overflow-scrolling: touch; }
+@media (max-width: 639px) {
+  #recModal { align-items: flex-start; padding-top: 8vh; }
+  #recModal .modal-lg { max-height: 88vh; border-radius: 16px; }
+}
