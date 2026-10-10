@@ -472,3 +472,27 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .cm-details { border: 1px solid var(--line); border-radius: var(--radius-sm); padding: 10px 12px; margin-top: 12px; background: #FBFCFD; }
 .cm-details > summary { cursor: pointer; font-size: 13.5px; font-weight: 500; color: var(--ink-2); user-select: none; }
 .cm-details[open] > summary { margin-bottom: 10px; }
+
+/* ---------- 平台模型费率列表 ---------- */
+.rate-block { margin-top: 4px; }
+.rate-search {
+  width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  padding: 9px 12px; background: #FBFCFD; outline: none; margin: 8px 0;
+  transition: border-color .15s, box-shadow .15s;
+}
+.rate-search:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
+.rate-list {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  max-height: 300px; overflow-y: auto; background: var(--card);
+}
+.rate-item {
+  display: flex; align-items: center; gap: 10px; padding: 9px 12px;
+  font-size: 13.5px; cursor: pointer; border-bottom: 1px solid var(--line);
+}
+.rate-item:last-child { border-bottom: none; }
+.rate-item:hover { background: var(--bg); }
+.rate-item.on { background: var(--blue-bg); }
+.rate-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-weight: 500; }
+.rate-id { font-style: normal; font-size: 11.5px; color: var(--ink-3); margin-left: 6px; }
+.rate-price { flex: none; font-size: 12.5px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.rate-price.free { color: var(--down); font-weight: 600; }

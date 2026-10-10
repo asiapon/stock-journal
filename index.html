@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.2.2">
+<link rel="stylesheet" href="style.css?v=2.3.0">
 </head>
 <body>
 
@@ -314,7 +314,7 @@
       <div class="set-tabs" id="setTabs">
         <button class="set-tab active" data-set="model" type="button">模型</button>
         <button class="set-tab" data-set="cost" type="button">交易费用</button>
-        <button class="set-tab" data-set="user" type="button">用户与账号</button>
+        <button class="set-tab" data-set="user" type="button">用户管理</button>
         <button class="set-tab" data-set="data" type="button">数据管理</button>
         <button class="set-tab" data-set="log" type="button">操作日志</button>
       </div>
@@ -330,6 +330,14 @@
           <label class="span2">当前使用模型
             <select id="modelCurSel"><option value="">（加载中）</option></select>
           </label>
+        </div>
+        <div class="rate-block">
+          <div class="card-title-row" style="margin-top:12px">
+            <span class="card-title" style="font-size:14px">平台模型与费率</span>
+            <span class="hint">费率为积分倍率，越低越便宜；点击行切换当前模型</span>
+          </div>
+          <input type="text" id="rateSearch" class="rate-search" placeholder="搜索模型名称或 ID" autocomplete="off">
+          <div id="rateList" class="rate-list"><div class="empty">加载中…</div></div>
         </div>
         <details class="cm-details" open>
           <summary>自定义模型（OpenAI 兼容接口）</summary>
@@ -375,7 +383,7 @@
       <div class="card" id="userMgmtCard" hidden>
         <div class="card-title-row">
           <span class="card-title">用户管理</span>
-          <span class="hint">仅管理员可见</span>
+          <span class="hint">仅管理员可见；重置密码请用「重置密码」</span>
         </div>
         <form id="userCreateForm" class="form-grid">
           <label>用户名
@@ -397,20 +405,6 @@
             <thead><tr><th>用户名</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>
             <tbody></tbody>
           </table>
-        </div>
-      </div>
-      <div class="card">
-        <div class="card-title-row">
-          <span class="card-title">账号</span>
-        </div>
-        <div class="form-grid">
-          <label>当前密码
-            <input type="password" id="chOld" placeholder="当前密码" autocomplete="current-password">
-          </label>
-          <label>新密码
-            <input type="password" id="chNew" placeholder="至少 6 位" minlength="6" autocomplete="new-password">
-          </label>
-          <div class="form-actions"><button type="button" class="btn ghost" id="chPwdBtn">修改密码</button></div>
         </div>
       </div>
       </div>
@@ -446,7 +440,7 @@
       </div>
       <div class="card">
         <div class="card-title">关于</div>
-        <p class="about-line">操作日记 v2.2.2 · 重构版（stock-journal）</p>
+        <p class="about-line">操作日记 v2.3.0 · 重构版（stock-journal）</p>
         <p class="about-line" id="aboutStorage">数据存储：—</p>
         <p class="about-line">费用口径与 trade-manager 一致：佣金（双向，最低收费）、印花税（卖出）、过户费、经手费、证管费，三市独立配置。成本核算采用移动加权平均法，费用计入买入成本。</p>
       </div>
@@ -494,6 +488,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.2.2"></script>
+<script src="app.js?v=2.3.0"></script>
 </body>
 </html>

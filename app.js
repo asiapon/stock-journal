@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.2.2';
+const APP_VER = '2.3.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -391,7 +391,31 @@ const ModelMgr = {
   label(m) {
     if (!m) return '（未选择模型）';
     if (m.custom) return `${m.name}·${m.model}（自定义）`;
-    return (m.name || m.id) + (m.vendor ? ' · ' + m.vendor : '');
+    const c = this.creditsText(m);
+    return (m.name || m.id) + (m.vendor ? ' · ' + m.vendor : '') + (c ? '（费率 ' + c + '）' : '');
+  },
+  /* 积分费率："x0.08 credits" / "x0.05" → "0.08x" 风格展示；0 = 免费 */
+  creditsText(m) {
+    if (!m || m.custom || !m.credits) return '';
+    const s = String(m.credits).replace(/\s*credits?$/i, '').replace(/^x/i, '').trim();
+    if (!s || isNaN(parseFloat(s))) return '';
+    return (parseFloat(s) === 0 ? '免费' : s + 'x');
+  },
+  renderRateList() {
+    const box = $('rateList');
+    if (!box) return;
+    const kw = ($('rateSearch').value || '').trim().toLowerCase();
+    const rows = this.platform.filter(m => !kw || ((m.name || '') + ' ' + (m.id || '')).toLowerCase().includes(kw));
+    if (!this.loaded) { box.innerHTML = '<div class="empty">模型目录加载中…</div>'; return; }
+    if (!rows.length) { box.innerHTML = '<div class="empty">' + (this.platform.length ? '没有匹配的模型' : '未获取到平台模型，点「刷新模型列表」重试') + '</div>'; return; }
+    const curId = this.cur && !this.cur.custom ? this.cur.id : null;
+    box.innerHTML = rows.map(m => {
+      const c = this.creditsText(m);
+      return `<div class="rate-item ${m.id === curId ? 'on' : ''}" data-mid="${esc('p:' + m.id)}">
+        <span class="rate-name">${esc(m.name || m.id)}<i class="rate-id">${esc(m.id)}</i></span>
+        <span class="rate-price ${c === '免费' ? 'free' : ''}">${c || '—'}</span>
+      </div>`;
+    }).join('');
   },
   /* 当前模型以「ID 字符串」持久化（与 trade-manager 一致），目录未加载时绝不降级覆盖，
      避免刷新后因目录缓存为空/过期把用户选择冲掉。 */
@@ -451,6 +475,7 @@ const ModelMgr = {
       if (this.cur) sel.value = this.modelId(this.cur);
       sel.disabled = !all.length;
     }
+    this.renderRateList();
     const st = $('modelStatus');
     if (st) st.textContent = this.loaded
       ? `云端模型 ${this.platform.length} 个、自定义 ${this.custom.length} 个。模型用于「记一笔」AI 解析，云端模型免密钥直接调用。`
@@ -1560,16 +1585,13 @@ function bindEvents() {
   });
   $('logReloadBtn').addEventListener('click', async () => { await loadAll(); renderMe(); });
 
-  /* 我的：改密 */
-  $('chPwdBtn').addEventListener('click', async () => {
-    const oldP = $('chOld').value, newP = $('chNew').value;
-    if (!oldP || newP.length < 6) { toast('请填写当前密码，新密码至少 6 位', 'warn'); return; }
-    try {
-      const r = await rpc('app_change_pwd', { p_token: S.token, p_old: oldP, p_new: newP });
-      if (!r.ok) { toast(r.msg || '修改失败', 'warn'); return; }
-      $('chOld').value = ''; $('chNew').value = '';
-      toast('密码已修改');
-    } catch (err) { toast(err.message || '修改失败', 'warn'); }
+  /* 平台模型费率列表：搜索 + 点击切换当前模型 */
+  $('rateSearch').addEventListener('input', () => ModelMgr.renderRateList());
+  $('rateList').addEventListener('click', e => {
+    const row = e.target.closest('.rate-item');
+    if (!row) return;
+    ModelMgr.setCur(row.dataset.mid);
+    toast('已切换模型：' + (ModelMgr.cur ? ModelMgr.label(ModelMgr.cur) : ''));
   });
 
   /* 用户管理 */
