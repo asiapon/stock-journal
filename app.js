@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.2.0';
+const APP_VER = '2.2.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -374,7 +374,9 @@ const ModelMgr = {
   saveCustom() { localStorage.setItem('sj_custom_models', JSON.stringify(this.custom)); },
   async reload() {
     if (!cloudLlm) throw new Error('云端模型服务不可用（本地模式）');
-    const listed = (await cloudLlm.models.list()) || [];
+    const llm = cloudLlm.llm || cloudLlm;   // SDK 命名空间：cloud.llm.models / cloud.llm.chat
+    const listed = (await llm.models.list()) || [];
+    this.platform = listed.filter(m => m.disabled !== true);
     this.platform = listed.filter(m => m.disabled !== true);
     this.loaded = true;
     localStorage.setItem('sj_model_list', JSON.stringify(this.platform));
@@ -502,9 +504,10 @@ async function llmComplete(messages) {
   if (!m) throw new Error('尚未选择模型，请到「应用设置 → AI 模型」选择');
   if (m.custom) return customLlmStream(m, messages);
   if (!cloudLlm) throw new Error('云端模型服务不可用');
+  const llm = cloudLlm.llm || cloudLlm;   // SDK 命名空间：cloud.llm.chat
   let text = '';
   const params = { model: m.id, messages, stream: true };
-  for await (const chunk of cloudLlm.chat.completions.create(params)) {
+  for await (const chunk of llm.chat.completions.create(params)) {
     const d = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
     if (d && d.content) text += d.content;
   }
