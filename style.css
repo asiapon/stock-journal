@@ -570,3 +570,6 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   #recModal .quick-input-row { flex-wrap: nowrap; }
   #recModal .quick-input-row input { min-width: 0; }
 }
+
+/* ---------- v2.6.4 解析确认行按钮成对并排 ---------- */
+.p-btns { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }

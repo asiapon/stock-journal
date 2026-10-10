@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.6.3';
+const APP_VER = '2.6.4';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -648,12 +648,17 @@ function normalizeParsed(j) {
     let time = nowLocalInput();
     if (t.trade_date && /^\d{4}-\d{2}-\d{2}[ T]\d{2}:\d{2}/.test(String(t.trade_date))) {
       const d = new Date(String(t.trade_date).replace(' ', 'T'));
-      if (!isNaN(d)) time = d.toISOString();
+      if (!isNaN(d)) time = toLocalInput(d);   // 转本地时间（此前 toISOString 是 UTC，差 8 小时）
     }
     return { type: t.action === 'sell' ? 'sell' : 'buy', code, name: String(t.stock_name || '').trim(), market: inferMarket(code), qty, price, time };
   }).filter(Boolean);
   if (!list.length) throw new Error('未解析出有效交易（需要：方向、数量、价格、股票）');
   return list;
+}
+/* Date → 本地 "YYYY-MM-DDTHH:mm"（datetime-local 口径） */
+function toLocalInput(d) {
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
 }
 function resToList(res) {
   return { type: res.type, code: res.code || '', name: res.name || '', market: res.market || inferMarket(res.code || ''), qty: res.qty, price: res.price, time: nowLocalInput() };
@@ -713,7 +718,7 @@ async function aiParseEntry(inputId, hintId) {
     renderPending(hintId, inputId, [resToList(res)], '（本地规则识别，请核对）');
     return;
   }
-  el.innerHTML = `AI 解析中（${esc(ModelMgr.label(model))}）…`;
+  el.innerHTML = `AI 解析中（${esc(ModelMgr.shortLabel(model))}）…`;
   try {
     const text = await llmComplete([{ role: 'system', content: tradeParseSys() }, { role: 'user', content: raw }]);
     const list = normalizeParsed(extractJson(text));
@@ -738,8 +743,10 @@ function renderPending(hintId, inputId, list, summary) {
       <div class="p-item">
         <span class="tag ${t.type}">${t.type === 'buy' ? '买入' : '卖出'}</span>
         <span class="p-desc">${esc(t.name || t.code)} ${t.qty} 股 @${esc(t.price)} · ${esc(String(t.time).replace('T', ' ').slice(0, 16))}</span>
-        <button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">保存</button>
-        <button class="btn ghost sm pfill-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">改</button>
+        <span class="p-btns">
+          <button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">保存</button>
+          <button class="btn ghost sm pfill-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">改</button>
+        </span>
       </div>`).join('') + `</div>`;
 }
 
