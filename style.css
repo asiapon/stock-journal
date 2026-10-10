@@ -512,3 +512,17 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 }
 .modal-x:hover { background: rgba(23, 30, 38, .06); color: var(--ink); }
 .cm-section { border-top: 1px solid var(--line, #e6e9ee); margin-top: 14px; padding-top: 2px; }
+
+/* ---------- v2.4.1 记一笔弹窗紧凑化 ---------- */
+#recModal .modal { padding: 16px 18px 18px; }
+#recModal .modal-title { font-size: 15px; }
+#recModal .modal > .hint { margin: 4px 0 10px; }
+#recModal .quick-input-row { gap: 8px; }
+#recModal .chips { margin: 8px 0 2px; }
+#recModal .chip { font-size: 12px; padding: 4px 10px; }
+#recModal .form-grid { gap: 8px 10px; margin-top: 10px; }
+#recModal .form-grid input, #recModal .form-grid select { padding: 8px 9px; }
+#recModal .form-grid .fee-preview.span2,
+#recModal .fee-preview.span2 { grid-column: span 4; }
+#recModal .fee-preview { justify-content: flex-end; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; }
+#recModal .form-actions { grid-column: span 4; justify-content: flex-end; margin-top: 2px; }

@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.4.0';
+const APP_VER = '2.4.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -468,7 +468,7 @@ const ModelMgr = {
   shortLabel(m) {
     if (!m) return '（未选择模型）';
     if (m.custom) return `${m.name}·${m.model}（自定义）`;
-    return (m.name || m.id) + (m.vendor ? ' · ' + m.vendor : '');
+    return m.name || m.id;   // 不拼 vendor/费率：vendor 是接口返回的单字母缩写，无信息量
   },
   render() {
     const all = this.all();
