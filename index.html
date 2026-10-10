@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.6.0">
+<link rel="stylesheet" href="style.css?v=2.6.1">
 </head>
 <body>
 
@@ -216,7 +216,7 @@
           <div class="add-row sug-anchor">
             <input type="text" id="wfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt（回车添加）">
             <div id="wfSug" class="sug-box" hidden></div>
-            <select id="wfGroupQuick" title="选择分组"><option value="默认">默认</option></select>
+            <input type="text" id="wfGroupQuick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名" style="flex:0 0 130px">
             <button type="submit" class="btn primary sm" id="wfSubmit">添加</button>
           </div>
           <details class="cm-details" id="wfAdv">
@@ -510,6 +510,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.6.0"></script>
+<script src="app.js?v=2.6.1"></script>
 </body>
 </html>

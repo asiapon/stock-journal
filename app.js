@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.6.0';
+const APP_VER = '2.6.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1194,13 +1194,8 @@ function renderWatch() {
       </div></td>
     </tr>`;
   }).join('');
-  // 分组 datalist + 快捷添加分组下拉（保留已选值）
-  $('groupList').innerHTML = groups.map(g => `<option value="${esc(g)}">`).join('');
-  const gq = $('wfGroupQuick');
-  if (gq) {
-    const curVal = gq.value;
-    gq.innerHTML = [...new Set(['默认', ...groups])].map(g => `<option value="${esc(g)}"${g === curVal ? ' selected' : ''}>${esc(g)}</option>`).join('');
-  }
+  // 分组 datalist（含「默认」，供「添加自选」分组输入联想，可输入新分组）
+  $('groupList').innerHTML = [...new Set(['默认', ...groups])].map(g => `<option value="${esc(g)}">`).join('');
 }
 function fillWatchForm(w) {
   S.editingWatchId = w.id;
@@ -1620,6 +1615,7 @@ function bindEvents() {
     } catch (err) { toast(err.message || '保存失败', 'warn'); }
   }
   $('wfCancel').addEventListener('click', resetWatchForm);
+  $('watchGroupFilter').addEventListener('change', renderWatch);
   $('watchTable').querySelector('tbody').addEventListener('click', async e => {
     const starBtn = e.target.closest('.star-watch');
     const editBtn = e.target.closest('.edit-watch');
