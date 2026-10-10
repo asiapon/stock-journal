@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.8.3';
+const APP_VER = '2.8.4';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -711,8 +711,8 @@ async function aiParseEntry(inputId, hintId) {
     const res = parseTradeText(raw);
     if (!res) {
       el.className = 'quick-hint warn';
-      el.textContent = model ? '模型服务暂不可用，本地规则也未能完整识别（需要：方向、价格、数量、股票），请手动填写表单。'
-                             : '尚未选择模型（应用设置 → AI 模型），本地规则也未能完整识别，请手动填写表单。';
+      el.innerHTML = esc(model ? '本地规则未能识别出交易信息。' : '尚未选择模型（应用设置 → AI 模型），本地规则也未能识别。')
+        + '请重新输入，或 <button class="link-btn p-open-manual" type="button">手动录入</button>';
       return;
     }
     renderPending(hintId, inputId, [resToList(res)], '（本地规则识别，请核对）');
@@ -722,6 +722,11 @@ async function aiParseEntry(inputId, hintId) {
   try {
     const text = await llmComplete([{ role: 'system', content: tradeParseSys() }, { role: 'user', content: raw }]);
     const list = normalizeParsed(extractJson(text));
+    if (!list.length) {
+      el.className = 'quick-hint warn';
+      el.innerHTML = '未能解析出交易信息，请换个说法重新输入，或 <button class="link-btn p-open-manual" type="button">手动录入</button>';
+      return;
+    }
     renderPending(hintId, inputId, list, '');
   } catch (e) {
     const res = parseTradeText(raw);
@@ -730,7 +735,7 @@ async function aiParseEntry(inputId, hintId) {
       el.insertAdjacentHTML('afterbegin', `<div class="p-warn">AI 解析失败（${esc(e.message || '未知错误')}），以下为本地规则结果：</div>`);
     } else {
       el.className = 'quick-hint warn';
-      el.textContent = 'AI 解析失败：' + (e.message || '未知错误') + '。可在「应用设置 → AI 模型」换一个模型，或手动填写表单。';
+      el.innerHTML = 'AI 解析失败：' + esc(e.message || '未知错误') + '。请重新输入，或 <button class="link-btn p-open-manual" type="button">手动录入</button>';
     }
   }
 }
@@ -1129,6 +1134,7 @@ function fillTradeForm(t) {
   $('tfTime').value = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
   $('tfNote').value = t.note || '';
   $('tfSubmit').textContent = '保存修改';
+  setManualOpen(true);
   updateFeePreview();
   openRecModal(false);
 }
@@ -1141,9 +1147,14 @@ function resetTradeForm() {
   updateFeePreview();
 }
 /* 「记一笔」弹窗 */
+function setManualOpen(open) {
+  const w = $('tfManualWrap'), t = $('tfManualToggle');
+  if (w) w.hidden = !open;
+  if (t) t.textContent = open ? '收起手动录入 ▴' : '手动录入 ▸';
+}
 function openRecModal(reset = true) {
   const m = $('recModal'); if (!m) return;
-  if (reset) resetTradeForm();
+  if (reset) { resetTradeForm(); setManualOpen(false); }
   m.hidden = false;
 }
 function closeRecModal() {
@@ -1151,6 +1162,12 @@ function closeRecModal() {
   m.hidden = true;
   $('tradeHint').hidden = true;
   resetTradeForm();
+}
+/* 方向 Tab 状态与隐藏 select 同步 */
+function syncTfTypeTabs() {
+  const sel = $('tfType');
+  if (!sel) return;
+  document.querySelectorAll('#tfTypeTabs .wtab').forEach(b => b.classList.toggle('on', b.dataset.t === sel.value));
 }
 /* 股票联想框：选定即确定代码/名称，市场由代码推断 */
 function setTfStock(code, name) {
@@ -1383,6 +1400,8 @@ function bindEvents() {
   $('tradeParseBtn').addEventListener('click', () => aiParseEntry('tradeNl', 'tradeHint'));
   $('tradeNl').addEventListener('keydown', e => { if (e.key === 'Enter') aiParseEntry('tradeNl', 'tradeHint'); });
   ['quickHint', 'tradeHint'].forEach(hid => $(hid).addEventListener('click', e => {
+    const openM = e.target.closest('.p-open-manual');
+    if (openM) { setManualOpen(true); if (hid !== 'tradeHint') { openRecModal(true); setManualOpen(true); } return; }
     const saveAllB = e.target.closest('.p-saveall-btn');
     if (saveAllB) { saveAllPending(saveAllB); return; }
     const saveB = e.target.closest('.p-save-btn');
@@ -1497,6 +1516,15 @@ function bindEvents() {
     if (c) { $('tradeNl').value = c.dataset.nl; $('tradeNl').focus(); }
   });
 
+  /* 方向：买/卖 Tab 按钮（驱动隐藏 select） */
+  $('tfTypeTabs').addEventListener('click', e => {
+    const b = e.target.closest('.wtab'); if (!b) return;
+    $('tfType').value = b.dataset.t;
+    syncTfTypeTabs();
+    updateFeePreview();
+  });
+  /* 手动录入区默认收起，点开关展开 */
+  $('tfManualToggle').addEventListener('click', () => setManualOpen($('tfManualWrap').hidden));
   /* 交易表单：股票联想（选定后代码/名称/市场自动确定） */
   bindSuggest('tfStock', 'tfStockSug', h => {
     setTfStock(h.code, h.name);
@@ -1905,7 +1933,9 @@ function bindEvents() {
 }
 function fillFormFromParsed(res) {
   resetTradeForm();
+  setManualOpen(true);
   $('tfType').value = res.type;
+  syncTfTypeTabs();
   if (res.code) setTfStock(res.code, res.name || '');
   $('tfPrice').value = res.price;
   $('tfQty').value = res.qty;

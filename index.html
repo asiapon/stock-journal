@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.8.3">
+<link rel="stylesheet" href="style.css?v=2.8.4">
 </head>
 <body>
 
@@ -428,12 +428,20 @@
         <span class="chip" data-nl="昨天12.3买入2000股三峡能源，今天13块止盈一半">昨天买入手今止盈一半</span>
       </div>
       <div id="tradeHint" class="quick-hint" hidden></div>
+      <div class="quick-input-row" style="margin-top:8px">
+        <button class="link-btn" id="tfManualToggle" type="button">手动录入 ▸</button>
+      </div>
+      <div id="tfManualWrap" hidden>
       <form id="tradeForm" class="form-grid">
         <label>方向
-          <select id="tfType">
+          <select id="tfType" hidden>
             <option value="buy">买入</option>
             <option value="sell">卖出</option>
           </select>
+          <div class="wtabs" id="tfTypeTabs" style="margin-bottom:0">
+            <button type="button" class="wtab on" data-t="buy">买</button>
+            <button type="button" class="wtab" data-t="sell">卖</button>
+          </div>
         </label>
         <label class="sug-anchor">股票
           <input type="text" id="tfStock" placeholder="代码 / 名称 / 拼音筛选，市场自动确定" autocomplete="off" required>
@@ -457,6 +465,7 @@
           <button type="button" class="btn ghost" id="tfReset">重置</button>
         </div>
       </form>
+      </div>
     </div>
   </div>
 
@@ -476,6 +485,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.8.3"></script>
+<script src="app.js?v=2.8.4"></script>
 </body>
 </html>

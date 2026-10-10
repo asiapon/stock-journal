@@ -642,3 +642,7 @@ select { padding-right: 6px; }
 
 /* ---------- v2.8.3 记一笔：全部保存按钮 ---------- */
 .p-saveall-row { display: flex; justify-content: flex-end; margin: 4px 0 6px; }
+
+/* ---------- v2.8.4 记一笔：手动录入收起 + 方向Tab ---------- */
+#tfTypeTabs { gap: 6px; }
+#tfTypeTabs .wtab { flex: 0 0 auto; padding: 4px 14px; }
