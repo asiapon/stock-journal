@@ -616,3 +616,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 
 /* ---------- v2.7.6 编辑自选时股票锁定 ---------- */
 #watchForm .add-row input.ro { background: rgba(23, 30, 38, .04); color: var(--ink-2); cursor: not-allowed; }
+
+/* ---------- v2.8.0 添加自选行高度与分组Tab一致(32px) ---------- */
+#watchForm .add-row { align-items: center; }
+#watchForm .add-row input {
+  height: 32px; padding: 0 12px; font-size: 13px; line-height: 1.4;
+  box-sizing: border-box;
+}
+#watchForm .add-row .btn.sm { height: 32px; padding: 0 14px; font-size: 13px; box-sizing: border-box; }
