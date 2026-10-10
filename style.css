@@ -547,3 +547,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   padding: 3px 7px; border-radius: 999px;
   background: rgba(23, 30, 38, .06); color: var(--ink-2);
 }
+
+/* ---------- v2.6.0 交易记录时间两行 / 操作按钮单行 ---------- */
+.tm-cell { white-space: nowrap; line-height: 1.35; }
+.tm-cell .tm-sub { color: var(--ink-2); font-size: 11.5px; }
+.row-actions { flex-wrap: nowrap; white-space: nowrap; }
+.row-actions .icon-btn { white-space: nowrap; }
+.tag { white-space: nowrap; }

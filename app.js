@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.5.6';
+const APP_VER = '2.6.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -320,7 +320,9 @@ const NetQuote = {
             if (p.length < 40) continue;
             const price = parseFloat(p[3]);
             if (!(price > 0)) continue;          // 停牌/无数据
-            out.set(m[1], { price, name: p[1], pct: parseFloat(p[32]) });
+            const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+            out.set(m[1], { price, name: p[1], pct: parseFloat(p[32]),
+              prevClose: num(p[4]), open: num(p[5]), high: num(p[33]), low: num(p[34]) });
           }
         } catch (e) { /* 网络失败：保持空，页面显示「未获取」 */ }
       }
@@ -526,8 +528,8 @@ const ModelMgr = {
     } else {
       const grp = (list, title) => list.length
         ? `<optgroup label="${title}">` + list.map(m => {
-            const c = this.creditsText(m);   // 下拉选项带费率，便于挑选；顶栏徽章不带
-            const fee = m.custom ? '' : (c ? `（费率 ${c}）` : '');
+            const c = this.creditsText(m);   // 下拉选项带费率数值便于挑选；顶栏徽章不带
+            const fee = m.custom ? '' : (c ? `（${c}）` : '');
             return `<option value="${esc(this.modelId(m))}">${esc(this.shortLabel(m) + fee)}</option>`;
           }).join('') + '</optgroup>'
         : '';
@@ -1069,19 +1071,20 @@ function tradeRowFiltered() {
 function renderTrades() {
   const rows = tradeRowFiltered();
   $('tradeEmpty').hidden = rows.length > 0;
-  const thisYear = new Date().getFullYear();
   $('tradeTable').querySelector('tbody').innerHTML = rows.map(t => {
     const fee = (t.fee && t.fee.total) || 0;
-    const net = t.transaction_type === 'buy' ? '+' : '−';
+    const d = new Date(t.transaction_time), p2 = n => String(n).padStart(2, '0');
+    const dateStr = `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+    const timeStr = `${p2(d.getHours())}:${p2(d.getMinutes())}:${p2(d.getSeconds())}`;
     return `<tr data-id="${t.id}">
-      <td>${fmtTime(t.transaction_time, new Date(t.transaction_time).getFullYear() !== thisYear)}</td>
+      <td class="tm-cell">${dateStr}<br><span class="tm-sub">${timeStr}</span></td>
       <td><span class="tag ${t.transaction_type}">${t.transaction_type === 'buy' ? '买入' : '卖出'}</span></td>
       <td><div class="stock-cell"><span class="sc-name">${esc(t.stock_name || '')}</span><span class="sc-code">${esc(t.stock_code)}</span></div></td>
       <td class="num">${fmt2(t.price)}</td>
       <td class="num">${t.quantity}</td>
       <td class="num">${fmt2(t.gross_amount)}</td>
       <td class="num fee-cell" data-id="${t.id}" title="点击展开费用明细">${fmt2(fee)}</td>
-      <td class="num">${net}¥${fmt2(Math.abs(t.net_amount != null ? t.net_amount : t.gross_amount - fee))}</td>
+      <td class="num">${fmt2(Math.abs(t.net_amount != null ? t.net_amount : t.gross_amount - fee))}</td>
       <td><div class="row-actions">
         <button class="icon-btn edit-trade" data-id="${t.id}">编辑</button>
         <button class="icon-btn del del-trade" data-id="${t.id}">删除</button>
@@ -1177,6 +1180,10 @@ function renderWatch() {
       <td>${esc(w.group_name || '默认')}</td>
       <td class="num">${price != null ? fmt2(price) : FAIL}</td>
       <td class="num ${chg != null ? pnlCls(chg) : ''}">${chg != null ? fmtPct(chg) : FAIL}</td>
+      <td class="num">${q && q.open != null ? fmt2(q.open) : '—'}</td>
+      <td class="num">${q && q.high != null ? fmt2(q.high) : '—'}</td>
+      <td class="num">${q && q.low != null ? fmt2(q.low) : '—'}</td>
+      <td class="num">${q && q.prevClose != null ? fmt2(q.prevClose) : '—'}</td>
       <td class="num ${gain != null ? pnlCls(gain) : ''}">${gain != null ? fmtPct(gain) : '—'}</td>
       <td class="hint">${addDate}</td>
       <td class="hint">${esc(w.note || '')}</td>
