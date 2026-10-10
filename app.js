@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.7.3';
+const APP_VER = '2.7.4';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1219,18 +1219,19 @@ function syncGroupList() {
 function fillWatchForm(w) {
   S.editingWatchId = w.id;
   $('wfInput').value = `${w.stock_code} ${w.stock_name || ''}`;
-  $('wfCode').value = w.stock_code;
-  $('wfName').value = w.stock_name || '';
-  $('wfGroup').value = w.group_name || '默认';
-  $('wfNote').value = w.note || '';
-  $('wfSaveAdv').textContent = '保存修改';
+  delete $('wfInput').dataset.picked;
+  $('wfGroupQuick').value = w.group_name || '默认';
+  $('wfNoteQuick').value = w.note || '';
+  $('wfSubmit').textContent = '保存修改';
   $('wfCancel').hidden = false;
 }
 function resetWatchForm() {
   S.editingWatchId = null;
   $('watchForm').reset();
   const inp = $('wfInput'); inp.value = ''; delete inp.dataset.picked;
-  $('wfSaveAdv').textContent = '保存';
+  $('wfGroupQuick').value = '';
+  $('wfNoteQuick').value = '';
+  $('wfSubmit').textContent = '保存';
   $('wfCancel').hidden = true;
 }
 
@@ -1570,22 +1571,36 @@ function bindEvents() {
     inp.addEventListener('blur', commit);
   }
 
-  /* 自选：快捷添加（联想）+ 高级编辑 双路径 */
+  /* 自选：添加 / 编辑 同一表单（输入联想 + 理由 + 分组 + 保存） */
   bindSuggest('wfInput', 'wfSug', h => {
     $('wfInput').value = `${h.code} ${h.name}`;
     $('wfInput').dataset.picked = h.code;
   });
   $('watchForm').addEventListener('submit', async e => {
     e.preventDefault();
-    if (S.editingWatchId) { await saveWatchAdvanced(); return; }
-    /* 快捷添加：联想命中 / 「代码 名称」/ 纯代码 / 名称拼音 */
+    const note = $('wfNoteQuick').value.trim();
+    const group = $('wfGroupQuick').value.trim() || watchTab || '默认';
+    /* 编辑：列表点「编辑」后，票已定，只更新理由/分组 */
+    if (S.editingWatchId) {
+      const w = S.watchlist.find(x => x.id == S.editingWatchId);
+      if (!w) { resetWatchForm(); return; }
+      try {
+        await store.update('watchlist', w.id, { group_name: group, note });
+        await store.log('watch', `修改自选 ${w.stock_name || w.stock_code}（理由/分组）`);
+        toast('已保存');
+        resetWatchForm();
+        await loadAll(); renderWatch(); renderToday();
+      } catch (err) { toast(err.message || '保存失败', 'warn'); }
+      return;
+    }
+    /* 添加：联想命中 / 「代码 名称」/ 纯代码 / 名称拼音 */
     const inp = $('wfInput');
     const picked = inp.dataset.picked;
     const txt = inp.value.trim();
     let hit = null;
     if (picked && txt.startsWith(picked)) hit = { code: picked, name: txt.slice(picked.length).trim() };
     else hit = StockDict.resolve(txt);
-    if (!hit || !hit.code) { toast('未识别股票，可在「高级选项」手动录入', 'warn'); return; }
+    if (!hit || !hit.code) { toast('未识别股票，请输入代码或名称', 'warn'); return; }
     if (!hit.name) hit.name = hit.code;
     /* 添加时记一个现价锚点（供「自选收益」计算）；网络行情没有则留空 */
     let anchor = NetQuote.get(hit.code);
@@ -1593,45 +1608,17 @@ function bindEvents() {
     const row = {
       stock_code: hit.code,
       stock_name: hit.name,
-      group_name: $('wfGroupQuick').value.trim() || watchTab || '默认',
-      note: '', cur_price: anchor ? anchor.price : null, prev_close: null
+      group_name: group,
+      note, cur_price: anchor ? anchor.price : null, prev_close: null
     };
     try {
       await store.insert('watchlist', row);
       await store.log('watch', `添加自选 ${row.stock_name}（${row.stock_code}）`);
       toast(`已添加自选 ${row.stock_name}`);
-      inp.value = ''; delete inp.dataset.picked;
       resetWatchForm();
       await loadAll(); renderWatch(); renderToday();
     } catch (err) { toast(err.message || '保存失败', 'warn'); }
   });
-  $('wfSaveAdv').addEventListener('click', () => saveWatchAdvanced());
-  async function saveWatchAdvanced() {
-    /* 编辑时保留原现价锚点（自选收益锚点不再手动录入） */
-    const old = S.editingWatchId ? S.watchlist.find(x => x.id == S.editingWatchId) : null;
-    const row = {
-      stock_code: $('wfCode').value.trim(),
-      stock_name: $('wfName').value.trim(),
-      group_name: $('wfGroup').value.trim() || '默认',
-      note: $('wfNote').value.trim(),
-      cur_price: old ? old.cur_price : null,
-      prev_close: old ? old.prev_close : null
-    };
-    if (!row.stock_code || !row.stock_name) { toast('请填写代码与名称', 'warn'); return; }
-    try {
-      if (S.editingWatchId) {
-        await store.update('watchlist', S.editingWatchId, row);
-        await store.log('watch', `修改自选 ${row.stock_name}（${row.stock_code}）`);
-        toast('已保存');
-      } else {
-        await store.insert('watchlist', row);
-        await store.log('watch', `添加自选 ${row.stock_name}（${row.stock_code}）`);
-        toast('已添加自选');
-      }
-      resetWatchForm();
-      await loadAll(); renderWatch(); renderToday();
-    } catch (err) { toast(err.message || '保存失败', 'warn'); }
-  }
   $('wfCancel').addEventListener('click', resetWatchForm);
   /* 分组 Tab：切换 / 新建；切 Tab 后添加自动归入当前分组 */
   $('watchTabs').addEventListener('click', e => {

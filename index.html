@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.7.3">
+<link rel="stylesheet" href="style.css?v=2.7.4">
 </head>
 <body>
 
@@ -214,31 +214,12 @@
         <div class="card-title">添加自选</div>
         <form id="watchForm">
           <div class="add-row sug-anchor">
-            <input type="text" id="wfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt（回车添加）">
+            <input type="text" id="wfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt">
             <div id="wfSug" class="sug-box" hidden></div>
+            <input type="text" id="wfNoteQuick" autocomplete="off" placeholder="备注 / 加入理由（选填）">
             <input type="text" id="wfGroupQuick" class="wg-quick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名">
-            <button type="submit" class="btn primary sm" id="wfSubmit">添加</button>
-          </div>
-          <div class="cm-details" id="wfAdv">
-            <div class="form-grid">
-              <label>代码
-                <input type="text" id="wfCode" placeholder="如 600519">
-              </label>
-              <label>名称
-                <input type="text" id="wfName" placeholder="贵州茅台">
-              </label>
-              <label>分组
-                <input type="text" id="wfGroup" placeholder="默认 / 科技 / 消费…" list="groupList">
-                <datalist id="groupList"></datalist>
-              </label>
-              <label class="span2">备注 / 加入理由
-                <input type="text" id="wfNote" placeholder="选填，如：人形机器人跟踪">
-              </label>
-              <div class="form-actions span2">
-                <button type="button" class="btn primary" id="wfSaveAdv">保存</button>
-                <button type="button" class="btn ghost" id="wfCancel" hidden>取消编辑</button>
-              </div>
-            </div>
+            <button type="submit" class="btn primary sm" id="wfSubmit">保存</button>
+            <button type="button" class="btn ghost sm" id="wfCancel" hidden>取消</button>
           </div>
         </form>
       </div>
@@ -505,6 +486,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.7.3"></script>
+<script src="app.js?v=2.7.4"></script>
 </body>
 </html>

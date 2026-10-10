@@ -608,3 +608,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   .tbl .sc-code { font-size: 10.5px; }
   .tbl th, .tbl td { padding: 8px 6px; }
 }
+
+/* ---------- v2.7.4 添加/编辑自选合一 ---------- */
+#watchForm .add-row #wfNoteQuick { flex: 1 1 200px; min-width: 0; }
+#watchForm .add-row #wfInput { flex: 1 1 240px; min-width: 0; }
+#watchForm .add-row .wg-quick { flex: 0 0 130px; }
