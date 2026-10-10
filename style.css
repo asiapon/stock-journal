@@ -553,3 +553,20 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .row-actions { flex-wrap: nowrap; white-space: nowrap; }
 .row-actions .icon-btn { white-space: nowrap; }
 .tag { white-space: nowrap; }
+
+/* ---------- v2.6.3 记一笔弹窗布局修正 ---------- */
+/* 解析确认行：按钮可换行不挤压 */
+.pending-list .p-item { flex-wrap: wrap; row-gap: 6px; }
+/* 手机端：弹窗近全屏、表单两列，span 对齐两列栅格 */
+@media (max-width: 639px) {
+  #recModal { padding: 10px; align-items: flex-end; }
+  #recModal .modal-lg {
+    max-width: none; width: 100%; max-height: 92vh;
+    border-radius: 16px 16px 0 0; padding: 14px 14px 18px;
+  }
+  #recModal .form-grid { grid-template-columns: 1fr 1fr; }
+  #recModal .fee-preview.span2,
+  #recModal .form-actions { grid-column: span 2 !important; }
+  #recModal .quick-input-row { flex-wrap: nowrap; }
+  #recModal .quick-input-row input { min-width: 0; }
+}
