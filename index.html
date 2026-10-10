@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.5.4">
+<link rel="stylesheet" href="style.css?v=2.5.5">
 </head>
 <body>
 
@@ -76,7 +76,7 @@
       操作日记
     </div>
     <div class="topbar-right">
-      <select id="modelSel" class="model-sel" title="AI 模型（用于交易解析）"><option value="">模型加载中…</option></select>
+      <span id="modelBadge" class="model-badge" title="当前使用的大模型（在 应用设置 → 模型 中切换）">未配置</span>
       <span id="modeBadge" class="mode-badge" title="数据存储方式">云端</span>
       <span id="userName" class="user-email"></span>
       <span id="userRole" class="role-badge" hidden>管理员</span>
@@ -292,15 +292,7 @@
         </div>
         <div class="rate-block">
           <div class="card-title-row" style="margin-top:12px">
-            <span class="card-title" style="font-size:14px">① WorkBuddy 平台模型</span>
-            <span class="hint">调用消耗 WorkBuddy 平台积分 · 费率为积分倍率，越低越便宜</span>
-          </div>
-          <input type="text" id="rateSearch" class="rate-search" placeholder="搜索模型名称或 ID" autocomplete="off">
-          <div id="rateList" class="rate-list"><div class="empty">加载中…</div></div>
-        </div>
-        <div class="cm-section">
-          <div class="card-title-row" style="margin-top:12px">
-            <span class="card-title" style="font-size:14px">② 自定义模型（OpenAI 兼容接口）</span>
+            <span class="card-title" style="font-size:14px">自定义模型（OpenAI 兼容接口）</span>
             <span class="hint">使用你自己的 API Key，不消耗 WorkBuddy 积分</span>
           </div>
           <p class="hint">接入任意 OpenAI 接口兼容的服务（DeepSeek、硅基流动等）。API Key 仅保存在本机浏览器，不会上传云端。</p>
@@ -517,6 +509,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.5.4"></script>
+<script src="app.js?v=2.5.5"></script>
 </body>
 </html>

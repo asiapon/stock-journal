@@ -123,6 +123,12 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   background: var(--blue-bg); color: var(--blue); outline: none;
 }
 .model-sel:focus { border-color: var(--blue); }
+/* 顶栏当前模型徽章（只读展示，切换在 应用设置 → 模型） */
+.model-badge {
+  max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  font-size: 12px; padding: 5px 12px; border-radius: 999px;
+  background: var(--blue-bg); color: var(--blue);
+}
 
 /* ---------- 横向导航（顶栏下方一排 Tab，与旧版一致） ---------- */
 .tabs {
@@ -399,7 +405,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   .topbar-brand { font-size: 14px; gap: 6px; }
   .topbar-brand .logo-ico { width: 18px; height: 18px; }
   .topbar-right { gap: 8px; min-width: 0; }
-  .model-sel { max-width: 128px; font-size: 11.5px; padding: 5px 8px; }
+  .model-badge { max-width: 150px; font-size: 11.5px; padding: 5px 9px; }
   .mode-badge { display: none; }
   .user-email { max-width: 84px; font-size: 12px; }
   .role-badge { display: none; }
