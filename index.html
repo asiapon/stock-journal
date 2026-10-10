@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.4.2">
+<link rel="stylesheet" href="style.css?v=2.5.0">
 </head>
 <body>
 
@@ -139,8 +139,12 @@
       <div class="card">
         <div class="card-title-row">
           <span class="card-title">当前持仓</span>
-          <button class="btn ghost sm" id="refreshHoldBtn" type="button">刷新</button>
+          <div style="display:flex;gap:8px">
+            <button class="btn primary sm" id="holdRecBtn" type="button">＋ 记一笔</button>
+            <button class="btn ghost sm" id="refreshHoldBtn" type="button">刷新</button>
+          </div>
         </div>
+        <div class="sum-cards sm" id="holdSummary"></div>
         <div class="weight-bar" id="weightBar"></div>
         <div class="table-scroll">
           <table class="tbl" id="holdTable">
@@ -186,7 +190,7 @@
           <table class="tbl" id="tradeTable">
             <thead><tr>
               <th>时间</th><th>方向</th><th>股票</th><th class="num">价格</th><th class="num">数量</th>
-              <th class="num">金额</th><th class="num">费用</th><th class="num">净额</th><th>操作</th>
+              <th class="num">成交金额</th><th class="num">费用</th><th class="num">发生金额</th><th>操作</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -245,7 +249,7 @@
           <table class="tbl" id="watchTable">
             <thead><tr>
               <th>股票</th><th>分组</th><th class="num">现价</th><th class="num">涨跌幅</th>
-              <th>备注 / 理由</th><th class="num">操作</th>
+              <th class="num">自选收益</th><th>自选日</th><th>备注 / 理由</th><th class="num">操作</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -317,6 +321,11 @@
         <div class="fee-calc">
           <div class="card-title">费用试算</div>
           <div class="quick-input-row">
+            <select id="calcType">
+              <option value="buy">买入</option>
+              <option value="sell">卖出</option>
+              <option value="both">双向对比</option>
+            </select>
             <select id="calcMarket">
               <option value="sh">沪市</option><option value="sz">深市</option><option value="bj">北交所</option>
             </select>
@@ -498,6 +507,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.4.2"></script>
+<script src="app.js?v=2.5.0"></script>
 </body>
 </html>

@@ -534,3 +534,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 #recModal .fee-preview.span2 { grid-column: span 4; }
 #recModal .fee-preview { justify-content: flex-end; flex-wrap: wrap; gap: 4px 14px; font-size: 12px; }
 #recModal .form-actions { grid-column: span 4; justify-content: flex-end; margin-top: 2px; }
+
+/* ---------- v2.5.0 未获取/获取失败标签 ---------- */
+.na-tag {
+  display: inline-block; font-size: 11px; line-height: 1;
+  padding: 3px 7px; border-radius: 999px;
+  background: rgba(23, 30, 38, .06); color: var(--ink-2);
+}

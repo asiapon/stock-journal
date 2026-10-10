@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.4.2';
+const APP_VER = '2.5.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -270,9 +270,68 @@ function computeHoldings() {
   return [...map.values()];
 }
 function quoteMap() {
-  const m = new Map();
-  for (const q of S.quotes) m.set(q.stock_code, q);
-  return m;
+  return NetQuote.map;   // 统一走网络行情（腾讯公开接口），不再读手填价格表
+}
+
+/* ============================================================
+   网络行情（腾讯公开接口，浏览器可直连；参考 trade-manager）
+   map: code -> { price, name, pct }；获取失败的代码不在 map 中
+   ============================================================ */
+const NetQuote = {
+  map: new Map(),
+  fetchedAt: 0,
+  pending: null,
+  ttl: 60 * 1000,
+  prefix(market, code) {
+    if (market === 'bj' || market === 'bse') return 'bj' + code;
+    if (market === 'sz') return 'sz' + code;
+    if (market === 'sh') return 'sh' + code;
+    return (/^(6|5|9)/.test(code) ? 'sh' : 'sz') + code;
+  },
+  allCodes() {
+    const mk = {}, codes = [];
+    const add = (c, m) => { if (c && !mk[c]) { mk[c] = m; codes.push(c); } };
+    S.trades.forEach(t => add(t.stock_code, t.market));
+    S.watchlist.forEach(w => add(w.stock_code, w.market));
+    return { codes, mk };
+  },
+  async refresh(force = false) {
+    const { codes, mk } = this.allCodes();
+    if (!codes.length) return this.map;
+    const fresh = Date.now() - this.fetchedAt < this.ttl;
+    if (this.pending) return this.pending;
+    if (!force && fresh && codes.every(c => this.map.has(c))) return this.map;
+    this.pending = (async () => {
+      const out = new Map();
+      for (let i = 0; i < codes.length; i += 50) {
+        const batch = codes.slice(i, i + 50);
+        try {
+          const q = batch.map(c => this.prefix(mk[c], c)).join(',');
+          const res = await fetch('https://qt.gtimg.cn/q=' + q);
+          const buf = await res.arrayBuffer();
+          const text = new TextDecoder('gbk').decode(buf);
+          for (const m of text.matchAll(/v_[a-z]{2}(\d{6})="([^"]*)"/g)) {
+            const p = m[2].split('~');
+            if (p.length < 40) continue;
+            const price = parseFloat(p[3]);
+            if (!(price > 0)) continue;          // 停牌/无数据
+            out.set(m[1], { price, name: p[1], pct: parseFloat(p[32]) });
+          }
+        } catch (e) { /* 网络失败：保持空，页面显示「未获取」 */ }
+      }
+      this.map = out;
+      this.fetchedAt = Date.now();
+      this.pending = null;
+      return out;
+    })();
+    return this.pending;
+  },
+  get(code) { return this.map.get(code) || null; }
+};
+/* 拉一次行情并刷新相关页面（登录后 / 手动刷新时调用） */
+async function refreshQuotes(force = false) {
+  await NetQuote.refresh(force);
+  renderAll();
 }
 
 /* ============================================================
@@ -682,7 +741,8 @@ function renderPending(hintId, inputId, list, summary) {
       <div class="p-item">
         <span class="tag ${t.type}">${t.type === 'buy' ? '买入' : '卖出'}</span>
         <span class="p-desc">${esc(t.name || t.code)} ${t.qty} 股 @${esc(t.price)} · ${esc(String(t.time).replace('T', ' ').slice(0, 16))}</span>
-        <button class="btn primary sm pfill-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">填入确认</button>
+        <button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">保存</button>
+        <button class="btn ghost sm pfill-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">改</button>
       </div>`).join('') + `</div>`;
 }
 
@@ -778,6 +838,7 @@ async function enterApp(user) {
   }
   StockDict.init();
   renderAll();
+  refreshQuotes().catch(() => { /* 行情失败页面显示未获取 */ });   // 网络行情到齐后再刷一遍
 }
 function switchAuthForm(id) {
   for (const f of ['loginForm', 'initForm', 'forcePwdForm']) $(f).hidden = f !== id;
@@ -831,14 +892,13 @@ function renderAll() {
 function renderToday() {
   const holds = computeHoldings().filter(h => h.qty > 0);
   const qm = quoteMap();
-  let totalMV = 0, totalFloat = 0, totalCost = 0;
+  let totalMV = 0, totalFloat = 0, totalCost = 0, missing = 0;
   for (const h of holds) {
     const q = qm.get(h.code);
     const price = q ? Number(q.price) : null;
     const costPrice = h.costValue / h.qty;
-    const mv = price != null ? h.qty * price : h.costValue;
-    totalMV += mv; totalCost += h.costValue;
-    if (price != null) totalFloat += h.qty * (price - costPrice);
+    if (price != null) { totalMV += h.qty * price; totalFloat += h.qty * (price - costPrice); totalCost += h.costValue; }
+    else missing++;
   }
   // 今日已实现（来自各持仓 timeline 的卖出事件）
   const todayStr = new Date().toDateString();
@@ -850,7 +910,7 @@ function renderToday() {
   }
   const floatPct = totalCost ? totalFloat / totalCost : 0;
   $('sumCards').innerHTML = `
-    <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
+    <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div>${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>
     <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div><div class="s-sub">${fmtPct(floatPct)}</div></div>
     <div class="sum-card"><div class="s-label">今日已实现</div><div class="s-value ${pnlCls(todayPnl)}">${todayPnl >= 0 ? '+' : ''}${fmt2(todayPnl)}</div></div>
     <div class="sum-card"><div class="s-label">持仓只数</div><div class="s-value">${holds.length}</div><div class="s-sub">在途 ${holds.length} 只</div></div>`;
@@ -858,14 +918,15 @@ function renderToday() {
   // 自选关注：星标优先 + 有涨跌幅的
   const ws = [...S.watchlist].sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0)).slice(0, 6);
   $('todayWatch').innerHTML = ws.length ? ws.map(w => {
-    const chg = w.cur_price && w.prev_close ? (w.cur_price - w.prev_close) / w.prev_close : null;
+    const q = quoteMap().get(w.stock_code);
+    const chg = q && q.pct != null && !isNaN(q.pct) ? q.pct / 100 : null;
     return `<div class="mini-item">
       <div class="mini-main">
         <div class="mini-title">${w.starred ? '<span class="tag star">关注</span>' : ''}${esc(w.stock_name || w.stock_code)}</div>
         <div class="mini-sub">${esc(w.stock_code)}${w.note ? ' · ' + esc(w.note) : ''}</div>
       </div>
       <div class="mini-right">
-        <div class="m-val">${w.cur_price != null ? fmtP(w.cur_price) : '—'}</div>
+        <div class="m-val">${q ? fmt2(q.price) : '—'}</div>
         ${chg != null ? `<div class="m-sub ${pnlCls(chg)}">${fmtPct(chg)}</div>` : ''}
       </div>
     </div>`;
@@ -894,14 +955,29 @@ function renderHoldings() {
   const all = computeHoldings();
   const holds = all.filter(h => h.qty > 0);
   const qm = quoteMap();
-  const totalMV = holds.reduce((s, h) => {
-    const q = qm.get(h.code); return s + (q && q.price != null ? h.qty * Number(q.price) : h.costValue);
-  }, 0);
+  const NA = '<span class="na-tag">未获取</span>';
+
+  /* 持仓总览（现价来自网络行情；未获取的股票不计入，并单独提示） */
+  let totalMV = 0, totalCost = 0, missing = 0;
+  for (const h of holds) {
+    const q = qm.get(h.code);
+    if (q && q.price != null) { totalMV += h.qty * q.price; totalCost += h.costValue; }
+    else missing++;
+  }
+  const totalFloat = totalMV - totalCost;
+  const totalPct = totalCost ? totalFloat / totalCost : null;
+  const hs = $('holdSummary');
+  if (hs) hs.innerHTML = holds.length ? `
+    <div class="sum-card"><div class="s-label">持仓市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
+    <div class="sum-card"><div class="s-label">持仓成本</div><div class="s-value">¥${fmt2(totalCost)}</div></div>
+    <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div></div>
+    <div class="sum-card"><div class="s-label">盈亏%</div><div class="s-value ${totalPct != null ? pnlCls(totalPct) : ''}">${totalPct != null ? fmtPct(totalPct) : '—'}</div>
+      ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>` : '';
 
   // 占比条
   const segs = holds.map((h, i) => {
     const q = qm.get(h.code);
-    const mv = q && q.price != null ? h.qty * Number(q.price) : h.costValue;
+    const mv = q && q.price != null ? h.qty * q.price : 0;
     return { name: h.name || h.code, pct: totalMV ? mv / totalMV : 0, color: WB_COLORS[i % WB_COLORS.length] };
   }).sort((a, b) => b.pct - a.pct);
   $('weightBar').innerHTML = segs.map(s =>
@@ -918,27 +994,26 @@ function renderHoldings() {
     $('weightBar').after(legend);
   }
 
-  // 表格
+  // 表格（现价一律来自网络行情；未获取时相关列显示「未获取」）
   $('holdEmpty').hidden = holds.length > 0;
   $('holdTable').querySelector('tbody').innerHTML = holds.map((h, i) => {
     const q = qm.get(h.code);
-    const price = q ? Number(q.price) : null;
+    const price = q ? q.price : null;
     const costPrice = h.costValue / h.qty;
-    const mv = price != null ? h.qty * price : h.costValue;
+    const mv = price != null ? h.qty * price : null;
     const float = price != null ? h.qty * (price - costPrice) : null;
     const floatPct = price != null && costPrice ? (price - costPrice) / costPrice : null;
     const color = WB_COLORS[i % WB_COLORS.length];
     return `<tr data-code="${esc(h.code)}">
       <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${esc(h.code)} · ${MKT_NAME[h.market] || ''}</span></div></td>
       <td class="num">${h.qty}</td>
-      <td class="num">${fmtP(costPrice)}</td>
-      <td class="num price-cell">${price != null ? fmtP(price) : '<button class="icon-btn set-price" data-code="' + esc(h.code) + '" data-name="' + esc(h.name) + '">改价</button>'}</td>
-      <td class="num">${fmt2(mv)}</td>
-      <td class="num ${float != null ? pnlCls(float) : ''}">${float != null ? (float >= 0 ? '+' : '') + fmt2(float) : '—'}</td>
-      <td class="num ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : '—'}</td>
-      <td class="num"><span class="wl-dot" style="display:inline-block;background:${color}"></span> ${(totalMV ? mv / totalMV * 100 : 0).toFixed(1)}%</td>
+      <td class="num">${fmt2(costPrice)}</td>
+      <td class="num price-cell">${price != null ? fmt2(price) : NA}</td>
+      <td class="num">${mv != null ? fmt2(mv) : NA}</td>
+      <td class="num ${float != null ? pnlCls(float) : ''}">${float != null ? (float >= 0 ? '+' : '') + fmt2(float) : NA}</td>
+      <td class="num ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : NA}</td>
+      <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : NA}</td>
       <td><div class="row-actions">
-        ${price != null ? `<button class="icon-btn set-price" data-code="${esc(h.code)}" data-name="${esc(h.name)}">改价</button>` : ''}
         <button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button>
       </div></td>
     </tr>`;
@@ -961,7 +1036,7 @@ function showHoldDetail(code) {
     <div class="sum-card"><div class="s-label">摊薄成本价</div><div class="s-value">${h.qty ? fmtP(diluted) : '—'}</div><div class="s-sub">盈亏滚入口径</div></div>
     <div class="sum-card"><div class="s-label">累计已实现</div><div class="s-value ${pnlCls(h.realized)}">${h.realized >= 0 ? '+' : ''}${fmt2(h.realized)}</div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(price != null ? h.qty * (price - costPrice) : 0)}">${price != null && h.qty ? (h.qty * (price - costPrice) >= 0 ? '+' : '') + fmt2(h.qty * (price - costPrice)) : '—'}</div></div>
-    <div class="sum-card"><div class="s-label">现价</div><div class="s-value">${price != null ? fmtP(price) : '未录入'}</div></div>`;
+    <div class="sum-card"><div class="s-label">现价</div><div class="s-value">${price != null ? fmt2(price) : '未获取'}</div></div>`;
   const sorted = [...h.timeline].sort((a, b) => new Date(b.t.transaction_time) - new Date(a.t.transaction_time));
   $('holdTimeline').innerHTML = sorted.map(ev => {
     const t = ev.t;
@@ -1007,7 +1082,7 @@ function renderTrades() {
       <td>${fmtTime(t.transaction_time, new Date(t.transaction_time).getFullYear() !== thisYear)}</td>
       <td><span class="tag ${t.transaction_type}">${t.transaction_type === 'buy' ? '买入' : '卖出'}</span></td>
       <td><div class="stock-cell"><span class="sc-name">${esc(t.stock_name || '')}</span><span class="sc-code">${esc(t.stock_code)}</span></div></td>
-      <td class="num">${fmtP(t.price)}</td>
+      <td class="num">${fmt2(t.price)}</td>
       <td class="num">${t.quantity}</td>
       <td class="num">${fmt2(t.gross_amount)}</td>
       <td class="num fee-cell" data-id="${t.id}" title="点击展开费用明细">${fmt2(fee)}</td>
@@ -1091,13 +1166,24 @@ function renderWatch() {
   gf.innerHTML = '<option value="">全部分组</option>' + groups.map(g => `<option${g === cur ? ' selected' : ''}>${esc(g)}</option>`).join('');
   const list = S.watchlist.filter(w => !cur || (w.group_name || '默认') === cur);
   $('watchEmpty').hidden = list.length > 0;
+  const qm = quoteMap();
+  const FAIL = '<span class="na-tag">获取失败</span>';
   $('watchTable').querySelector('tbody').innerHTML = list.map(w => {
-    const chg = w.cur_price && w.prev_close ? (Number(w.cur_price) - Number(w.prev_close)) / Number(w.prev_close) : null;
+    const q = qm.get(w.stock_code);
+    const price = q ? q.price : null;                       // 网络现价
+    const chg = q && q.pct != null && !isNaN(q.pct) ? q.pct / 100 : null;
+    /* 自选收益：现价 vs 添加/手填时的价格锚点（cur_price） */
+    const anchor = w.cur_price != null ? Number(w.cur_price) : null;
+    const gain = price != null && anchor ? (price - anchor) / anchor : null;
+    const d = w.created_at ? new Date(w.created_at) : null;
+    const addDate = d && !isNaN(d) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '—';
     return `<tr data-id="${w.id}">
       <td><div class="stock-cell"><span class="sc-name">${esc(w.stock_name || '')}</span><span class="sc-code">${esc(w.stock_code)}${w.starred ? ' · <span class="tag star">关注</span>' : ''}</span></div></td>
       <td>${esc(w.group_name || '默认')}</td>
-      <td class="num">${w.cur_price != null ? fmtP(w.cur_price) : '—'}</td>
-      <td class="num ${chg != null ? pnlCls(chg) : ''}">${chg != null ? fmtPct(chg) : '—'}</td>
+      <td class="num">${price != null ? fmt2(price) : FAIL}</td>
+      <td class="num ${chg != null ? pnlCls(chg) : ''}">${chg != null ? fmtPct(chg) : FAIL}</td>
+      <td class="num ${gain != null ? pnlCls(gain) : ''}">${gain != null ? fmtPct(gain) : '—'}</td>
+      <td class="hint">${addDate}</td>
       <td class="hint">${esc(w.note || '')}</td>
       <td><div class="row-actions">
         <button class="icon-btn star-watch" data-id="${w.id}">${w.starred ? '取消关注' : '关注'}</button>
@@ -1251,15 +1337,42 @@ function bindEvents() {
   $('tradeParseBtn').addEventListener('click', () => aiParseEntry('tradeNl', 'tradeHint'));
   $('tradeNl').addEventListener('keydown', e => { if (e.key === 'Enter') aiParseEntry('tradeNl', 'tradeHint'); });
   ['quickHint', 'tradeHint'].forEach(hid => $(hid).addEventListener('click', e => {
+    const saveB = e.target.closest('.p-save-btn');
+    if (saveB) {
+      const t = pendingTrades[Number(saveB.dataset.i)];
+      if (t) savePendingTrade(t, saveB);
+      return;
+    }
     const b = e.target.closest('.pfill-btn');
     if (!b) return;
     const t = pendingTrades[Number(b.dataset.i)];
     if (!t) return;
     fillFormFromParsed(t);
     switchView('trades');
+    openRecModal(false);
     $(b.dataset.hint).hidden = true;
     $(b.dataset.input).value = '';
   }));
+  /* 解析结果一键入库（免表单） */
+  async function savePendingTrade(t, btn) {
+    let code = t.code || '', name = t.name || '';
+    if (!code && name) { const hit = StockDict.resolve(name); if (hit && hit.code) { code = hit.code; name = hit.name || name; } }
+    if (!code) { toast('未能识别股票代码，请点「改」手动确认', 'warn'); return; }
+    if (!(t.price > 0) || !(t.qty > 0)) { toast('价格或数量无法识别，请点「改」手动确认', 'warn'); return; }
+    const row = buildTradeRow({
+      type: t.type, code, name, market: t.market || inferMarket(code),
+      price: parseFloat(t.price), qty: parseInt(t.qty, 10),
+      time: (t.time && !isNaN(new Date(t.time))) ? t.time : nowLocalInput(), note: ''
+    });
+    btn.disabled = true;
+    try {
+      await store.insert('trades', row);
+      await store.log('trade', `新增交易 ${row.stock_name || row.stock_code} ${row.transaction_type === 'buy' ? '买入' : '卖出'} ${row.quantity}股@${row.price}`);
+      toast(`已保存：${row.stock_name || row.stock_code} ${row.transaction_type === 'buy' ? '买入' : '卖出'} ${row.quantity}股`);
+      btn.textContent = '已存';
+      await loadAll(); renderAll(); refreshQuotes();
+    } catch (err) { btn.disabled = false; toast(err.message || '保存失败', 'warn'); }
+  }
   $('openFormBtn').addEventListener('click', () => { switchView('trades'); openRecModal(); });
   /* 记一笔弹窗：开关与关闭 */
   $('recModalBtn').addEventListener('click', () => openRecModal());
@@ -1405,7 +1518,8 @@ function bindEvents() {
   });
 
   /* 持仓：刷新 / 改价 / 明细 */
-  $('refreshHoldBtn').addEventListener('click', async () => { await loadAll(); renderHoldings(); renderToday(); toast('已刷新'); });
+  $('refreshHoldBtn').addEventListener('click', async () => { await loadAll(); await refreshQuotes(true); toast('已刷新行情'); });
+  $('holdRecBtn').addEventListener('click', () => openRecModal());
   $('holdDetailClose').addEventListener('click', () => { $('holdDetail').hidden = true; });
   $('holdTable').querySelector('tbody').addEventListener('click', e => {
     const sp = e.target.closest('.set-price');
@@ -1452,11 +1566,14 @@ function bindEvents() {
     else hit = StockDict.resolve(txt);
     if (!hit || !hit.code) { toast('未识别股票，可在「高级选项」手动录入', 'warn'); return; }
     if (!hit.name) hit.name = hit.code;
+    /* 添加时记一个现价锚点（供「自选收益」计算）；网络行情没有则留空 */
+    let anchor = NetQuote.get(hit.code);
+    if (!anchor) { try { await refreshQuotes(true); } catch (e) { /* */ } anchor = NetQuote.get(hit.code); }
     const row = {
       stock_code: hit.code,
       stock_name: hit.name,
       group_name: $('wfGroupQuick').value.trim() || '默认',
-      note: '', cur_price: null, prev_close: null
+      note: '', cur_price: anchor ? anchor.price : null, prev_close: null
     };
     try {
       await store.insert('watchlist', row);
@@ -1530,11 +1647,23 @@ function bindEvents() {
     const amount = parseFloat($('calcAmount').value);
     if (!(amount >= 0)) { $('calcResult').innerHTML = ''; return; }
     const mk = $('calcMarket').value;
-    const buy = calcFees(amount, 'buy', mk);
-    const sell = calcFees(amount, 'sell', mk);
-    $('calcResult').innerHTML = `
-      <span>买入费用 <b>${fmt2(buy.total)}</b>（佣金 ${fmt2(buy.commission)}）</span>
-      <span>卖出费用 <b>${fmt2(sell.total)}</b>（佣金 ${fmt2(sell.commission)} + 印花税 ${fmt2(sell.stamp)}）</span>`;
+    const dir = $('calcType').value;
+    const detail = f => `
+      <span>佣金 <b>${fmt2(f.commission)}</b></span>
+      <span>印花税 <b>${fmt2(f.stamp)}</b></span>
+      <span>过户费 <b>${fmt2(f.transfer || 0)}</b></span>
+      <span>经手费 <b>${fmt2(f.handling || 0)}</b></span>
+      <span>证管费 <b>${fmt2(f.gov || 0)}</b></span>`;
+    if (dir === 'both') {
+      const buy = calcFees(amount, 'buy', mk), sell = calcFees(amount, 'sell', mk);
+      $('calcResult').innerHTML = `
+        <span>买入合计 <b>${fmt2(buy.total)}</b></span>${detail(buy)}
+        <span>卖出合计 <b>${fmt2(sell.total)}</b></span>${detail(sell)}`;
+    } else {
+      const f = calcFees(amount, dir, mk);
+      $('calcResult').innerHTML = `
+        <span>${dir === 'buy' ? '买入' : '卖出'}费用合计 <b>${fmt2(f.total)}</b></span>${detail(f)}`;
+    }
   });
 
   /* 我的：数据管理 */
