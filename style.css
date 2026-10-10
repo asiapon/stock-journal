@@ -624,3 +624,14 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   box-sizing: border-box;
 }
 #watchForm .add-row .btn.sm { height: 32px; padding: 0 14px; font-size: 13px; box-sizing: border-box; }
+
+/* ---------- v2.8.1 全局统一输入框/下拉/按钮高度32px、字号13px ---------- */
+input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
+select, textarea {
+  height: 32px; font-size: 13px; line-height: 1.4;
+  padding: 0 10px; box-sizing: border-box;
+}
+textarea { height: auto; min-height: 32px; padding: 8px 10px; resize: vertical; }
+select { padding-right: 6px; }
+.btn { height: 32px; padding: 0 14px; font-size: 13px; box-sizing: border-box; }
+.btn.sm { padding: 0 10px; }
