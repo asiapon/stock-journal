@@ -635,3 +635,7 @@ textarea { height: auto; min-height: 32px; padding: 8px 10px; resize: vertical; 
 select { padding-right: 6px; }
 .btn { height: 32px; padding: 0 14px; font-size: 13px; box-sizing: border-box; }
 .btn.sm { padding: 0 10px; }
+
+/* ---------- v2.8.2 修复表单内 select/input 32px 高度下文字被裁 ---------- */
+.form-grid input, .form-grid select { padding: 0 10px; }
+#recModal .form-grid input, #recModal .form-grid select { padding: 0 9px; }
