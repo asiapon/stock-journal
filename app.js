@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.3.0';
+const APP_VER = '2.4.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -464,14 +464,27 @@ const ModelMgr = {
       }
     } catch (e) { /* */ }
   },
+  /* 下拉短标签：不带费率后缀（费率只在费率列表展示） */
+  shortLabel(m) {
+    if (!m) return '（未选择模型）';
+    if (m.custom) return `${m.name}·${m.model}（自定义）`;
+    return (m.name || m.id) + (m.vendor ? ' · ' + m.vendor : '');
+  },
   render() {
     const all = this.all();
-    const opts = all.length
-      ? all.map(m => `<option value="${esc(this.modelId(m))}">${esc(this.label(m))}</option>`).join('')
-      : '<option value="">（暂无可选模型）</option>';
+    let inner;
+    if (!all.length) {
+      inner = '<option value="">（暂无可选模型）</option>';
+    } else {
+      const grp = (list, title) => list.length
+        ? `<optgroup label="${title}">` + list.map(m => `<option value="${esc(this.modelId(m))}">${esc(this.shortLabel(m))}</option>`).join('') + '</optgroup>'
+        : '';
+      inner = grp(this.platform.map(m => Object.assign({ platform: true }, m)), 'WorkBuddy 平台模型（消耗平台积分）')
+            + grp(this.custom.map(c => Object.assign({ custom: true }, c)), '自定义模型（自己的 API Key）');
+    }
     for (const selId of ['modelSel', 'modelCurSel']) {
       const sel = $(selId); if (!sel) continue;
-      sel.innerHTML = opts;
+      sel.innerHTML = inner;
       if (this.cur) sel.value = this.modelId(this.cur);
       sel.disabled = !all.length;
     }
@@ -1032,7 +1045,7 @@ function fillTradeForm(t) {
   $('tfNote').value = t.note || '';
   $('tfSubmit').textContent = '保存修改';
   updateFeePreview();
-  $('tradeForm').scrollIntoView({ behavior: 'smooth', block: 'center' });
+  openRecModal(false);
 }
 function resetTradeForm() {
   S.editingTradeId = null;
@@ -1040,6 +1053,18 @@ function resetTradeForm() {
   $('tfTime').value = nowLocalInput();
   $('tfSubmit').textContent = '保存';
   updateFeePreview();
+}
+/* 「记一笔」弹窗 */
+function openRecModal(reset = true) {
+  const m = $('recModal'); if (!m) return;
+  if (reset) resetTradeForm();
+  m.hidden = false;
+}
+function closeRecModal() {
+  const m = $('recModal'); if (!m) return;
+  m.hidden = true;
+  $('tradeHint').hidden = true;
+  resetTradeForm();
 }
 function updateFeePreview() {
   const price = parseFloat($('tfPrice').value), qty = parseInt($('tfQty').value, 10);
@@ -1081,8 +1106,13 @@ function renderWatch() {
       </div></td>
     </tr>`;
   }).join('');
-  // 分组 datalist
+  // 分组 datalist + 快捷添加分组下拉（保留已选值）
   $('groupList').innerHTML = groups.map(g => `<option value="${esc(g)}">`).join('');
+  const gq = $('wfGroupQuick');
+  if (gq) {
+    const curVal = gq.value;
+    gq.innerHTML = [...new Set(['默认', ...groups])].map(g => `<option value="${esc(g)}"${g === curVal ? ' selected' : ''}>${esc(g)}</option>`).join('');
+  }
 }
 function fillWatchForm(w) {
   S.editingWatchId = w.id;
@@ -1230,7 +1260,12 @@ function bindEvents() {
     $(b.dataset.hint).hidden = true;
     $(b.dataset.input).value = '';
   }));
-  $('openFormBtn').addEventListener('click', () => { switchView('trades'); resetTradeForm(); });
+  $('openFormBtn').addEventListener('click', () => { switchView('trades'); openRecModal(); });
+  /* 记一笔弹窗：开关与关闭 */
+  $('recModalBtn').addEventListener('click', () => openRecModal());
+  $('recModalClose').addEventListener('click', closeRecModal);
+  $('recModal').addEventListener('mousedown', e => { if (e.target === $('recModal')) closeRecModal(); });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('recModal').hidden) closeRecModal(); });
 
   /* AI 模型 */
   $('modelSel').addEventListener('change', () => ModelMgr.setCur($('modelSel').value));
@@ -1329,6 +1364,7 @@ function bindEvents() {
       }
       resetTradeForm();
       await loadAll(); renderAll();
+      closeRecModal();
     } catch (err) { toast(err.message || '保存失败', 'warn'); }
   });
 
@@ -1419,7 +1455,7 @@ function bindEvents() {
     const row = {
       stock_code: hit.code,
       stock_name: hit.name,
-      group_name: '默认',
+      group_name: $('wfGroupQuick').value.trim() || '默认',
       note: '', cur_price: null, prev_close: null
     };
     try {

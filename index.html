@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.3.0">
+<link rel="stylesheet" href="style.css?v=2.4.0">
 </head>
 <body>
 
@@ -165,65 +165,10 @@
 
     <!-- ============ 操作 ============ -->
     <section id="view-trades" class="view">
-        <div class="card">
-          <div class="card-title-row">
-            <span class="card-title">记一笔</span>
-            <span class="hint">AI 解析多笔交易后逐笔确认；解析失败时手动填写</span>
-          </div>
-          <div class="quick-input-row">
-            <input type="text" id="tradeNl" placeholder="例：昨天12.3买入2000股三峡能源，今天13块止盈一半">
-            <button class="btn primary" id="tradeParseBtn" type="button">AI 解析</button>
-          </div>
-          <div class="chips" id="tradeChips">
-            <span class="chip" data-nl="买了1000股中兴通讯单价39.5">买了1000股中兴通讯单价39.5</span>
-            <span class="chip" data-nl="40块卖了5手中兴通讯">40块卖了5手中兴通讯</span>
-            <span class="chip" data-nl="昨天12.3买入2000股三峡能源，今天13块止盈一半">昨天买入手今止盈一半</span>
-          </div>
-          <div id="tradeHint" class="quick-hint" hidden></div>
-        <form id="tradeForm" class="form-grid">
-          <label>方向
-            <select id="tfType">
-              <option value="buy">买入</option>
-              <option value="sell">卖出</option>
-            </select>
-          </label>
-          <label class="sug-anchor">股票代码
-            <input type="text" id="tfCode" placeholder="如 000063" required pattern="[0-9A-Za-z]{5,6}" autocomplete="off">
-            <div id="tfCodeSug" class="sug-box" hidden></div>
-          </label>
-          <label class="sug-anchor">名称
-            <input type="text" id="tfName" placeholder="输入代码自动带出，可手改" autocomplete="off">
-            <div id="tfNameSug" class="sug-box" hidden></div>
-          </label>
-          <label>市场
-            <select id="tfMarket">
-              <option value="sh">沪市</option>
-              <option value="sz">深市</option>
-              <option value="bj">北交所</option>
-            </select>
-          </label>
-          <label>价格
-            <input type="number" id="tfPrice" step="0.01" min="0.01" required>
-          </label>
-          <label>数量（股）
-            <input type="number" id="tfQty" step="100" min="1" required>
-          </label>
-          <label>成交时间
-            <input type="datetime-local" id="tfTime" required>
-          </label>
-          <label class="span2">备注
-            <input type="text" id="tfNote" placeholder="选填">
-          </label>
-          <div class="fee-preview span2" id="feePreview"></div>
-          <div class="form-actions span2">
-            <button type="submit" class="btn primary" id="tfSubmit">保存</button>
-            <button type="button" class="btn ghost" id="tfReset">重置</button>
-          </div>
-        </form>
-      </div>
       <div class="card">
         <div class="card-title-row">
           <span class="card-title">交易记录</span>
+          <button class="btn primary sm" id="recModalBtn" type="button">＋ 记一笔</button>
           <div class="filters">
             <input type="date" id="ftFrom" title="开始日期">
             <span class="filter-sep">—</span>
@@ -258,16 +203,17 @@
           <div class="add-row sug-anchor">
             <input type="text" id="wfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt（回车添加）">
             <div id="wfSug" class="sug-box" hidden></div>
+            <select id="wfGroupQuick" title="选择分组"><option value="默认">默认</option></select>
             <button type="submit" class="btn primary sm" id="wfSubmit">添加</button>
           </div>
           <details class="cm-details" id="wfAdv">
-            <summary>高级选项（分组 / 备注 / 手动价格）与编辑</summary>
+            <summary>高级选项（备注 / 手动价格）与编辑</summary>
             <div class="form-grid">
               <label>代码
-                <input type="text" id="wfCode" placeholder="如 600519" required pattern="[0-9A-Za-z]{5,6}">
+                <input type="text" id="wfCode" placeholder="如 600519">
               </label>
               <label>名称
-                <input type="text" id="wfName" placeholder="贵州茅台" required>
+                <input type="text" id="wfName" placeholder="贵州茅台">
               </label>
               <label>现价（选填）
                 <input type="number" id="wfPrice" step="0.001" min="0" placeholder="手动录入">
@@ -333,15 +279,18 @@
         </div>
         <div class="rate-block">
           <div class="card-title-row" style="margin-top:12px">
-            <span class="card-title" style="font-size:14px">平台模型与费率</span>
-            <span class="hint">费率为积分倍率，越低越便宜；点击行切换当前模型</span>
+            <span class="card-title" style="font-size:14px">① WorkBuddy 平台模型</span>
+            <span class="hint">调用消耗 WorkBuddy 平台积分 · 费率为积分倍率，越低越便宜</span>
           </div>
           <input type="text" id="rateSearch" class="rate-search" placeholder="搜索模型名称或 ID" autocomplete="off">
           <div id="rateList" class="rate-list"><div class="empty">加载中…</div></div>
         </div>
-        <details class="cm-details" open>
-          <summary>自定义模型（OpenAI 兼容接口）</summary>
-          <p class="hint">接入任意 OpenAI 接口兼容的服务（DeepSeek、硅基流动等），使用你自己的 Token。API Key 仅保存在本机浏览器，不会上传云端。</p>
+        <div class="cm-section">
+          <div class="card-title-row" style="margin-top:12px">
+            <span class="card-title" style="font-size:14px">② 自定义模型（OpenAI 兼容接口）</span>
+            <span class="hint">使用你自己的 API Key，不消耗 WorkBuddy 积分</span>
+          </div>
+          <p class="hint">接入任意 OpenAI 接口兼容的服务（DeepSeek、硅基流动等）。API Key 仅保存在本机浏览器，不会上传云端。</p>
           <form id="customModelForm" class="form-grid">
             <label>名称<input type="text" id="cmName" placeholder="如 DeepSeek" required></label>
             <label class="span2">Base URL<input type="text" id="cmBaseUrl" placeholder="https://api.deepseek.com/v1" required></label>
@@ -350,7 +299,7 @@
             <div class="form-actions span2"><button type="submit" class="btn ghost">添加自定义模型</button></div>
           </form>
           <div id="customModelList" class="mini-list"></div>
-        </details>
+        </div>
       </div>
       </div>
 
@@ -472,6 +421,67 @@
     </button>
   </nav>
 
+  <!-- 模态：记一笔 -->
+  <div id="recModal" class="modal-mask" hidden>
+    <div class="modal modal-lg">
+      <div class="modal-title-row">
+        <div class="modal-title">记一笔</div>
+        <button class="modal-x" id="recModalClose" type="button" title="关闭">✕</button>
+      </div>
+      <p class="hint">一句话描述交易，AI 解析后逐笔确认；也可直接填下方表单。</p>
+      <div class="quick-input-row">
+        <input type="text" id="tradeNl" placeholder="例：昨天12.3买入2000股三峡能源，今天13块止盈一半">
+        <button class="btn primary" id="tradeParseBtn" type="button">AI 解析</button>
+      </div>
+      <div class="chips" id="tradeChips">
+        <span class="chip" data-nl="买了1000股中兴通讯单价39.5">买了1000股中兴通讯单价39.5</span>
+        <span class="chip" data-nl="40块卖了5手中兴通讯">40块卖了5手中兴通讯</span>
+        <span class="chip" data-nl="昨天12.3买入2000股三峡能源，今天13块止盈一半">昨天买入手今止盈一半</span>
+      </div>
+      <div id="tradeHint" class="quick-hint" hidden></div>
+      <form id="tradeForm" class="form-grid">
+        <label>方向
+          <select id="tfType">
+            <option value="buy">买入</option>
+            <option value="sell">卖出</option>
+          </select>
+        </label>
+        <label class="sug-anchor">股票代码
+          <input type="text" id="tfCode" placeholder="如 000063" required pattern="[0-9A-Za-z]{5,6}" autocomplete="off">
+          <div id="tfCodeSug" class="sug-box" hidden></div>
+        </label>
+        <label class="sug-anchor">名称
+          <input type="text" id="tfName" placeholder="输入代码自动带出，可手改" autocomplete="off">
+          <div id="tfNameSug" class="sug-box" hidden></div>
+        </label>
+        <label>市场
+          <select id="tfMarket">
+            <option value="sh">沪市</option>
+            <option value="sz">深市</option>
+            <option value="bj">北交所</option>
+          </select>
+        </label>
+        <label>价格
+          <input type="number" id="tfPrice" step="0.01" min="0.01" required>
+        </label>
+        <label>数量（股）
+          <input type="number" id="tfQty" step="100" min="1" required>
+        </label>
+        <label>成交时间
+          <input type="datetime-local" id="tfTime" required>
+        </label>
+        <label class="span2">备注
+          <input type="text" id="tfNote" placeholder="选填">
+        </label>
+        <div class="fee-preview span2" id="feePreview"></div>
+        <div class="form-actions span2">
+          <button type="submit" class="btn primary" id="tfSubmit">保存</button>
+          <button type="button" class="btn ghost" id="tfReset">重置</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- 模态：确认 -->
   <div id="confirmModal" class="modal-mask" hidden>
     <div class="modal">
@@ -488,6 +498,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.3.0"></script>
+<script src="app.js?v=2.4.0"></script>
 </body>
 </html>
