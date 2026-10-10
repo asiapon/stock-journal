@@ -599,3 +599,12 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   .add-row input { flex: 1 1 100%; }
   .wg-quick { flex: 1 1 100%; }
 }
+
+/* ---------- v2.7.3 自选列表优化 ---------- */
+.tbl td.adate { white-space: nowrap; }
+@media (max-width: 639px) {
+  .tbl .stock-cell { max-width: 96px; }
+  .tbl .sc-name { font-size: 12.5px; }
+  .tbl .sc-code { font-size: 10.5px; }
+  .tbl th, .tbl td { padding: 8px 6px; }
+}

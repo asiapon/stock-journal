@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.7.2">
+<link rel="stylesheet" href="style.css?v=2.7.3">
 </head>
 <body>
 
@@ -219,8 +219,7 @@
             <input type="text" id="wfGroupQuick" class="wg-quick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名">
             <button type="submit" class="btn primary sm" id="wfSubmit">添加</button>
           </div>
-          <details class="cm-details" id="wfAdv">
-            <summary>高级选项（备注 / 手动价格）与编辑</summary>
+          <div class="cm-details" id="wfAdv">
             <div class="form-grid">
               <label>代码
                 <input type="text" id="wfCode" placeholder="如 600519">
@@ -240,13 +239,13 @@
                 <button type="button" class="btn ghost" id="wfCancel" hidden>取消编辑</button>
               </div>
             </div>
-          </details>
+          </div>
         </form>
       </div>
       <div class="card">
         <div class="card-title-row">
           <span class="card-title">自选列表</span>
-          <button class="btn ghost sm" id="delGroupBtn" type="button" hidden>删除该分组</button>
+          <button class="btn ghost sm" id="delGroupBtn" type="button" style="visibility:hidden">删除该分组</button>
           <span class="hint">点分组 Tab 切换；当前分组下添加股票自动归组</span>
         </div>
         <div class="wtabs" id="watchTabs"></div>
@@ -506,6 +505,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.7.2"></script>
+<script src="app.js?v=2.7.3"></script>
 </body>
 </html>

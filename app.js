@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.7.2';
+const APP_VER = '2.7.3';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1195,7 +1195,7 @@ function renderWatch() {
       <td class="num">${q && q.low != null ? fmt2(q.low) : '—'}</td>
       <td class="num">${q && q.prevClose != null ? fmt2(q.prevClose) : '—'}</td>
       <td class="num ${gain != null ? pnlCls(gain) : ''}">${gain != null ? fmtPct(gain) : '—'}</td>
-      <td class="hint">${addDate}</td>
+      <td class="hint adate">${addDate}</td>
       <td class="hint">${esc(w.note || '')}</td>
       <td><div class="row-actions">
         <button class="icon-btn edit-watch" data-id="${w.id}">编辑</button>
@@ -1208,7 +1208,7 @@ function renderWatch() {
   $('watchEmpty').textContent = watchTab ? `分组「${watchTab}」暂无自选，在上方添加会自动归入此分组` : '暂无自选股';
   /* 当前在具体分组 Tab（「默认」除外）时显示「删除该分组」 */
   const dgb = $('delGroupBtn');
-  if (dgb) dgb.hidden = !(watchTab && watchTab !== '默认');
+  if (dgb) dgb.style.visibility = (watchTab && watchTab !== '默认') ? 'visible' : 'hidden';
 }
 /* 分组下拉数据源：所有已用分组 + 默认（数据加载完即同步，供添加/高级选项联想） */
 function syncGroupList() {
@@ -1225,7 +1225,6 @@ function fillWatchForm(w) {
   $('wfNote').value = w.note || '';
   $('wfSaveAdv').textContent = '保存修改';
   $('wfCancel').hidden = false;
-  const adv = $('wfAdv'); if (adv) adv.open = true;
 }
 function resetWatchForm() {
   S.editingWatchId = null;
