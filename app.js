@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.8.2';
+const APP_VER = '2.8.3';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -739,6 +739,7 @@ function renderPending(hintId, inputId, list, summary) {
   const el = $(hintId);
   el.className = 'quick-hint';
   el.innerHTML = (summary ? `<div class="p-sum">${esc(summary)}</div>` : '')
+    + (list.length > 1 ? `<div class="p-saveall-row"><button class="btn primary sm p-saveall-btn" type="button">全部保存（${list.length} 笔）</button></div>` : '')
     + `<div class="pending-list">` + list.map((t, i) => `
       <div class="p-item">
         <span class="tag ${t.type}">${t.type === 'buy' ? '买入' : '卖出'}</span>
@@ -1121,9 +1122,7 @@ function feeDetailRow(t) {
 function fillTradeForm(t) {
   S.editingTradeId = t.id;
   $('tfType').value = t.transaction_type;
-  $('tfCode').value = t.stock_code;
-  $('tfName').value = t.stock_name || '';
-  $('tfMarket').value = t.market || inferMarket(t.stock_code);
+  setTfStock(t.stock_code, t.stock_name || '');
   $('tfPrice').value = t.price;
   $('tfQty').value = t.quantity;
   const d = new Date(t.transaction_time), p = n => String(n).padStart(2, '0');
@@ -1136,6 +1135,7 @@ function fillTradeForm(t) {
 function resetTradeForm() {
   S.editingTradeId = null;
   $('tradeForm').reset();
+  setTfStock('', '');
   $('tfTime').value = nowLocalInput();
   $('tfSubmit').textContent = '保存';
   updateFeePreview();
@@ -1152,9 +1152,29 @@ function closeRecModal() {
   $('tradeHint').hidden = true;
   resetTradeForm();
 }
+/* 股票联想框：选定即确定代码/名称，市场由代码推断 */
+function setTfStock(code, name) {
+  const inp = $('tfStock');
+  inp.value = name ? `${code} ${name}` : code;
+  inp.dataset.code = code || '';
+  inp.dataset.sname = name || '';
+}
+function resolveTfStock() {
+  const inp = $('tfStock');
+  const txt = inp.value.trim();
+  let code = inp.dataset.code || '', name = inp.dataset.sname || '';
+  if (!(code && txt.startsWith(code)) && txt) {
+    const hit = StockDict.resolve(txt);
+    if (hit && hit.code) { code = hit.code; name = hit.name || name; }
+    else if (/^\d{5,6}$/.test(txt)) { code = txt; name = ''; }
+    else { code = ''; name = ''; }
+  }
+  if (code && !name) { const hit = StockDict.resolve(code); if (hit && hit.name) name = hit.name; }
+  return { code, name, market: code ? inferMarket(code) : 'sh' };
+}
 function updateFeePreview() {
   const price = parseFloat($('tfPrice').value), qty = parseInt($('tfQty').value, 10);
-  const type = $('tfType').value, market = $('tfMarket').value;
+  const type = $('tfType').value, market = resolveTfStock().market;
   if (!(price > 0) || !(qty > 0)) { $('feePreview').innerHTML = ''; return; }
   const gross = price * qty;
   const f = calcFees(gross, type, market);
@@ -1363,6 +1383,8 @@ function bindEvents() {
   $('tradeParseBtn').addEventListener('click', () => aiParseEntry('tradeNl', 'tradeHint'));
   $('tradeNl').addEventListener('keydown', e => { if (e.key === 'Enter') aiParseEntry('tradeNl', 'tradeHint'); });
   ['quickHint', 'tradeHint'].forEach(hid => $(hid).addEventListener('click', e => {
+    const saveAllB = e.target.closest('.p-saveall-btn');
+    if (saveAllB) { saveAllPending(saveAllB); return; }
     const saveB = e.target.closest('.p-save-btn');
     if (saveB) {
       const t = pendingTrades[Number(saveB.dataset.i)];
@@ -1396,8 +1418,28 @@ function bindEvents() {
       await store.log('trade', `新增交易 ${row.stock_name || row.stock_code} ${row.transaction_type === 'buy' ? '买入' : '卖出'} ${row.quantity}股@${row.price}`);
       toast(`已保存：${row.stock_name || row.stock_code} ${row.transaction_type === 'buy' ? '买入' : '卖出'} ${row.quantity}股`);
       btn.textContent = '已存';
+      t._saved = true;
       await loadAll(); renderAll(); refreshQuotes();
     } catch (err) { btn.disabled = false; toast(err.message || '保存失败', 'warn'); }
+  }
+  /* 多条解析结果一键全部入库 */
+  async function saveAllPending(btn) {
+    const targets = pendingTrades.filter(t => !t._saved);
+    if (!targets.length) { toast('没有待保存的记录'); return; }
+    btn.disabled = true;
+    let ok = 0;
+    for (const t of targets) {
+      const ghost = { disabled: false, textContent: '' };
+      try { await savePendingTrade(t, ghost); if (t._saved) ok++; } catch (e) { /* 单笔失败继续 */ }
+    }
+    btn.disabled = false;
+    if (ok === targets.length) {
+      btn.textContent = `已全部保存`;
+      toast(`已全部保存（${ok} 笔）`);
+      $('tradeHint').hidden = true;
+    } else {
+      btn.textContent = `已保存 ${ok}/${targets.length}，其余请点「改」确认`;
+    }
   }
   $('openFormBtn').addEventListener('click', () => { switchView('trades'); openRecModal(); });
   /* 记一笔弹窗：开关与关闭 */
@@ -1455,36 +1497,31 @@ function bindEvents() {
     if (c) { $('tradeNl').value = c.dataset.nl; $('tradeNl').focus(); }
   });
 
-  /* 交易表单 */
-  bindSuggest('tfCode', 'tfCodeSug', h => {
-    $('tfCode').value = h.code;
-    $('tfName').value = h.name;
-    $('tfMarket').value = h.mkt;
+  /* 交易表单：股票联想（选定后代码/名称/市场自动确定） */
+  bindSuggest('tfStock', 'tfStockSug', h => {
+    setTfStock(h.code, h.name);
     updateFeePreview();
   });
-  bindSuggest('tfName', 'tfNameSug', h => {
-    $('tfCode').value = h.code;
-    $('tfName').value = h.name;
-    $('tfMarket').value = h.mkt;
+  $('tfStock').addEventListener('input', () => {
+    const inp = $('tfStock');
+    if (!(inp.dataset.code && inp.value.trim().startsWith(inp.dataset.code))) {
+      delete inp.dataset.code; delete inp.dataset.sname;
+    }
     updateFeePreview();
   });
   $('tfType').addEventListener('change', updateFeePreview);
-  $('tfMarket').addEventListener('change', updateFeePreview);
   $('tfPrice').addEventListener('input', updateFeePreview);
   $('tfQty').addEventListener('input', updateFeePreview);
-  $('tfCode').addEventListener('change', () => {
-    const c = $('tfCode').value.trim();
-    if (/^\d{5,6}$/.test(c)) $('tfMarket').value = inferMarket(c);
-    updateFeePreview();
-  });
   $('tfReset').addEventListener('click', resetTradeForm);
   $('tradeForm').addEventListener('submit', async e => {
     e.preventDefault();
+    const st = resolveTfStock();
+    if (!st.code) { toast('请先从联想中选定股票', 'warn'); return; }
     const row = buildTradeRow({
       type: $('tfType').value,
-      code: $('tfCode').value.trim(),
-      name: $('tfName').value.trim(),
-      market: $('tfMarket').value,
+      code: st.code,
+      name: st.name,
+      market: st.market,
       price: parseFloat($('tfPrice').value),
       qty: parseInt($('tfQty').value, 10),
       time: $('tfTime').value,
@@ -1869,8 +1906,7 @@ function bindEvents() {
 function fillFormFromParsed(res) {
   resetTradeForm();
   $('tfType').value = res.type;
-  if (res.code) { $('tfCode').value = res.code; $('tfMarket').value = res.market || inferMarket(res.code); }
-  if (res.name) $('tfName').value = res.name;
+  if (res.code) setTfStock(res.code, res.name || '');
   $('tfPrice').value = res.price;
   $('tfQty').value = res.qty;
   if (res.time) {

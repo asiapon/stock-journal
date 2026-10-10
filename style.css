@@ -639,3 +639,6 @@ select { padding-right: 6px; }
 /* ---------- v2.8.2 修复表单内 select/input 32px 高度下文字被裁 ---------- */
 .form-grid input, .form-grid select { padding: 0 10px; }
 #recModal .form-grid input, #recModal .form-grid select { padding: 0 9px; }
+
+/* ---------- v2.8.3 记一笔：全部保存按钮 ---------- */
+.p-saveall-row { display: flex; justify-content: flex-end; margin: 4px 0 6px; }
