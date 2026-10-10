@@ -168,7 +168,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   margin-bottom: 16px; min-width: 0;
 }
 .grid-2 .card { margin-bottom: 0; }
-.card-title { font-size: 15px; font-weight: 600; }
+.card-title { font-size: 15px; font-weight: 600; margin-bottom: 12px; }
 .card-title-row {
   display: flex; align-items: center; gap: 10px; flex-wrap: wrap;
   margin-bottom: 12px;
