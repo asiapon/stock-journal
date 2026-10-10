@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>操作日记 · 个人交易信息管家</title>
+<link rel="stylesheet" href="style.css?v=2.1.1">
+</head>
+<body>
+
+<!-- ============ 登录 / 注册 ============ -->
+<div id="authView" class="auth-wrap" hidden>
+  <div class="auth-card">
+    <div class="auth-logo">
+      <svg viewBox="0 0 24 24" class="logo-ico"><path d="M3 20h18M5 16l4-6 4 3 6-9" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <h1>操作日记</h1>
+      <p class="auth-sub">个人交易信息管家</p>
+    </div>
+    <div class="auth-tabs" id="authTabs">
+      <button id="tabLogin" class="auth-tab active" type="button">登录</button>
+      <button id="tabInit" class="auth-tab" type="button" hidden>初始化</button>
+    </div>
+    <!-- 用户名密码登录 -->
+    <form id="loginForm" class="auth-form">
+      <input type="text" id="loginUser" placeholder="用户名" required autocomplete="username" maxlength="30">
+      <div class="pwd-wrap">
+        <input type="password" id="loginPass" placeholder="密码" required autocomplete="current-password">
+        <button type="button" class="pwd-eye" data-eye="loginPass" aria-label="显示或隐藏密码">
+          <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+        </button>
+      </div>
+      <button type="submit" class="btn primary block">登 录</button>
+      <p class="auth-foot hint">默认账号 admin / admin，首次登录需修改初始密码；其他账号由管理员创建</p>
+    </form>
+    <!-- 首次使用：初始化管理员 -->
+    <form id="initForm" class="auth-form" hidden>
+      <p class="hint init-hint">系统检测到还没有任何账号，创建第一个管理员账号以开始使用。</p>
+      <input type="text" id="initUser" placeholder="管理员用户名" required minlength="2" maxlength="30" autocomplete="username">
+      <div class="pwd-wrap">
+        <input type="password" id="initPass" placeholder="设置密码（至少 6 位）" required minlength="6" autocomplete="new-password">
+        <button type="button" class="pwd-eye" data-eye="initPass" aria-label="显示或隐藏密码">
+          <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+        </button>
+      </div>
+      <button type="submit" class="btn primary block">创建管理员并登录</button>
+    </form>
+    <!-- 强制改密 -->
+    <form id="forcePwdForm" class="auth-form" hidden>
+      <p class="hint init-hint" id="forcePwdHint">首次登录，请修改初始密码后继续。</p>
+      <div class="pwd-wrap">
+        <input type="password" id="forceOld" placeholder="当前密码" required autocomplete="current-password">
+        <button type="button" class="pwd-eye" data-eye="forceOld" aria-label="显示或隐藏密码">
+          <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+        </button>
+      </div>
+      <div class="pwd-wrap">
+        <input type="password" id="forceNew" placeholder="新密码（至少 6 位）" required minlength="6" autocomplete="new-password">
+        <button type="button" class="pwd-eye" data-eye="forceNew" aria-label="显示或隐藏密码">
+          <svg viewBox="0 0 24 24"><path d="M2 12s3.5-6 10-6 10 6 10 6-3.5 6-10 6-10-6-10-6z" stroke="currentColor" stroke-width="1.6" fill="none"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.6" fill="none"/></svg>
+        </button>
+      </div>
+      <button type="submit" class="btn primary block">修改密码并进入</button>
+    </form>
+    <div id="authMsg" class="auth-msg" hidden></div>
+  </div>
+</div>
+
+<!-- ============ 主应用 ============ -->
+<div id="appView" hidden>
+  <!-- 顶部栏（平板/电脑，与旧版 trade-manager 一致：品牌左、工具右） -->
+  <header class="topbar">
+    <div class="topbar-brand">
+      <svg viewBox="0 0 24 24" class="logo-ico"><path d="M3 20h18M5 16l4-6 4 3 6-9" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      操作日记
+    </div>
+    <div class="topbar-right">
+      <select id="modelSel" class="model-sel" title="AI 模型（用于交易解析）"><option value="">模型加载中…</option></select>
+      <span id="modeBadge" class="mode-badge" title="数据存储方式">云端</span>
+      <span id="userName" class="user-email"></span>
+      <span id="userRole" class="role-badge" hidden>管理员</span>
+      <button id="logoutBtn" class="btn ghost sm" type="button">退出</button>
+    </div>
+  </header>
+
+  <!-- 横向导航（与旧版一致：顶栏下方一排 Tab） -->
+  <nav class="tabs" id="topNav">
+    <button class="tab active" data-view="today"><span class="tab-ico">◇</span>总览</button>
+    <button class="tab" data-view="holdings"><span class="tab-ico">▤</span>持仓</button>
+    <button class="tab" data-view="trades"><span class="tab-ico">≡</span>交易记录</button>
+    <button class="tab" data-view="watch"><span class="tab-ico">☆</span>自选股</button>
+    <button class="tab" data-view="me"><span class="tab-ico">⚙</span>应用设置</button>
+  </nav>
+
+  <main class="main">
+    <!-- ============ 今日 ============ -->
+    <section id="view-today" class="view active">
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title">持仓快照</div>
+          <div class="sum-cards" id="sumCards"></div>
+        </div>
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">快捷记一笔</span>
+            <span class="hint">AI 解析自然语言，如「昨天14点半 39.5 买了 2000 股中兴通讯」</span>
+          </div>
+          <div class="quick-input-row">
+            <input type="text" id="quickNl" placeholder="例：40 块卖了 5 手中兴通讯">
+            <button class="btn primary" id="quickParseBtn" type="button">AI 解析</button>
+          </div>
+          <div id="quickHint" class="quick-hint" hidden></div>
+          <button class="btn ghost block" id="openFormBtn" type="button">手动填写完整表单</button>
+        </div>
+      </div>
+      <div class="grid-2">
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">自选关注</span>
+            <button class="btn ghost sm" data-goto="watch" type="button">全部自选</button>
+          </div>
+          <div id="todayWatch" class="mini-list"></div>
+        </div>
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">近期操作</span>
+            <button class="btn ghost sm" data-goto="trades" type="button">全部记录</button>
+          </div>
+          <div id="recentTrades" class="mini-list"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============ 持仓 ============ -->
+    <section id="view-holdings" class="view">
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">当前持仓</span>
+          <button class="btn ghost sm" id="refreshHoldBtn" type="button">刷新</button>
+        </div>
+        <div class="weight-bar" id="weightBar"></div>
+        <div class="table-scroll">
+          <table class="tbl" id="holdTable">
+            <thead><tr>
+              <th>股票</th><th class="num">数量</th><th class="num">成本价</th><th class="num">现价</th>
+              <th class="num">市值</th><th class="num">浮动盈亏</th><th class="num">盈亏%</th><th class="num">仓位</th><th></th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="holdEmpty" class="empty" hidden>暂无持仓，去「操作」页记一笔买入</div>
+      </div>
+      <div class="card" id="holdDetail" hidden>
+        <div class="card-title-row">
+          <span class="card-title" id="holdDetailTitle">买卖记录</span>
+          <button class="btn ghost sm" id="holdDetailClose" type="button">收起</button>
+        </div>
+        <div class="sum-cards sm" id="holdDetailStats"></div>
+        <div class="timeline" id="holdTimeline"></div>
+      </div>
+    </section>
+
+    <!-- ============ 操作 ============ -->
+    <section id="view-trades" class="view">
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">记一笔</span>
+            <span class="hint">AI 解析多笔交易后逐笔确认；解析失败时手动填写</span>
+          </div>
+          <div class="quick-input-row">
+            <input type="text" id="tradeNl" placeholder="例：昨天12.3买入2000股三峡能源，今天13块止盈一半">
+            <button class="btn primary" id="tradeParseBtn" type="button">AI 解析</button>
+          </div>
+          <div id="tradeHint" class="quick-hint" hidden></div>
+        <form id="tradeForm" class="form-grid">
+          <label>方向
+            <select id="tfType">
+              <option value="buy">买入</option>
+              <option value="sell">卖出</option>
+            </select>
+          </label>
+          <label>股票代码
+            <input type="text" id="tfCode" placeholder="如 000063" required pattern="[0-9A-Za-z]{5,6}">
+          </label>
+          <label>名称
+            <input type="text" id="tfName" placeholder="中兴通讯">
+          </label>
+          <label>市场
+            <select id="tfMarket">
+              <option value="sh">沪市</option>
+              <option value="sz">深市</option>
+              <option value="bj">北交所</option>
+            </select>
+          </label>
+          <label>价格
+            <input type="number" id="tfPrice" step="0.01" min="0.01" required>
+          </label>
+          <label>数量（股）
+            <input type="number" id="tfQty" step="100" min="1" required>
+          </label>
+          <label>成交时间
+            <input type="datetime-local" id="tfTime" required>
+          </label>
+          <label class="span2">备注
+            <input type="text" id="tfNote" placeholder="选填">
+          </label>
+          <div class="fee-preview span2" id="feePreview"></div>
+          <div class="form-actions span2">
+            <button type="submit" class="btn primary" id="tfSubmit">保存</button>
+            <button type="button" class="btn ghost" id="tfReset">重置</button>
+          </div>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">交易记录</span>
+          <div class="filters">
+            <input type="date" id="ftFrom" title="开始日期">
+            <span class="filter-sep">—</span>
+            <input type="date" id="ftTo" title="结束日期">
+            <select id="ftType">
+              <option value="">全部方向</option>
+              <option value="buy">买入</option>
+              <option value="sell">卖出</option>
+            </select>
+            <input type="text" id="ftStock" placeholder="代码/名称" class="w120">
+            <button class="btn ghost sm" id="ftClear" type="button">清空筛选</button>
+          </div>
+        </div>
+        <div class="table-scroll">
+          <table class="tbl" id="tradeTable">
+            <thead><tr>
+              <th>时间</th><th>方向</th><th>股票</th><th class="num">价格</th><th class="num">数量</th>
+              <th class="num">金额</th><th class="num">费用</th><th class="num">净额</th><th>操作</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="tradeEmpty" class="empty" hidden>没有符合条件的记录</div>
+      </div>
+    </section>
+
+    <!-- ============ 自选 ============ -->
+    <section id="view-watch" class="view">
+      <div class="card">
+        <div class="card-title">添加自选</div>
+        <form id="watchForm" class="form-grid">
+          <label>代码
+            <input type="text" id="wfCode" placeholder="如 600519" required pattern="[0-9A-Za-z]{5,6}">
+          </label>
+          <label>名称
+            <input type="text" id="wfName" placeholder="贵州茅台" required>
+          </label>
+          <label>现价（选填）
+            <input type="number" id="wfPrice" step="0.001" min="0" placeholder="手动录入">
+          </label>
+          <label>昨收（选填）
+            <input type="number" id="wfPrev" step="0.001" min="0" placeholder="用于计算涨跌幅">
+          </label>
+          <label>分组
+            <input type="text" id="wfGroup" placeholder="默认 / 科技 / 消费…" list="groupList">
+            <datalist id="groupList"></datalist>
+          </label>
+          <label class="span2">备注 / 加入理由
+            <input type="text" id="wfNote" placeholder="选填，如：人形机器人跟踪">
+          </label>
+          <div class="form-actions span2">
+            <button type="submit" class="btn primary" id="wfSubmit">添加</button>
+            <button type="button" class="btn ghost" id="wfCancel" hidden>取消编辑</button>
+          </div>
+        </form>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">自选列表</span>
+          <select id="watchGroupFilter"><option value="">全部分组</option></select>
+        </div>
+        <div class="table-scroll">
+          <table class="tbl" id="watchTable">
+            <thead><tr>
+              <th>股票</th><th>分组</th><th class="num">现价</th><th class="num">涨跌幅</th>
+              <th>备注 / 理由</th><th class="num">操作</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="watchEmpty" class="empty" hidden>暂无自选股</div>
+      </div>
+    </section>
+
+    <!-- ============ 应用设置 ============ -->
+    <section id="view-me" class="view">
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">AI 模型</span>
+          <button class="btn ghost sm" id="modelReloadBtn" type="button">刷新模型列表</button>
+        </div>
+        <div class="form-grid">
+          <label class="span2">当前使用模型
+            <select id="modelCurSel"><option value="">（加载中）</option></select>
+          </label>
+        </div>
+        <p class="hint" id="modelStatus">模型用于「记一笔」自然语言解析，云端免密钥调用。</p>
+        <div class="custom-model">
+          <div class="card-title" style="font-size:14px;margin:12px 0 8px">自定义模型（OpenAI 兼容接口）</div>
+          <form id="customModelForm" class="form-grid">
+            <label>名称<input type="text" id="cmName" placeholder="如 DeepSeek" required></label>
+            <label class="span2">Base URL<input type="text" id="cmBaseUrl" placeholder="https://api.deepseek.com/v1" required></label>
+            <label>模型 ID<input type="text" id="cmModel" placeholder="deepseek-chat" required></label>
+            <label class="span2">API Key<input type="password" id="cmApiKey" placeholder="sk-..." required></label>
+            <div class="form-actions span2"><button type="submit" class="btn ghost">添加自定义模型</button></div>
+          </form>
+          <div id="customModelList" class="mini-list"></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">费率设置</span>
+          <span class="hint">单位 ‰（千分比），印花税仅卖出收取</span>
+        </div>
+        <div id="feeEditor" class="fee-editor"></div>
+        <div class="form-actions">
+          <button class="btn primary" id="feeSaveBtn" type="button">保存费率</button>
+          <button class="btn ghost" id="feeResetBtn" type="button">恢复默认</button>
+        </div>
+        <div class="fee-calc">
+          <div class="card-title">费用试算</div>
+          <div class="quick-input-row">
+            <select id="calcMarket">
+              <option value="sh">沪市</option><option value="sz">深市</option><option value="bj">北交所</option>
+            </select>
+            <input type="number" id="calcAmount" placeholder="成交金额（元）" step="0.01" min="0">
+            <button class="btn ghost" id="calcBtn" type="button">试算</button>
+          </div>
+          <div id="calcResult" class="fee-preview"></div>
+        </div>
+      </div>
+      <div class="card" id="userMgmtCard" hidden>
+        <div class="card-title-row">
+          <span class="card-title">用户管理</span>
+          <span class="hint">仅管理员可见</span>
+        </div>
+        <form id="userCreateForm" class="form-grid">
+          <label>用户名
+            <input type="text" id="nuName" placeholder="2-30 个字符" required minlength="2" maxlength="30">
+          </label>
+          <label>初始密码
+            <input type="text" id="nuPass" placeholder="至少 6 位" required minlength="6">
+          </label>
+          <label>角色
+            <select id="nuRole">
+              <option value="user">普通用户</option>
+              <option value="admin">管理员</option>
+            </select>
+          </label>
+          <div class="form-actions"><button type="submit" class="btn primary">创建账号</button></div>
+        </form>
+        <div class="table-scroll">
+          <table class="tbl" id="userTable">
+            <thead><tr><th>用户名</th><th>角色</th><th>创建时间</th><th>操作</th></tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">账号</span>
+        </div>
+        <div class="form-grid">
+          <label>当前密码
+            <input type="password" id="chOld" placeholder="当前密码" autocomplete="current-password">
+          </label>
+          <label>新密码
+            <input type="password" id="chNew" placeholder="至少 6 位" minlength="6" autocomplete="new-password">
+          </label>
+          <div class="form-actions"><button type="button" class="btn ghost" id="chPwdBtn">修改密码</button></div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title">数据管理</div>
+        <div class="btn-row">
+          <button class="btn ghost" id="exportBtn" type="button">导出 JSON 备份</button>
+          <button class="btn ghost" id="importBtn" type="button">导入 JSON</button>
+          <button class="btn ghost" id="seedBtn" type="button">载入演示数据</button>
+          <button class="btn danger" id="clearBtn" type="button">清空全部数据</button>
+          <input type="file" id="importFile" accept=".json" hidden>
+        </div>
+        <p class="hint" id="seedHint" hidden>检测到当前没有数据，可先载入演示数据体验（可随时清空）</p>
+        <div id="clearArea" class="clear-area" hidden>
+          <p class="hint">此操作不可恢复，将删除全部交易记录、自选、价格与操作日志（费率设置保留）。输入「清空」确认：</p>
+          <div class="quick-input-row">
+            <input type="text" id="clearConfirmInput" placeholder="清空">
+            <button class="btn danger" id="clearConfirmBtn" type="button" disabled>确认清空</button>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">操作日志</span>
+          <button class="btn ghost sm" id="logReloadBtn" type="button">刷新</button>
+        </div>
+        <div class="mini-list" id="logList"></div>
+      </div>
+      <div class="card">
+        <div class="card-title">关于</div>
+        <p class="about-line">操作日记 v2.1.1 · 重构版（stock-journal）</p>
+        <p class="about-line" id="aboutStorage">数据存储：—</p>
+        <p class="about-line">费用口径与 trade-manager 一致：佣金（双向，最低收费）、印花税（卖出）、过户费、经手费、证管费，三市独立配置。成本核算采用移动加权平均法，费用计入买入成本。</p>
+      </div>
+    </section>
+  </main>
+
+  <!-- 底部 Tab（手机） -->
+  <nav class="bottom-nav" id="bottomNav">
+    <button class="bnav-item active" data-view="today">
+      <svg viewBox="0 0 24 24"><rect x="3" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.5"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.5"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.5"/></svg>
+      <span>总览</span>
+    </button>
+    <button class="bnav-item" data-view="holdings">
+      <svg viewBox="0 0 24 24"><path d="M4 19V9m5.3 10V5m5.4 14v-8m5.3 8V8" stroke-linecap="round"/></svg>
+      <span>持仓</span>
+    </button>
+    <button class="bnav-item bnav-add" data-view="trades">
+      <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" stroke-linecap="round"/></svg>
+      <span>记一笔</span>
+    </button>
+    <button class="bnav-item" data-view="watch">
+      <svg viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8z"/></svg>
+      <span>自选</span>
+    </button>
+    <button class="bnav-item" data-view="me">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>
+      <span>我的</span>
+    </button>
+  </nav>
+
+  <!-- 模态：确认 -->
+  <div id="confirmModal" class="modal-mask" hidden>
+    <div class="modal">
+      <div class="modal-title" id="confirmTitle">确认</div>
+      <div class="modal-desc" id="confirmDesc"></div>
+      <div class="modal-actions">
+        <button class="btn ghost" id="confirmCancel" type="button">取消</button>
+        <button class="btn danger" id="confirmOk" type="button">确认</button>
+      </div>
+    </div>
+  </div>
+  <!-- Toast -->
+  <div id="toast"></div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
+<script src="app.js?v=2.1.1"></script>
+</body>
+</html>
