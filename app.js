@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.7.4';
+const APP_VER = '2.7.5';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -755,6 +755,11 @@ function renderPending(hintId, inputId, list, summary) {
    ============================================================ */
 async function boot() {
   bindEvents();
+  /* 恢复上次所在页面 */
+  try {
+    const last = localStorage.getItem('sj_view');
+    if (last && $('view-' + last)) switchView(last);
+  } catch (e) { /* */ }
   $('tfTime').value = nowLocalInput();
   try {
     const probe = await Promise.race([
@@ -1165,7 +1170,7 @@ function updateFeePreview() {
 }
 
 /* ---------- 自选 ---------- */
-let watchTab = '默认';   // 当前分组 Tab（不再有「全部」，默认进「默认」分组）
+let watchTab = (() => { try { return localStorage.getItem('sj_watchTab') || '默认'; } catch (e) { return '默认'; } })();   // 当前分组 Tab（记住上次所在分组）
 function renderWatch() {
   const groups = [...new Set(['默认', ...S.watchlist.map(w => w.group_name || '默认')])];
   const tabGroups = groups.includes(watchTab) ? groups : [...groups, watchTab].filter(Boolean);
@@ -1633,6 +1638,7 @@ function bindEvents() {
       return;
     }
     watchTab = g;
+    try { localStorage.setItem('sj_watchTab', watchTab); } catch (e) { /* */ }
     renderWatch();
     $('wfGroupQuick').value = g || '';   // 当前分组即默认归组，可手动改
   });
@@ -1647,6 +1653,7 @@ function bindEvents() {
         }
         await store.log('update', `删除分组「${watchTab}」（${n} 只移回默认）`);
         watchTab = '默认';
+        try { localStorage.setItem('sj_watchTab', watchTab); } catch (e) { /* */ }
         $('wfGroupQuick').value = '';
         await loadAll(); renderWatch(); renderToday();
         toast('分组已删除');
@@ -1862,6 +1869,7 @@ function switchView(name) {
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   $('view-' + name).classList.add('active');
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === name));
+  try { localStorage.setItem('sj_view', name); } catch (e) { /* */ }
 }
 
 boot();
