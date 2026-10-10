@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.6.4">
+<link rel="stylesheet" href="style.css?v=2.7.0">
 </head>
 <body>
 
@@ -252,8 +252,9 @@
       <div class="card">
         <div class="card-title-row">
           <span class="card-title">自选列表</span>
-          <select id="watchGroupFilter"><option value="">全部分组</option></select>
+          <span class="hint">点分组 Tab 切换；当前分组下添加股票自动归组</span>
         </div>
+        <div class="wtabs" id="watchTabs"></div>
         <div class="table-scroll">
           <table class="tbl" id="watchTable">
             <thead><tr>
@@ -510,6 +511,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.6.4"></script>
+<script src="app.js?v=2.7.0"></script>
 </body>
 </html>

@@ -573,3 +573,21 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 
 /* ---------- v2.6.4 解析确认行按钮成对并排 ---------- */
 .p-btns { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
+
+/* ---------- v2.7.0 自选分组 Tab ---------- */
+.wtabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 10px; }
+.wtab {
+  display: inline-flex; align-items: center; gap: 5px;
+  border: 1px solid var(--line); background: var(--card); cursor: pointer;
+  color: var(--ink-2); padding: 6px 12px; font-size: 13px; border-radius: 999px;
+  transition: background .15s, color .15s, border-color .15s;
+}
+.wtab:hover { color: var(--blue); border-color: var(--blue); }
+.wtab.on { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); font-weight: 600; }
+.wtab i {
+  font-style: normal; font-size: 11px; line-height: 1;
+  background: rgba(23, 30, 38, .06); color: var(--ink-2);
+  padding: 3px 6px; border-radius: 999px;
+}
+.wtab.on i { background: #fff; color: var(--blue); }
+.wtab-add { padding: 6px 10px; font-weight: 600; }

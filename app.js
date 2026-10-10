@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.6.4';
+const APP_VER = '2.7.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1164,12 +1164,16 @@ function updateFeePreview() {
 }
 
 /* ---------- 自选 ---------- */
+let watchTab = '';   // 当前分组 Tab：'' = 全部
 function renderWatch() {
-  const gf = $('watchGroupFilter');
   const groups = [...new Set(S.watchlist.map(w => w.group_name || '默认'))];
-  const cur = gf.value;
-  gf.innerHTML = '<option value="">全部分组</option>' + groups.map(g => `<option${g === cur ? ' selected' : ''}>${esc(g)}</option>`).join('');
-  const list = S.watchlist.filter(w => !cur || (w.group_name || '默认') === cur);
+  const tabGroups = groups.includes(watchTab) ? groups : [...groups, watchTab].filter(Boolean);
+  /* 分组 Tab：全部 + 各分组 + 新建（＋） */
+  const tabs = $('watchTabs');
+  tabs.innerHTML = `<button class="wtab${watchTab === '' ? ' on' : ''}" data-g="">全部</button>`
+    + tabGroups.map(g => `<button class="wtab${watchTab === g ? ' on' : ''}" data-g="${esc(g)}">${esc(g)}<i>${S.watchlist.filter(w => (w.group_name || '默认') === g).length}</i></button>`).join('')
+    + `<button class="wtab wtab-add" data-g="+" title="新建分组">＋</button>`;
+  const list = S.watchlist.filter(w => !watchTab || (w.group_name || '默认') === watchTab);
   $('watchEmpty').hidden = list.length > 0;
   const qm = quoteMap();
   const FAIL = '<span class="na-tag">获取失败</span>';
@@ -1201,8 +1205,9 @@ function renderWatch() {
       </div></td>
     </tr>`;
   }).join('');
-  // 分组 datalist（含「默认」，供「添加自选」分组输入联想，可输入新分组）
-  $('groupList').innerHTML = [...new Set(['默认', ...groups])].map(g => `<option value="${esc(g)}">`).join('');
+  // 分组 datalist（含「默认」与当前 Tab，供「添加自选」分组输入联想，可输入新分组）
+  $('groupList').innerHTML = [...new Set(['默认', ...groups, watchTab])].filter(Boolean).map(g => `<option value="${esc(g)}">`).join('');
+  $('watchEmpty').textContent = watchTab ? `分组「${watchTab}」暂无自选，在上方添加会自动归入此分组` : '暂无自选股';
 }
 function fillWatchForm(w) {
   S.editingWatchId = w.id;
@@ -1584,7 +1589,7 @@ function bindEvents() {
     const row = {
       stock_code: hit.code,
       stock_name: hit.name,
-      group_name: $('wfGroupQuick').value.trim() || '默认',
+      group_name: $('wfGroupQuick').value.trim() || watchTab || '默认',
       note: '', cur_price: anchor ? anchor.price : null, prev_close: null
     };
     try {
@@ -1622,7 +1627,22 @@ function bindEvents() {
     } catch (err) { toast(err.message || '保存失败', 'warn'); }
   }
   $('wfCancel').addEventListener('click', resetWatchForm);
-  $('watchGroupFilter').addEventListener('change', renderWatch);
+  /* 分组 Tab：切换 / 新建；切 Tab 后添加自动归入当前分组 */
+  $('watchTabs').addEventListener('click', e => {
+    const b = e.target.closest('.wtab'); if (!b) return;
+    const g = b.dataset.g;
+    if (g === '+') {
+      const name = (prompt('新分组名称：') || '').trim();
+      if (!name) return;
+      watchTab = name;
+      renderWatch();
+      $('wfGroupQuick').value = name;
+      return;
+    }
+    watchTab = g;
+    renderWatch();
+    $('wfGroupQuick').value = g || '';   // 当前分组即默认归组，可手动改
+  });
   $('watchTable').querySelector('tbody').addEventListener('click', async e => {
     const starBtn = e.target.closest('.star-watch');
     const editBtn = e.target.closest('.edit-watch');
