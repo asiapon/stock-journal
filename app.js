@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.7.5';
+const APP_VER = '2.7.6';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1223,8 +1223,12 @@ function syncGroupList() {
 }
 function fillWatchForm(w) {
   S.editingWatchId = w.id;
-  $('wfInput').value = `${w.stock_code} ${w.stock_name || ''}`;
-  delete $('wfInput').dataset.picked;
+  const inp = $('wfInput');
+  inp.value = `${w.stock_code} ${w.stock_name || ''}`;
+  delete inp.dataset.picked;
+  inp.readOnly = true;                       // 编辑时票不可改，只能改分组/理由
+  inp.placeholder = '编辑中：股票不可修改';
+  inp.classList.add('ro');
   $('wfGroupQuick').value = w.group_name || '默认';
   $('wfNoteQuick').value = w.note || '';
   $('wfSubmit').textContent = '保存修改';
@@ -1234,6 +1238,9 @@ function resetWatchForm() {
   S.editingWatchId = null;
   $('watchForm').reset();
   const inp = $('wfInput'); inp.value = ''; delete inp.dataset.picked;
+  inp.readOnly = false;
+  inp.placeholder = '代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt';
+  inp.classList.remove('ro');
   $('wfGroupQuick').value = '';
   $('wfNoteQuick').value = '';
   $('wfSubmit').textContent = '保存';

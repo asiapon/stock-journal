@@ -613,3 +613,6 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 #watchForm .add-row #wfNoteQuick { flex: 1 1 200px; min-width: 0; }
 #watchForm .add-row #wfInput { flex: 1 1 240px; min-width: 0; }
 #watchForm .add-row .wg-quick { flex: 0 0 130px; }
+
+/* ---------- v2.7.6 编辑自选时股票锁定 ---------- */
+#watchForm .add-row input.ro { background: rgba(23, 30, 38, .04); color: var(--ink-2); cursor: not-allowed; }
