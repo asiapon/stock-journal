@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.8.7';
+const APP_VER = '2.8.8';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -705,6 +705,7 @@ let pendingTrades = [];
 async function aiParseEntry(inputId, hintId) {
   const raw = $(inputId).value.trim();
   if (!raw) return;
+  setManualOpen(false);   // 解析时收起手动录入区
   const el = $(hintId);
   el.hidden = false;
   el.className = 'quick-hint';
