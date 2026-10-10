@@ -653,3 +653,8 @@ select { padding-right: 6px; }
   #recModal { align-items: flex-start; padding-top: 8vh; }
   #recModal .modal-lg { max-height: 88vh; border-radius: 16px; }
 }
+
+/* ---------- v2.8.6 记一笔：手机端股票框独占一行 ---------- */
+@media (max-width: 639px) {
+  #tradeForm .tf-stock-label { grid-column: span 2; }
+}
