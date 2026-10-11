@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.9';
+const APP_VER = '3.5.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1046,7 +1046,9 @@ function renderHoldings() {
     const price = q ? q.price : null;
     const prevClose = q ? q.prevClose : null;
     const cleared = h.qty <= 0;                               // 今日清仓：保留展示，盈亏已落地
-    const costPrice = h.qty ? h.dilutedValue / h.qty : null;  // 摊薄成本：已实现盈亏滚入（表格展示口径）
+    /* 摊薄成本：持仓股=当前摊薄；清仓股=清仓前最后一笔的加权成本（不再平摊，保留作参考） */
+    const costPrice = h.qty ? h.dilutedValue / h.qty
+      : (h.timeline && h.timeline.length ? h.timeline[h.timeline.length - 1].avg : null);
     const mv = !cleared && price != null ? h.qty * price : null;
     const dayPnl = dayPnlOf(h.code, h.qty, price, prevClose);
     /* 清仓股盈亏列 = 该股全部已实现盈亏（整轮结果，vs 成本）；持仓股 = 摊薄累计盈亏 */
