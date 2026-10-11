@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.0.9';
+const APP_VER = '3.1.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1038,22 +1038,33 @@ function renderHoldings() {
 
   // 表格（现价一律来自网络行情；未获取时相关列显示「未获取」）
   $('holdEmpty').hidden = holds.length > 0;
+  const todayStr = nowLocalInput().slice(0, 10);
   $('holdTable').querySelector('tbody').innerHTML = holds.map((h, i) => {
     const q = qm.get(h.code);
     const price = q ? q.price : null;
+    const prevClose = q ? q.prevClose : null;
     const costPrice = h.costValue / h.qty;
     const mv = price != null ? h.qty * price : null;
     const float = price != null ? h.qty * (price - costPrice) : null;
     const floatPct = price != null && costPrice ? (price - costPrice) / costPrice : null;
+    /* T+1 可用 = 持仓 − 当日买入 */
+    const boughtToday = S.trades.reduce((s, t) =>
+      s + ((t.stock_code === h.code && t.transaction_type === 'buy' && t.transaction_time.slice(0, 10) === todayStr) ? t.quantity : 0), 0);
+    const avail = Math.max(0, h.qty - boughtToday);
+    /* 当日盈亏：按现价与昨收计算 */
+    const dayPnl = price != null && prevClose > 0 ? h.qty * (price - prevClose) : null;
+    const dayPct = price != null && prevClose > 0 ? (price - prevClose) / prevClose : null;
     const color = WB_COLORS[i % WB_COLORS.length];
     return `<tr data-code="${esc(h.code)}">
-      <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${esc(h.code)} · ${MKT_NAME[h.market] || ''}</span></div></td>
-      <td class="num">${h.qty}</td>
+      <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${esc(h.code)}</span></div></td>
+      <td class="num" title="持仓 ${h.qty} · 可用 ${avail}">${h.qty} / ${avail}</td>
       <td class="num">${fmtP(costPrice)}</td>
       <td class="num price-cell">${price != null ? fmt2(price) : NA}</td>
       <td class="num">${mv != null ? fmt2(mv) : NA}</td>
       <td class="num ${float != null ? pnlCls(float) : ''}">${float != null ? (float >= 0 ? '+' : '') + fmt2(float) : NA}</td>
       <td class="num ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : NA}</td>
+      <td class="num ${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? (dayPnl >= 0 ? '+' : '') + fmt2(dayPnl) : NA}</td>
+      <td class="num ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : NA}</td>
       <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : NA}</td>
       <td><div class="row-actions">
         <button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button>

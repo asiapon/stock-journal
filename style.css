@@ -580,6 +580,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   #recModal .quick-input-row input { min-width: 0; }
 }
 
+/* ---------- v3.1.0 持仓页调整 ---------- */
+/* 明细时间线字号统一 */
+.tl-time, .tl-sub, .tl-num .t-val, .tl-num .m-sub { font-size: 12.5px; }
+
 /* ---------- v2.6.4 解析确认行按钮成对并排 ---------- */
 .p-btns { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
 
