@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.3';
+const APP_VER = '3.8.4';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -2461,46 +2461,143 @@ function findLevels(bars, price) {
   return { support: sup, resistance: res };
 }
 /* ---- 单周期信号引擎（规则投票，每个判断给出理由）---- */
+/* v3.8.4 打分引擎重构：按"维度"而非"指标"计数，避免共线性伪确认。
+   四个维度：趋势(均线) / 动能(MACD) / 摆动(RSI+KDJ) / 位置(支撑压力)，各计一票。
+   趋势维度与摆动维度方向矛盾时（空头趋势+极度超卖等），下调强度并提示技术性反弹。 */
 function analyzeTimeframe(bars, label) {
   const closes = bars.map(b => b.c);
   const i = closes.length - 1, price = closes[i];
   const ma = { 5: calcMA(closes, 5), 10: calcMA(closes, 10), 20: calcMA(closes, 20), 60: calcMA(closes, 60) };
   const macd = calcMACD(closes), rsi = calcRSI(closes), kdj = calcKDJ(bars);
   const levels = findLevels(bars, price);
-  const reasons = [];
-  const vote = (dir, w, text) => { if (dir) reasons.push({ dir, w, text }); };
   const f2 = x => Math.round(x * 100) / 100;
   const ma20 = ma[20][i], ma60 = ma[60][i];
-  if (ma20 != null) vote(price > ma20 ? 1 : -1, 1, `${label}收盘 ${f2(price)} ${price > ma20 ? '站上' : '跌破'} MA20(${f2(ma20)})`);
-  if (ma20 != null && ma60 != null) vote(ma20 > ma60 ? 1 : -1, 1, `MA20(${f2(ma20)}) 在 MA60(${f2(ma60)}) ${ma20 > ma60 ? '上方，中期趋势向上' : '下方，中期趋势向下'}`);
-  if (ma[5][i] != null && ma[10][i] != null) vote(ma[5][i] > ma[10][i] ? 1 : -1, 1, `MA5(${f2(ma[5][i])}) ${ma[5][i] > ma[10][i] ? '上穿/位于' : '下穿/位于'} MA10(${f2(ma[10][i])})，短期动能${ma[5][i] > ma[10][i] ? '偏强' : '偏弱'}`);
   const h = macd.hist[i], hp = macd.hist[i - 1];
-  if (h > 0 && h > hp) vote(1, 2, `MACD 红柱扩大（${f2(hp)}→${f2(h)}），多头动能增强`);
-  else if (h > 0) vote(1, 1, `MACD 红柱 ${f2(h)}，多头动能略有减弱`);
-  else if (h < 0 && h < hp) vote(-1, 2, `MACD 绿柱扩大（${f2(hp)}→${f2(h)}），空头动能增强`);
-  else vote(-1, 1, `MACD 绿柱 ${f2(h)}，空头动能有所收敛`);
-  vote(macd.dif[i] > 0 ? 1 : -1, 1, `DIF(${f2(macd.dif[i])}) 位于零轴${macd.dif[i] > 0 ? '上方' : '下方'}`);
   const r = rsi[i];
-  if (r != null) {
-    if (r < 30) vote(1, 2, `RSI(${f2(r)}) 进入超卖区，存在反弹修复需求`);
-    else if (r > 70) vote(-1, 2, `RSI(${f2(r)}) 进入超买区，短期回撤风险加大`);
-    else if (r > 55) vote(1, 1, `RSI(${f2(r)}) 处于强势区间`);
-    else if (r < 45) vote(-1, 1, `RSI(${f2(r)}) 处于弱势区间`);
-  }
   const k = kdj.K[i], d = kdj.D[i], j = kdj.J[i];
-  vote(k > d ? 1 : -1, 1, `KDJ ${k > d ? 'K 线在 D 线上方（金叉状态）' : 'K 线在 D 线下方（死叉状态）'}，J=${f2(j)}`);
-  if (j < 15) vote(1, 1, `J 值(${f2(j)})深度超卖，随时可能触发反弹`);
-  else if (j > 95) vote(-1, 1, `J 值(${f2(j)})深度超买，谨防短线冲高回落`);
+
+  /* —— 维度1：趋势（均线系统，合并为一条证据）—— */
+  let tPts = 0; const tParts = [];
+  if (ma20 != null) { const p = price > ma20 ? 1 : -1; tPts += p; tParts.push(`收盘${p > 0 ? '站上' : '跌破'} MA20(${f2(ma20)})`); }
+  if (ma20 != null && ma60 != null) { const p = ma20 > ma60 ? 1 : -1; tPts += p; tParts.push(`MA20 在 MA60(${f2(ma60)})${p > 0 ? '上' : '下'}方`); }
+  if (ma[5][i] != null && ma[10][i] != null) { const p = ma[5][i] > ma[10][i] ? 1 : -1; tPts += p * 0.5; tParts.push(`MA5 ${p > 0 ? '>' : '<'} MA10`); }
+  const trendDir = tPts > 0.5 ? 1 : tPts < -0.5 ? -1 : 0;
+  const trendW = 3;
+  const trendText = `${label}趋势维度：${tParts.join('，')}${trendDir === 1 ? '，中期趋势偏多' : trendDir === -1 ? '，中期趋势偏空' : '，均线纠缠、方向不明'}`;
+
+  /* —— 维度2：动能（MACD，绿柱收敛=空头动能衰竭，不再计入看空）—— */
+  let momDir = 0, momW = 2, momText;
+  if (h > 0 && h > hp) { momDir = 1; momText = `MACD 红柱扩大（${f2(hp)}→${f2(h)}），多头动能增强`; }
+  else if (h > 0) { momDir = 1; momW = 1; momText = `MACD 红柱 ${f2(h)}，多头动能维持但略有减弱`; }
+  else if (h < 0 && h < hp) { momDir = -1; momText = `MACD 绿柱扩大（${f2(hp)}→${f2(h)}），空头动能增强`; }
+  else if (h < 0 && h > hp) { momDir = 0; momW = 0; momText = `MACD 绿柱收敛（${f2(hp)}→${f2(h)}），空头动能衰竭，需警惕止跌反弹（中性观察）`; }
+  else { momDir = 0; momW = 1; momText = `MACD 柱线接近零轴，动能中性`; }
+  if (macd.dif[i] > 0 && momDir >= 0) { momText += `；DIF(${f2(macd.dif[i])}) 在零轴上方`; }
+  else if (macd.dif[i] < 0 && momDir <= 0) { momText += `；DIF(${f2(macd.dif[i])}) 在零轴下方`; }
+
+  /* —— 维度3：摆动/超买超卖（RSI + KDJ 合并为一条证据，取最极端状态）—— */
+  let oscDir = 0, oscW = 2, oscText;
+  const oversold = (r != null && r < 30) || j < 15;
+  const overbought = (r != null && r > 70) || j > 95;
+  if (oversold) {
+    oscDir = 1; oscW = (r != null && r < 25) || j < 5 ? 3 : 2;
+    oscText = `摆动维度极度超卖：RSI=${r != null ? f2(r) : '--'}、J=${f2(j)}，历史上此区域反弹概率偏高`;
+  } else if (overbought) {
+    oscDir = -1; oscW = (r != null && r > 75) || j > 105 ? 3 : 2;
+    oscText = `摆动维度极度超买：RSI=${r != null ? f2(r) : '--'}、J=${f2(j)}，谨防短线冲高回落`;
+  } else if (k > d) {
+    oscDir = r != null && r > 55 ? 1 : 0; oscW = 1;
+    oscText = `KDJ 金叉状态（J=${f2(j)}）${r != null && r > 55 ? `，RSI=${f2(r)} 处于强势区` : '，RSI 中性区，摆动信号不强'}`;
+  } else {
+    oscDir = r != null && r < 45 ? -1 : 0; oscW = 1;
+    oscText = `KDJ 死叉状态（J=${f2(j)}）${r != null && r < 45 ? `，RSI=${f2(r)} 处于弱势区` : '，RSI 中性区，摆动信号不强'}`;
+  }
+
+  /* —— 维度4：位置（支撑/压力，独立信息，保持原逻辑）—— */
   const nearSup = levels.support.find(x => price / x < 1.03);
   const nearRes = levels.resistance.find(x => x / price < 1.03);
-  if (nearSup) vote(1, 1, `${label}现价贴近支撑位 ${f2(nearSup)}，下方抛压相对较小`);
-  if (nearRes) vote(-1, 1, `${label}现价逼近压力位 ${f2(nearRes)}，突破前上行空间受限`);
-  const raw = reasons.reduce((s, x) => s + x.dir * x.w, 0);
-  const maxW = reasons.reduce((s, x) => s + x.w, 0) || 1;
-  const pct = Math.round(raw / maxW * 100);
+  let posDir = 0, posW = 0, posText = '';
+  if (nearSup && nearRes) { posDir = 0; posW = 1; posText = `${label}现价位于支撑 ${f2(nearSup)} 与压力 ${f2(nearRes)} 之间，空间受限`; }
+  else if (nearSup) { posDir = 1; posW = 1; posText = `${label}现价贴近支撑位 ${f2(nearSup)}，下方抛压相对较小`; }
+  else if (nearRes) { posDir = -1; posW = 1; posText = `${label}现价逼近压力位 ${f2(nearRes)}，突破前上行空间受限`; }
+
+  const dims = [
+    { name: '趋势', dir: trendDir, w: trendDir === 0 ? 0 : trendW, text: trendText },
+    { name: '动能', dir: momDir, w: momW, text: momText },
+    { name: '摆动', dir: oscDir, w: oscW, text: oscText },
+    { name: '位置', dir: posDir, w: posW, text: posText },
+  ];
+  const reasons = dims.filter(x => x.w > 0 || x.text);
+
+  const raw = dims.reduce((s, x) => s + x.dir * x.w, 0);
+  const maxW = dims.reduce((s, x) => s + x.w, 0) || 1;
+  let pct = Math.round(raw / maxW * 100);
+  let caveat = '';
+  /* —— 矛盾权重：趋势与摆动维度方向相反时，下调强度并提示反弹/回落 —— */
+  if (trendDir === -1 && oversold) {
+    pct = Math.round(pct * 0.7);
+    caveat = '注：空头趋势中摆动指标已达极度超卖，看空强度已下调，可能出现技术性反弹，不宜追空';
+  } else if (trendDir === 1 && overbought) {
+    pct = Math.round(pct * 0.7);
+    caveat = '注：多头趋势中摆动指标已达极度超买，看多强度已下调，谨防技术性回调，不宜追高';
+  }
+  if (caveat) reasons.push({ name: '矛盾提示', dir: 0, w: 0, text: caveat });
+
+  /* —— v3.8.4 两段式：量能不直接计分，而是作为强度乘数 + 背离预警。
+     防陷阱设计：①用 20 日均量的相对倍数而非单日绝对量；②分类阈值取自该股
+     自身近 60 日量比分位数（不同市值/板块换手差异大，不用固定倍数套全市场）；
+     ③涨跌停/极端单日波动时量能失真，乘数置 1 并标注；④量价关系是概率性
+     修正，只调强度、不单独构成买卖依据。 —— */
+  const vol = Number(bars[i].v) || 0;
+  const vols = bars.map(b => Number(b.v) || 0);
+  const volWin = vols.slice(-21, -1).filter(x => x > 0);
+  const volMa = volWin.length ? volWin.reduce((s, x) => s + x, 0) / volWin.length : 0;
+  const ratio = volMa > 0 ? vol / volMa : 1;
+  /* 该股自身的量比分布（近 60 日：每日量 / 其前 20 日均量），取分位数做自适应阈值 */
+  const histRatios = [];
+  for (let p = 20; p < vols.length - 1 && p < vols.length; p++) {
+    const win = vols.slice(Math.max(0, p - 20), p).filter(x => x > 0);
+    if (win.length >= 10 && vols[p] > 0) histRatios.push(vols[p] / (win.reduce((s, x) => s + x, 0) / win.length));
+  }
+  const qsort = arr => { const a = [...arr].sort((x, y) => x - y); return q => a.length ? a[Math.min(a.length - 1, Math.floor(q * a.length))] : null; };
+  const qOf = qsort(histRatios);
+  const loThr = (qOf && qOf(0.25)) || 0.7;   /* 缩量线：自身分布 25 分位，缺数据退回 0.7 */
+  const hiThr = (qOf && qOf(0.80)) || 1.5;   /* 放量线：自身分布 80 分位，缺数据退回 1.5 */
+  const midLo = (loThr + 1) / 2, midHi = (1 + hiThr) / 2;
+  const prevC = closes[i - 1] || price;
+  const dayDir = price > prevC * 1.001 ? 1 : price < prevC * 0.999 ? -1 : 0;
+  const dayChg = prevC > 0 ? (price / prevC - 1) : 0;
+  /* 涨跌停/异动检测：单日涨跌幅达 ±9.5%（主板约涨停位）或 ±19%（20cm 品种）附近，量能失真 */
+  const isLimitLike = Math.abs(dayChg) >= 0.19 || (Math.abs(dayChg) >= 0.095 && Math.abs(dayChg) < 0.11);
+  let volState, mult;
+  if (isLimitLike) { volState = dayChg > 0 ? '涨停板（量能失真）' : '跌停板（量能失真）'; mult = 1.0; }
+  else if (ratio < loThr) { volState = '缩量'; mult = 0.7; }
+  else if (ratio < midLo * 1.0 && ratio >= loThr) { volState = '偏缩量'; mult = 0.85; }
+  else if (ratio <= midHi) { volState = '平量'; mult = 1.0; }
+  else if (ratio <= hiThr) { volState = '温和放量'; mult = 1.1; }
+  else { volState = '显著放量'; mult = 1.2; }
+  if (dayDir === 0) mult = Math.min(mult, 1.0); /* 横盘时放量不加分 */
+  pct = Math.max(-100, Math.min(100, Math.round(pct * mult)));
+  /* 量价背离预警：创新低但缩量（抛压衰竭）或放量（恐慌出逃）；停牌复牌日跳过 */
+  const recentLows = bars.slice(-20).map(b => Number(b.l) || price);
+  const isNewLow = price <= Math.min(...recentLows) * 1.002;
+  const prevVol = vols[i - 1] || 0;
+  const isResumeDay = prevVol === 0; /* 前一日零量≈停牌复牌，量能不可比 */
+  let volNote = `量能：${volState}（现量为 20 日均量的 ${f2(ratio)} 倍，阈值按该股自身近 60 日量比分位数自适应${histRatios.length < 20 ? '，历史不足、暂用通用阈值' : ''}）`;
+  if (isResumeDay) volNote = `量能：近期有停牌复牌，单日量能不可比，本次不做量能修正`;
+  else if (isLimitLike) volNote += '。涨跌停板附近量能失真（封板/砸板量不代表真实供需），本次不做量能加减分';
+  else if (dayDir !== 0) volNote += `，${dayDir > 0 ? '上涨' : '下跌'}${mult > 1 ? '获量能确认' : mult < 1 ? '缺乏量能支撑' : ''}`;
+  if (!isResumeDay && !isLimitLike && isNewLow && ratio < loThr) {
+    volNote += '。量价背离：股价创新低但明显缩量，抛压趋于衰竭，历史统计上此处加速下跌概率下降、注意止跌信号（概率性修正，非买卖依据）';
+    pct = Math.round(pct * 0.7);
+  } else if (!isResumeDay && !isLimitLike && isNewLow && ratio > hiThr) {
+    volNote += '。放量破位创新低，恐慌性抛售特征，短期或有惯性下探（概率性提示，非买卖依据）';
+  }
+  reasons.push({ name: '量能', dir: 0, w: 0, text: volNote });
+
   const signal = pct >= 30 ? 'buy' : pct <= -30 ? 'sell' : 'hold';
   const summary = reasons.filter(x => x.dir !== 0).slice(0, 3).map(x => x.text).join('；');
-  return { label, price, ma, macd, rsi: r, kdj: { K: k, D: d, J: j }, levels, reasons, raw, pct, signal, summary };
+  return { label, price, ma, macd, rsi: r, kdj: { K: k, D: d, J: j }, levels, reasons, raw, pct, signal, summary, caveat, dims, volInfo: { state: volState, ratio, mult } };
 }
 function combineTechSignal(d, w) {
   const pct = Math.round(d.pct * 0.6 + w.pct * 0.4);
@@ -2850,7 +2947,9 @@ function diagHtml() {
   const posLine = pos
     ? `你的持仓 ${fmt2(pos.qty)} 股，成本 ${fmt2(pos.avgCost)}`
     : '你当前未持仓这只股票';
-  const reasonLi = (r) => `<li class="${r.dir > 0 ? 'r-bull' : 'r-bear'}">${r.dir > 0 ? '▲ 看多' : '▼ 看空'}（+${r.w}）：${esc(r.text)}</li>`;
+  const reasonLi = (r) => r.dir === 0
+    ? `<li class="r-neu">◦ 中性（${r.name}）：${esc(r.text)}</li>`
+    : `<li class="${r.dir > 0 ? 'r-bull' : 'r-bear'}">${r.dir > 0 ? '▲ 看多' : '▼ 看空'}（${r.name} +${r.w}）：${esc(r.text)}</li>`;
   return `
     <div class="card-title-row">
       <span class="card-title">🩺 个股诊断：${esc(name)}（${esc(code)}）</span>
@@ -2903,7 +3002,7 @@ async function runDiagAi() {
   paint('生成中…');
   const { d, w, comb, name, code, q, pos } = t;
   const last = (a) => (a && a.length ? Math.round(a[a.length - 1] * 100) / 100 : '-');
-  const anDesc = (an) => `${an.label}：现价 ${an.price}，RSI=${an.rsi == null ? '-' : Math.round(an.rsi)}，KDJ K=${Math.round((an.kdj && an.kdj.K) || 0)}/D=${Math.round((an.kdj && an.kdj.D) || 0)}/J=${Math.round((an.kdj && an.kdj.J) || 0)}，MACD DIF=${last(an.macd && an.macd.dif)}/DEA=${last(an.macd && an.macd.dea)}，强度 ${an.pct}；信号要点：${an.reasons.map(r => (r.dir > 0 ? '看多' : '看空') + r.text).join('；')}`;
+  const anDesc = (an) => `${an.label}：现价 ${an.price}，RSI=${an.rsi == null ? '-' : Math.round(an.rsi)}，KDJ K=${Math.round((an.kdj && an.kdj.K) || 0)}/D=${Math.round((an.kdj && an.kdj.D) || 0)}/J=${Math.round((an.kdj && an.kdj.J) || 0)}，MACD DIF=${last(an.macd && an.macd.dif)}/DEA=${last(an.macd && an.macd.dea)}，强度 ${an.pct}；信号要点（按维度归类）：${an.reasons.filter(r => r.dir !== 0).map(r => (r.dir > 0 ? '看多' : '看空') + '【' + r.name + '】' + r.text).join('；')}${an.caveat ? '。' + an.caveat : ''}`;
   const myTrades = S.trades.filter(x => x.stock_code === code).slice(0, 10)
     .map(x => `${String(x.transaction_time || '').slice(0, 16)} ${x.transaction_type === 'buy' ? '买入' : '卖出'} ${x.quantity}股 @${x.price}`);
   const sys = `你是资深证券分析师。用户已经在界面上看到了技术指标与 K 线图，你不需要复述原始数值。
