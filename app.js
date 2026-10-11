@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.3';
+const APP_VER = '3.4.4';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1018,6 +1018,29 @@ function renderHoldings() {
 
   /* 行数据一次算好，PC / 手机两张表共用 */
   const todayStr = nowLocalInput().slice(0, 10);
+  /* 当日交易按代码分组（当日盈亏与今日清仓都要用） */
+  const todayByCode = new Map();
+  for (const t of S.trades) {
+    if (t.transaction_time.slice(0, 10) !== todayStr) continue;
+    if (!todayByCode.has(t.stock_code)) todayByCode.set(t.stock_code, []);
+    todayByCode.get(t.stock_code).push(t);
+  }
+  /* 当日盈亏（券商口径）：卖出净得 + 期末持仓现价 − 买入净额 − 期初持仓×昨收
+     净额含费用；期初持仓 = 期末 + 今日卖出 − 今日买入。对「今日买今日卖」「今日清仓」均成立 */
+  function dayPnlOf(code, endQty, price, prevClose) {
+    const tt = todayByCode.get(code) || [];
+    if (!tt.length) return null;
+    let buyNet = 0, buyQty = 0, sellNet = 0, sellQty = 0;
+    for (const t of tt) {
+      const f = (t.fee && t.fee.total) || 0;
+      if (t.transaction_type === 'buy') { buyQty += t.quantity; buyNet += t.net_amount != null ? Number(t.net_amount) : t.gross_amount + f; }
+      else { sellQty += t.quantity; sellNet += t.net_amount != null ? Number(t.net_amount) : t.gross_amount - f; }
+    }
+    const openQty = endQty + sellQty - buyQty;               // 期初（昨收时点）持仓
+    if (!price && openQty <= 0) return sellNet - buyNet;     // 今买今卖全平，无行情也能算
+    if (price == null || !(prevClose > 0)) return null;      // 隔夜部分缺昨收无法算
+    return sellNet + endQty * price - buyNet - openQty * prevClose;
+  }
   const rows = holds.map((h, i) => {
     const q = qm.get(h.code);
     const price = q ? q.price : null;
@@ -1026,24 +1049,22 @@ function renderHoldings() {
     const mv = price != null ? h.qty * price : null;
     const float = price != null ? h.qty * price - h.dilutedValue : null;   // 累计盈亏（含已实现）
     const floatPct = price != null && costPrice ? float / h.dilutedValue : null;
-    /* T+1 可用 = 持仓 − 当日买入；同时统计当日买卖明细（当日盈亏要用） */
-    let boughtQty = 0, boughtAmt = 0, soldQty = 0, soldAmt = 0;
-    for (const t of S.trades) {
-      if (t.stock_code !== h.code || t.transaction_time.slice(0, 10) !== todayStr) continue;
-      if (t.transaction_type === 'buy') { boughtQty += t.quantity; boughtAmt += t.gross_amount + ((t.fee && t.fee.total) || 0); }
-      else { soldQty += t.quantity; soldAmt += t.gross_amount; }
-    }
+    /* T+1 可用 = 持仓 − 当日买入 */
+    const boughtQty = (todayByCode.get(h.code) || []).reduce((s, t) => s + (t.transaction_type === 'buy' ? t.quantity : 0), 0);
     const avail = Math.max(0, h.qty - boughtQty);
-    /* 当日盈亏（券商口径，基准=昨收）：
-       隔夜持仓 (现价-昨收)×量 + 今日买入 (现价-买入均价)×量 + 今日卖出 (卖均价-昨收)×量 */
-    const avgBuyToday = boughtQty ? boughtAmt / boughtQty : 0;
-    const avgSellToday = soldQty ? soldAmt / soldQty : 0;
-    const dayPnl = price != null && prevClose > 0
-      ? (h.qty - boughtQty) * (price - prevClose) + boughtQty * (price - avgBuyToday) + soldQty * (avgSellToday - prevClose)
-      : null;
+    const dayPnl = dayPnlOf(h.code, h.qty, price, prevClose);
     const dayPct = price != null && prevClose > 0 ? (price - prevClose) / prevClose : null;
     return { h, price, prevClose, costPrice, mv, float, floatPct, avail, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
   });
+  /* 今日清仓的股票不在持仓表里，但当日盈亏必须落地（清仓=盈亏确定） */
+  const heldCodes = new Set(holds.map(h => h.code));
+  let clearedDayPnl = 0, clearedCnt = 0;
+  for (const h of all) {
+    if (h.qty > 0 || heldCodes.has(h.code) || !todayByCode.has(h.code)) continue;
+    const q = qm.get(h.code);
+    const dp = dayPnlOf(h.code, 0, q ? q.price : null, q ? q.prevClose : null);
+    if (dp != null) { clearedDayPnl += dp; clearedCnt++; }
+  }
 
   /* 持仓统计卡：摊薄口径，与表格行完全一致（浮动盈亏=累计盈亏，当日参考盈亏=券商口径） */
   let totalMV = 0, totalDayPnl = 0, missing = 0;
@@ -1051,12 +1072,14 @@ function renderHoldings() {
     if (r.mv != null) { totalMV += r.mv; if (r.dayPnl != null) totalDayPnl += r.dayPnl; }
     else missing++;
   }
+  totalDayPnl += clearedDayPnl;   // 今日清仓的已落地盈亏计入当日参考盈亏
   const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   const hs = $('holdSummary');
   if (hs) hs.innerHTML = holds.length ? `
     <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div></div>
     <div class="sum-card"><div class="s-label">当日参考盈亏</div><div class="s-value ${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</div>
+      ${clearedCnt ? `<div class="s-sub">含今日清仓 ${clearedCnt} 只（已落地 ${clearedDayPnl >= 0 ? '+' : ''}${fmt2(clearedDayPnl)}）</div>` : ''}
       ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>` : '';
   $('holdEmpty').hidden = holds.length > 0;
 
