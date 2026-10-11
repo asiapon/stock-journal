@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.2.1';
+const APP_VER = '3.2.2';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1344,8 +1344,9 @@ function renderWatch() {
       <td class="num">${q && q.high != null ? fmt2(q.high) : '—'}</td>
       <td class="num">${q && q.low != null ? fmt2(q.low) : '—'}</td>
       <td class="num">${q && q.prevClose != null ? fmt2(q.prevClose) : '—'}</td>
+      <td class="num hint adate">${addDate}</td>
+      <td class="num">${anchor != null ? fmtP(anchor) : '—'}</td>
       <td class="num ${gain != null ? pnlCls(gain) : ''}">${gain != null ? fmtPct(gain) : '—'}</td>
-      <td class="hint adate">${addDate}</td>
       <td class="hint">${esc(w.note || '')}</td>
       <td><div class="row-actions">
         <button class="icon-btn edit-watch" data-id="${w.id}">编辑</button>
