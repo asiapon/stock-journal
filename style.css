@@ -584,6 +584,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 /* 明细时间线字号统一 */
 .tl-time, .tl-sub, .tl-num .t-val, .tl-num .m-sub { font-size: 12.5px; }
 
+/* ---------- v3.1.2 持仓/可用两行（PC+手机） ---------- */
+#holdTable .two-line { display: flex; flex-direction: column; line-height: 1.35; }
+#holdTable .two-line .sub { font-size: 11px; color: var(--ink-3); }
+
 /* ---------- v3.1.1 持仓手机端合并列表格 ---------- */
 #holdTableM { display: none; min-width: 0; }
 #holdTableM .two-line b { font-weight: 500; }

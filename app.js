@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.1.1';
+const APP_VER = '3.1.2';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1063,7 +1063,7 @@ function renderHoldings() {
     const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
     return `<tr data-code="${esc(h.code)}">
       <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${esc(h.code)}</span></div></td>
-      <td class="num" title="持仓 ${h.qty} · 可用 ${avail}">${h.qty} / ${avail}</td>
+      <td class="num"><div class="two-line"><span title="可用 = 持仓 − 当日买入（T+1）">${h.qty}</span><span class="sub">可用 ${avail}</span></div></td>
       <td class="num">${fmtP(costPrice)}</td>
       <td class="num price-cell">${price != null ? fmt2(price) : NA}</td>
       <td class="num">${mv != null ? fmt2(mv) : NA}</td>
@@ -1085,7 +1085,7 @@ function renderHoldings() {
     return `<tr data-code="${esc(h.code)}">
       <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${mv != null ? '¥' + fmt2(mv) : NA}</span></div></td>
       <td class="num"><div class="two-line"><b class="${float != null ? pnlCls(float) : ''}">${float != null ? sgn(float) + fmt2(float) : NA}</b><span class="sub ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : ''}</span></div></td>
-      <td class="num" title="持仓 ${h.qty} · 可用 ${avail}">${h.qty} / ${avail}</td>
+      <td class="num"><div class="two-line"><span title="可用 = 持仓 − 当日买入（T+1）">${h.qty}</span><span class="sub">可用 ${avail}</span></div></td>
       <td class="num"><div class="two-line"><span>${fmtP(costPrice)}</span><span class="sub">${price != null ? fmt2(price) : '未获取'}</span></div></td>
       <td class="num"><div class="two-line"><b class="${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? sgn(dayPnl) + fmt2(dayPnl) : NA}</b><span class="sub ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : ''}</span></div></td>
       <td><button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button></td>
