@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.6.1';
+const APP_VER = '3.6.2';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1084,12 +1084,12 @@ function renderHoldings() {
   const cumPnl = totalMV - buyNetAll + sellNetAll;
   const hs = $('holdSummary');
   if (hs) hs.innerHTML = rows.length ? `
-    <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
-    <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div><div class="s-sub">${clearedCnt ? `含今日清仓 ${clearedCnt} 只已实现 ${clearedRealized >= 0 ? '+' : ''}${fmt2(clearedRealized)}` : '摊薄口径，含已实现'}</div></div>
-    <div class="sum-card"><div class="s-label">当日参考盈亏</div><div class="s-value ${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</div>
-      ${clearedCnt ? `<div class="s-sub">含今日清仓 ${clearedCnt} 只（已落地 ${clearedDayPnl >= 0 ? '+' : ''}${fmt2(clearedDayPnl)}）</div>` : ''}
-      ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>
-    <div class="sum-card"><div class="s-label">账户累计总盈亏</div><div class="s-value ${pnlCls(cumPnl)}">${cumPnl >= 0 ? '+' : ''}${fmt2(cumPnl)}</div><div class="s-sub">含已清仓轮次盈亏</div></div>` : '';
+    <div class="sum-card"><div class="s-label">总市值 · 账户累计总盈亏</div>
+      <div class="s-value">¥${fmt2(totalMV)}</div>
+      <div class="s-sub">累计 <b class="${pnlCls(cumPnl)}">${cumPnl >= 0 ? '+' : ''}${fmt2(cumPnl)}</b>（含已清仓轮次）</div></div>
+    <div class="sum-card"><div class="s-label">浮动盈亏 · 当日参考盈亏</div>
+      <div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div>
+      <div class="s-sub">当日 <b class="${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</b>${clearedCnt ? ` · 含今日清仓 ${clearedCnt} 只` : ''}${missing ? ` · ${missing} 只现价未获取` : ''}</div></div>` : '';
   $('holdEmpty').hidden = holds.length > 0;
 
   /* PC 全列表格：股票/市值/盈亏/盈亏%/持仓可用/成本价/现价/当日盈亏/当日盈亏%/仓位/明细 */
