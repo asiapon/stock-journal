@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.7';
+const APP_VER = '3.4.8';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1049,7 +1049,8 @@ function renderHoldings() {
     const costPrice = h.qty ? h.dilutedValue / h.qty : null;  // 摊薄成本：已实现盈亏滚入（表格展示口径）
     const mv = !cleared && price != null ? h.qty * price : null;
     const dayPnl = dayPnlOf(h.code, h.qty, price, prevClose);
-    const float = cleared ? dayPnl : (price != null ? h.qty * price - h.dilutedValue : null);   // 累计盈亏（含已实现）；清仓股=当日落地盈亏
+    /* 清仓股盈亏列 = 该股全部已实现盈亏（整轮结果，vs 成本）；持仓股 = 摊薄累计盈亏 */
+    const float = cleared ? (h.realized || 0) : (price != null ? h.qty * price - h.dilutedValue : null);
     const floatPct = !cleared && price != null && costPrice ? float / h.dilutedValue : null;
     /* T+1 可用 = 持仓 − 当日买入 */
     const boughtQty = (todayByCode.get(h.code) || []).reduce((s, t) => s + (t.transaction_type === 'buy' ? t.quantity : 0), 0);
@@ -1068,12 +1069,13 @@ function renderHoldings() {
   const clearedRows = rows.filter(r => r.cleared);
   const clearedCnt = clearedRows.length;
   const clearedDayPnl = clearedRows.reduce((s, r) => s + (r.dayPnl != null ? r.dayPnl : 0), 0);
+  const clearedRealized = clearedRows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   totalDayPnl += clearedDayPnl;   // 今日清仓的已落地盈亏计入当日参考盈亏
   const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   const hs = $('holdSummary');
   if (hs) hs.innerHTML = rows.length ? `
     <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
-    <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div></div>
+    <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div><div class="s-sub">${clearedCnt ? `含今日清仓 ${clearedCnt} 只已实现 ${clearedRealized >= 0 ? '+' : ''}${fmt2(clearedRealized)}` : '摊薄口径，含已实现'}</div></div>
     <div class="sum-card"><div class="s-label">当日参考盈亏</div><div class="s-value ${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</div>
       ${clearedCnt ? `<div class="s-sub">含今日清仓 ${clearedCnt} 只（已落地 ${clearedDayPnl >= 0 ? '+' : ''}${fmt2(clearedDayPnl)}）</div>` : ''}
       ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>` : '';
