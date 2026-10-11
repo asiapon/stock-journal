@@ -622,9 +622,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   #holdTableM { display: table; }
   #holdTableM th, #holdTableM td { padding: 8px 5px; font-size: 12px; }
   #holdTableM .two-line { display: flex; flex-direction: column; line-height: 1.4; }
-  #holdTableM .two-line .sub { font-size: 10.5px; color: var(--ink-3); }
+  #holdTableM .two-line .sub { font-size: 12px; color: var(--ink-3); }
   #holdTableM .stock-cell { min-width: 0; }
-  #holdTableM .sc-code { font-size: 10.5px; }
+  #holdTableM .sc-name { font-size: 12px; }
+  #holdTableM .sc-code { font-size: 12px; }
   #holdTableM .icon-btn { padding: 4px 8px; }
 }
 
@@ -735,7 +736,7 @@ tr.stockagg:hover td { background: #F5F8FC; }
   .tbl th, .tbl td { padding: 8px 6px; }
   /* v3.8.17 手机端持仓：名称/代码/市值三行 */
   #holdTableM .stock-cell { max-width: 120px; }
-  #holdTableM .sc-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #holdTableM .sc-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   #holdTableM .sc-mv { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
 }
 
