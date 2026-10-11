@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.9.2';
+const APP_VER = '2.9.3';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -755,7 +755,8 @@ function renderPending(hintId, inputId, list, summary) {
         <span class="tag ${t.type}">${t.type === 'buy' ? '买入' : '卖出'}</span>
         <span class="p-desc">${esc(t.name || t.code)} ${t.qty} 股 @${esc(t.price)} · ${esc(String(t.time).replace('T', ' ').slice(0, 16))}</span>
         <span class="p-btns">
-          <button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" data-close="${list.length === 1 ? 1 : 0}" type="button">${list.length === 1 ? '保存并关闭' : '保存'}</button>
+          <button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" data-close="0" type="button">保存</button>
+          ${list.length === 1 ? `<button class="btn sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" data-close="1" type="button">保存并关闭</button>` : ''}
           <button class="btn ghost sm pfill-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">改</button>
         </span>
       </div>`).join('') + `</div>`;
@@ -1427,6 +1428,7 @@ function bindEvents() {
   }));
   /* 解析结果一键入库（免表单） */
   async function savePendingTrade(t, btn, closeAfter = false) {
+    if (t._saved) { toast('该笔已保存过'); return; }
     let code = t.code || '', name = t.name || '';
     if (!code && name) { const hit = StockDict.resolve(name); if (hit && hit.code) { code = hit.code; name = hit.name || name; } }
     if (!code) { toast('未能识别股票代码，请点「改」手动确认', 'warn'); return; }
