@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.0.0';
+const APP_VER = '3.0.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -164,10 +164,15 @@ const StockDict = {
 /* ---------- 通用联想下拉（自选 / 交易表单共用） ---------- */
 function bindSuggest(inputId, boxId, onPick) {
   const inp = $(inputId), box = $(boxId);
-  let items = [], shield = null;
-  /* 候选打开期间的透明防护罩：第一次点空白处只收起下拉，避免误触下方按钮 */
+  let items = [], shield = null, shieldTimer = null;
+  /* 候选打开期间的透明防护罩：第一次点空白处只收起下拉，避免误触下方按钮；
+     收起后延迟 350ms 再撤罩，吞掉选中后浏览器补发的 click，防止落到下方按钮上 */
+  const removeShieldNow = () => {
+    if (shieldTimer) { clearTimeout(shieldTimer); shieldTimer = null; }
+    if (shield) { shield.remove(); shield = null; }
+  };
   const showShield = () => {
-    if (shield) return;
+    if (shield) { if (shieldTimer) { clearTimeout(shieldTimer); shieldTimer = null; } return; }
     shield = document.createElement('div');
     shield.className = 'sug-shield';
     const stop = e => { e.preventDefault(); e.stopPropagation(); close(); };
@@ -175,7 +180,10 @@ function bindSuggest(inputId, boxId, onPick) {
     shield.addEventListener('touchstart', stop, { passive: false });
     (box.closest('.modal-mask') || document.body).appendChild(shield);
   };
-  const close = () => { box.hidden = true; box.innerHTML = ''; items = []; if (shield) { shield.remove(); shield = null; } };
+  const close = () => {
+    box.hidden = true; box.innerHTML = ''; items = [];
+    if (shield && !shieldTimer) shieldTimer = setTimeout(removeShieldNow, 350);
+  };
   inp.addEventListener('input', () => {
     const v = inp.value.trim();
     if (!v || !StockDict.ready) { close(); return; }
