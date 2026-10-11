@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.1';
+const APP_VER = '3.8.2';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -2026,6 +2026,7 @@ function bindEvents() {
         await store.log('watch', `修改自选 ${w.stock_name || w.stock_code}（理由/分组）`);
         toast('已保存');
         resetWatchForm();
+        watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (e) { /* */ }
         await loadAll(); renderWatch(); renderToday();
       } catch (err) { toast(err.message || '保存失败', 'warn'); }
       return;
@@ -2053,6 +2054,7 @@ function bindEvents() {
       await store.log('watch', `添加自选 ${row.stock_name}（${row.stock_code}）`);
       toast(`已添加自选 ${row.stock_name}`);
       resetWatchForm();
+      watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (e) { /* */ }
       await loadAll(); renderWatch(); renderToday();
     } catch (err) { toast(err.message || '保存失败', 'warn'); }
   });
