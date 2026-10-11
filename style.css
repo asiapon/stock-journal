@@ -320,6 +320,11 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 }
 .filters input.w120 { width: 120px; }
 .filter-sep { color: var(--ink-3); }
+/* v3.3.5 起止日期框收窄，手机端「起至止」不换行错开 */
+.filters input[type="date"] { width: 112px; }
+@media (max-width: 639px) {
+  .filters input[type="date"] { width: 104px; padding: 6px 4px; font-size: 12px; }
+}
 
 /* ---------- 费率编辑 ---------- */
 .fee-editor { display: flex; flex-direction: column; gap: 12px; margin-bottom: 14px; }
