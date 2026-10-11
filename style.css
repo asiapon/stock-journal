@@ -713,3 +713,17 @@ select { padding-right: 6px; }
 /* ---------- v3.0.3 记一笔：买卖Tab加宽 ---------- */
 #tfTypeTabs { display: flex; }
 #tfTypeTabs .wtab { flex: 1; justify-content: center; padding: 4px 0; }
+
+/* ---------- v3.1.3 自选/操作/持仓表格字号统一（全端一致） ---------- */
+/* 基准：正文 13px，表头 12px，次要小字（代码/可用/现价等）11px */
+#holdTable td, #holdTableM td, #tradeTable td, #watchTable td { font-size: 13px; }
+#holdTable th, #holdTableM th, #tradeTable th, #watchTable th { font-size: 12px; }
+#holdTable .sc-name, #holdTableM .sc-name, #tradeTable .sc-name, #watchTable .sc-name { font-size: 13px; }
+#holdTable .sc-code, #holdTableM .sc-code, #tradeTable .sc-code, #watchTable .sc-code,
+#holdTable .two-line .sub, #holdTableM .two-line .sub,
+#tradeTable .tm-cell .tm-sub, #watchTable .tm-cell .tm-sub { font-size: 11px; }
+@media (max-width: 639px) {
+  #holdTable .sc-code, #holdTableM .sc-code, #tradeTable .sc-code, #watchTable .sc-code,
+  #holdTable .two-line .sub, #holdTableM .two-line .sub,
+  #tradeTable .tm-cell .tm-sub, #watchTable .tm-cell .tm-sub { font-size: 11px; }
+}
