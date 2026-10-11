@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.9';
+const APP_VER = '3.8.10';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -946,6 +946,9 @@ function renderAll() {
   renderTrades();
   renderWatch();
   renderMe();
+  /* v3.8.10 分析中心下拉随数据加载刷新：修复启动即落在分析中心时选股框永远"加载中…" */
+  if (typeof renderAnalysisSelect === 'function') { try { renderAnalysisSelect(); } catch (e) { /* */ } }
+  if (typeof renderBtOptions === 'function') { try { renderBtOptions(); } catch (e) { /* */ } }
 }
 
 /* ---------- 今日 ---------- */
