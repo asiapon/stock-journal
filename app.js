@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.8';
+const APP_VER = '3.8.9';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -2548,14 +2548,22 @@ function analyzeTimeframe(bars, label) {
   const raw = dims.reduce((s, x) => s + x.dir * x.w, 0);
   const maxW = dims.reduce((s, x) => s + x.w, 0) || 1;
   let pct = Math.round(raw / maxW * 100);
+  /* v3.8.9 计算链全程可见：每一步乘数都记入 steps，明细区展示，输出值=公式值可复现 */
+  const steps = [`Σ(方向×权重)=${raw}，Σ权重=${maxW}，基础强度 ${pct}`];
   let caveat = '';
   /* —— 矛盾权重：趋势与摆动维度方向相反时，下调强度并提示反弹/回落 —— */
   if (trendDir === -1 && oversold) {
     pct = Math.round(pct * 0.7);
-    caveat = '注：空头趋势中摆动指标已达极度超卖，看空强度已下调，可能出现技术性反弹，不宜追空';
+    steps.push(`矛盾降权×0.7 → ${pct}`);
+    caveat = Math.abs(raw / maxW * 100) < 10
+      ? '注：趋势维度看空与摆动维度极度超卖方向相反，但基础净分已接近零，实为多空对冲，不构成任一方向的独立依据'
+      : '注：空头趋势中摆动指标已达极度超卖，看空强度已下调，可能出现技术性反弹，不宜追空';
   } else if (trendDir === 1 && overbought) {
     pct = Math.round(pct * 0.7);
-    caveat = '注：多头趋势中摆动指标已达极度超买，看多强度已下调，谨防技术性回调，不宜追高';
+    steps.push(`矛盾降权×0.7 → ${pct}`);
+    caveat = Math.abs(raw / maxW * 100) < 10
+      ? '注：趋势维度看多与摆动维度极度超买方向相反，但基础净分已接近零，实为多空对冲，不构成任一方向的独立依据'
+      : '注：多头趋势中摆动指标已达极度超买，看多强度已下调，谨防技术性回调，不宜追高';
   }
   if (caveat) reasons.push({ name: '矛盾提示', dir: 0, w: 0, text: caveat });
 
@@ -2595,6 +2603,7 @@ function analyzeTimeframe(bars, label) {
   else { volState = '显著放量'; mult = 1.2; }
   if (dayDir === 0) mult = Math.min(mult, 1.0); /* 横盘时放量不加分 */
   pct = Math.max(-100, Math.min(100, Math.round(pct * mult)));
+  if (mult !== 1) steps.push(`量能×${mult} → ${pct}`);
   /* 量价背离预警：创新低但缩量（抛压衰竭）或放量（恐慌出逃）；停牌复牌日跳过 */
   const recentLows = bars.slice(-20).map(b => Number(b.l) || price);
   const isNewLow = price <= Math.min(...recentLows) * 1.002;
@@ -2604,10 +2613,11 @@ function analyzeTimeframe(bars, label) {
   if (isResumeDay) volNote = `量能：近期有停牌复牌，单日量能不可比，本次不做量能修正`;
   else if (isLimitLike) volNote += '。涨跌停板附近量能失真（封板/砸板量不代表真实供需），本次不做量能加减分';
   else if (dayDir !== 0) volNote += `，${dayDir > 0 ? '上涨' : '下跌'}${mult > 1 ? '获量能确认' : mult < 1 ? '缺乏量能支撑' : ''}`;
-  if (volState === '地量') volNote += '。地量变盘：交投极度冷清，多空方向待定，变盘窗口临近（量能同时削弱多空双方的信号强度）';
+  if (volState === '地量') volNote += '。地量：交投极度冷清，已削弱当前方向净分的信号强度，变盘方向待定';
   if (!isResumeDay && !isLimitLike && isNewLow && ratio < loThr) {
     volNote += '。量价背离：股价创新低但明显缩量，抛压趋于衰竭，历史统计上此处加速下跌概率下降、注意止跌信号（概率性修正，非买卖依据）';
     pct = Math.round(pct * 0.7);
+    steps.push(`背离再降×0.7 → ${pct}`);
   } else if (!isResumeDay && !isLimitLike && isNewLow && ratio > hiThr) {
     volNote += '。放量破位创新低，恐慌性抛售特征，短期或有惯性下探（概率性提示，非买卖依据）';
   }
@@ -2615,7 +2625,7 @@ function analyzeTimeframe(bars, label) {
 
   const signal = pct >= 30 ? 'buy' : pct <= -30 ? 'sell' : 'hold';
   const summary = reasons.filter(x => x.dir !== 0).slice(0, 3).map(x => x.text).join('；');
-  return { label, price, ma, macd, rsi: r, kdj: { K: k, D: d, J: j }, levels, reasons, raw, pct, signal, summary, caveat, dims, volInfo: { state: volState, ratio, mult } };
+  return { label, price, ma, macd, rsi: r, kdj: { K: k, D: d, J: j }, levels, reasons, raw, maxW, pct, signal, summary, caveat, dims, steps, volInfo: { state: volState, ratio, mult } };
 }
 /* v3.8.5 修复一致性判断 bug：原来按 buy/sell/hold 三档比较，+10 与 -10 都落 hold 档
    被误判为"方向一致"。现按强度符号比较；|综合|<5 强制输出观望；并披露合成公式。 */
@@ -3020,7 +3030,7 @@ function diagHtml() {
       <div class="sig-score">
         <div><b>${esc(name)}（${esc(code)}）</b>　${esc(qLine)}</div>
         <div>技术面综合强度 <b>${comb.pct > 0 ? '+' : ''}${comb.pct}</b>（日线 ${d.pct > 0 ? '+' : ''}${d.pct} × 60% ＋ 周线 ${w.pct > 0 ? '+' : ''}${w.pct} × 40%）</div>
-        <div class="dw-status">当前状态：日线${d.pct > 0 ? '偏多' : d.pct < 0 ? '偏空' : '中性'} / 周线${w.pct > 0 ? '偏多' : w.pct < 0 ? '偏空' : '中性'}${(() => { const ds = Math.sign(d.pct), ws = Math.sign(w.pct); return ds !== 0 && ds === ws ? '，两周期方向一致' : ds !== 0 && ws !== 0 ? '，两周期方向冲突' : '，一方方向不明'; })()}${Math.abs(comb.pct) < 5 ? '，落入观望区' : ''}</div>
+        <div class="dw-status">当前状态：日线${d.pct > 0 ? '偏多' : d.pct < 0 ? '偏空' : '多空对冲（净信号为零，非无信号）'} / 周线${w.pct > 0 ? '偏多' : w.pct < 0 ? '偏空' : '多空对冲（净信号为零，非无信号）'}${(() => { const ds = Math.sign(d.pct), ws = Math.sign(w.pct); return ds !== 0 && ds === ws ? '，两周期方向一致' : ds !== 0 && ws !== 0 ? '，两周期方向冲突' : '，一方方向不明'; })()}${Math.abs(comb.pct) < 5 ? '，落入观望区' : ''}${(() => { const cs = Math.sign(comb.pct), ds = Math.sign(d.pct), ws = Math.sign(w.pct); if (cs === 0) return ''; const dir = cs > 0 ? '偏多' : '偏空'; if (ds === 0 && ws === cs) return `；综合${dir}完全由周线贡献`; if (ws === 0 && ds === cs) return `；综合${dir}完全由日线贡献`; return ''; })()}</div>
         <div>${esc(posLine)}</div>
         <div>${esc(comb.note)}</div>
       </div>
@@ -3037,10 +3047,10 @@ function diagHtml() {
     </div>
     <div class="levels-legend">关键价位：<b>支撑</b> ${d.levels.support.length ? d.levels.support.join(' / ') : '近 3 年低点下方'} ／ <b>压力</b> ${d.levels.resistance.length ? d.levels.resistance.join(' / ') : '近 3 年高点上方'}　<span class="lv-note">（K 线图左上角图例只标出落在当前可见区间内的档位，档号与这里一一对应）</span></div>
     <div class="tech-cols">
-      <div class="tech-reason"><h4>📉 日线信号明细（强度 ${d.pct > 0 ? '+' : ''}${d.pct}）</h4><ul>${d.reasons.map(reasonLi).join('')}</ul></div>
-      <div class="tech-reason"><h4>📊 周线信号明细（强度 ${w.pct > 0 ? '+' : ''}${w.pct}）</h4><ul>${w.reasons.map(reasonLi).join('')}</ul></div>
+      <div class="tech-reason"><h4>📉 日线信号明细（强度 ${d.pct > 0 ? '+' : ''}${d.pct}）</h4>${d.steps && d.steps.length ? `<div class="calc-chain">计算链：${d.steps.join(' → ')}</div>` : ''}<ul>${d.reasons.map(reasonLi).join('')}</ul></div>
+      <div class="tech-reason"><h4>📊 周线信号明细（强度 ${w.pct > 0 ? '+' : ''}${w.pct}）</h4>${w.steps && w.steps.length ? `<div class="calc-chain">计算链：${w.steps.join(' → ')}</div>` : ''}<ul>${w.reasons.map(reasonLi).join('')}</ul></div>
     </div>
-    <div class="formula-note">强度合成公式（可复现）：单周期强度 = Σ(维度方向×权重) ÷ Σ该周期实际计分权重 × 100。四维度权重表：趋势 3（均线三条件合成，方向由合计点数定）、动能 2（红/绿柱走弱降为 1，零轴噪声 0）、摆动 2（RSI/J 值极值升为 3，金叉/死叉但 RSI 中性降为 1 且方向记 0）、位置 1（密集区支撑/压力升为 2；四个周期统一计算，无贴近摆动点位时该维度不计入分母）。再乘量能系数（地量 0.5 / 缩量 0.7 / 平量 1.0 / 温和放量 1.1 / 显著放量 1.2，阈值取个股自身近 60 日量比分位数；涨跌停与停牌复牌不做修正）。矛盾降权触发条件（写死）：趋势维度与摆动维度符号相反，且摆动处于极端区（RSI&lt;30 或 J&lt;15；反向为 RSI&gt;70 或 J&gt;95）→ 强度 ×0.7。综合强度 = 日线 × 60% + 周线 × 40%（两周期同公式同量纲），|综合| &lt; 5 强制观望。</div>
+    <div class="formula-note">强度合成公式（可复现，明细区附每一步计算链）：单周期强度 = Σ(维度方向×权重) ÷ Σ该周期实际计分权重 × 100。四维度权重表：趋势 3（均线三条件合成，方向由合计点数定）、动能 2（红/绿柱走弱降为 1，|柱线|&lt;股价0.1% 判噪声记 0）、摆动 2（深度极值 RSI&lt;25 或 J&lt;5 升为 3；金叉/死叉但 RSI 中性降为 1 且方向记 0；矛盾触发用较宽阈值 RSI&lt;30/J&lt;15，不影响权重）、位置 1（密集区支撑/压力升为 2；各周期统一计算，无贴近摆动点位时该维度不计入分母）。再乘量能系数（地量 0.5 / 缩量 0.7 / 偏缩量 0.85 / 平量 1.0 / 温和放量 1.1 / 显著放量 1.2，阈值取个股自身近 60 日量比分位数；涨跌停与停牌复牌不做修正；地量削弱的是当前净分方向）。矛盾降权触发条件（写死）：趋势维度与摆动维度符号相反，且摆动处于极端区（RSI&lt;30 或 J&lt;15；反向为 RSI&gt;70 或 J&gt;95）→ 强度 ×0.7。综合强度 = 日线 × 60% + 周线 × 40%（两周期同公式同量纲），|综合| &lt; 5 强制观望。</div>
     <div class="diag-ai">
       <div class="diag-ai-title">🤖 综合诊断 <span class="diag-ai-sub">技术面 ＋ 基本面 ＋ 你的持仓与交易行为，只给一个结论</span></div>
       <div id="diagAiOut" class="diag-ai-out">${t.ai ? esc(t.ai) : (t.busy ? '生成中…' : '<span class="diag-ai-idle">技术面已经出好了。点下面的按钮，再结合基本面、消息面与你的持仓 / 交易行为，生成一段可执行的操作建议。</span>')}</div>
