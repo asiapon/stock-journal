@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.0.2';
+const APP_VER = '3.0.3';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1186,7 +1186,11 @@ function setManualOpen(open) {
 }
 function openRecModal(reset = true) {
   const m = $('recModal'); if (!m) return;
-  if (reset) { resetTradeForm(); setManualOpen(false); }
+  if (reset) {
+    resetTradeForm();
+    setManualOpen(false);
+    const nl = $('tradeNl'); if (nl) nl.value = '';   // 清掉上次的一句话描述
+  }
   m.hidden = false;
 }
 function closeRecModal() {
@@ -1433,7 +1437,7 @@ function bindEvents() {
   $('tradeParseBtn').addEventListener('click', () => aiParseEntry('tradeNl', 'tradeHint'));
   ['quickHint', 'tradeHint'].forEach(hid => $(hid).addEventListener('click', e => {
     const openM = e.target.closest('.p-open-manual');
-    if (openM) { setManualOpen(true); if (hid !== 'tradeHint') { openRecModal(true); setManualOpen(true); } return; }
+    if (openM) { setManualOpen(true); if (hid !== 'tradeHint') { openRecModal(true); setManualOpen(true); $('tradeNl').value = ''; } return; }
     const saveAllB = e.target.closest('.p-saveall-btn');
     if (saveAllB) { saveAllPending(saveAllB, saveAllB.dataset.close === '1'); return; }
     const saveB = e.target.closest('.p-save-btn');
