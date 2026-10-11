@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.5.2';
+const APP_VER = '3.6.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1074,13 +1074,25 @@ function renderHoldings() {
   const clearedRealized = clearedRows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   totalDayPnl += clearedDayPnl;   // 今日清仓的已落地盈亏计入当日参考盈亏
   const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
+  /* 账户资金：初始额度 → 现金 / 总资产 / 累计总盈亏（费用已含在买卖净额中） */
+  const initCap = (() => { const v = Number(S.settings && S.settings['initial_capital']); return isFinite(v) && v > 0 ? v : 10000000; })();
+  let buyNetAll = 0, sellNetAll = 0;
+  for (const t of S.trades) {
+    const f = (t.fee && t.fee.total) || 0;
+    if (t.transaction_type === 'buy') buyNetAll += t.net_amount != null ? Number(t.net_amount) : t.gross_amount + f;
+    else sellNetAll += t.net_amount != null ? Number(t.net_amount) : t.gross_amount - f;
+  }
+  const cash = initCap - buyNetAll + sellNetAll;
+  const totalAssets = totalMV + cash;
+  const cumPnl = totalAssets - initCap;
   const hs = $('holdSummary');
   if (hs) hs.innerHTML = rows.length ? `
     <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div><div class="s-sub">${clearedCnt ? `含今日清仓 ${clearedCnt} 只已实现 ${clearedRealized >= 0 ? '+' : ''}${fmt2(clearedRealized)}` : '摊薄口径，含已实现'}</div></div>
     <div class="sum-card"><div class="s-label">当日参考盈亏</div><div class="s-value ${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</div>
       ${clearedCnt ? `<div class="s-sub">含今日清仓 ${clearedCnt} 只（已落地 ${clearedDayPnl >= 0 ? '+' : ''}${fmt2(clearedDayPnl)}）</div>` : ''}
-      ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>` : '';
+      ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>
+    <div class="sum-card"><div class="s-label">账户累计总盈亏</div><div class="s-value ${pnlCls(cumPnl)}">${cumPnl >= 0 ? '+' : ''}${fmt2(cumPnl)}</div><div class="s-sub">总资产 ¥${fmt2(totalAssets)} · 现金 ¥${fmt2(cash)}</div></div>` : '';
   $('holdEmpty').hidden = holds.length > 0;
 
   /* PC 全列表格：股票/市值/盈亏/盈亏%/持仓可用/成本价/现价/当日盈亏/当日盈亏%/仓位/明细 */
@@ -1096,7 +1108,7 @@ function renderHoldings() {
       <td class="num price-cell">${price != null ? fmt2(price) : NA}</td>
       <td class="num ${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? (dayPnl >= 0 ? '+' : '') + fmt2(dayPnl) : NA}</td>
       <td class="num ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : NA}</td>
-      <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : (r.cleared ? '0.00%' : NA)}</td>
+      <td class="num">${mv != null && totalAssets ? (mv / totalAssets * 100).toFixed(2) + '%' : (r.cleared ? '0.00%' : NA)}</td>
       <td><div class="row-actions">
         <button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button>
       </div></td>
@@ -1581,6 +1593,7 @@ async function saveFeeEditor() {
 }
 function renderMe() {
   renderFeeEditor();
+  renderInitCap();
   renderLogs();
   if (S.mode === 'cloud' && S.user && S.user.role === 'admin') {
     $('userMgmtCard').hidden = false;
@@ -1588,6 +1601,22 @@ function renderMe() {
   } else {
     $('userMgmtCard').hidden = true;
   }
+}
+/* ---------- 账户初始资金 ---------- */
+function renderInitCap() {
+  const v = Number(S.settings && S.settings['initial_capital']);
+  $('initCapInput').value = isFinite(v) && v > 0 ? v : '';
+  $('initCapHint').textContent = '当前生效：' + fmt2(isFinite(v) && v > 0 ? v : 10000000) + ' 元（未设置时默认 1000 万）';
+}
+async function saveInitCap(val) {
+  const v = val != null ? val : (parseFloat($('initCapInput').value) || 0);
+  try {
+    await saveSetting('initial_capital', v > 0 ? v : '');
+    await loadAll();
+    renderInitCap();
+    renderAll();
+    toast(v > 0 ? '初始资金已保存' : '已恢复默认 1000 万');
+  } catch (err) { toast(err.message || '保存失败', 'warn'); }
 }
 function renderLogs() {
   const logs = S.opLogs.slice(0, 20);
@@ -2106,6 +2135,8 @@ function bindEvents() {
     }
   });
 
+  $('initCapSave').addEventListener('click', () => saveInitCap());
+  $('initCapReset').addEventListener('click', () => saveInitCap(10000000));
   /* 我的：费率 */
   $('feeSaveBtn').addEventListener('click', saveFeeEditor);
   $('feeResetBtn').addEventListener('click', () => { S.settings.fee = null; delete S.settings.fee; renderFeeEditor(); toast('已恢复默认（记得保存生效）'); });

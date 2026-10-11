@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=3.5.2">
+<link rel="stylesheet" href="style.css?v=3.6.0">
 </head>
 <body>
 
@@ -305,6 +305,18 @@
       <div class="set-pane" data-pane="cost" hidden>
       <div class="card">
         <div class="card-title-row">
+          <span class="card-title">账户资金</span>
+          <span class="hint">初始资金用于计算总资产、真实仓位与账户累计总盈亏</span>
+        </div>
+        <div class="quick-input-row" style="margin:8px 0 4px">
+          <input type="number" id="initCapInput" placeholder="初始资金（元），如 10000000" step="0.01" min="0" style="flex:1 1 220px">
+          <button class="btn primary sm" id="initCapSave" type="button">保存</button>
+          <button class="btn ghost sm" id="initCapReset" type="button">恢复默认 1000 万</button>
+        </div>
+        <div class="hint" id="initCapHint" style="margin:0 0 6px 2px"></div>
+      </div>
+      <div class="card">
+        <div class="card-title-row">
           <span class="card-title">费率设置</span>
           <span class="hint">单位 ‰（千分比），印花税仅卖出收取</span>
         </div>
@@ -502,6 +514,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.5.2"></script>
+<script src="app.js?v=3.6.0"></script>
 </body>
 </html>
