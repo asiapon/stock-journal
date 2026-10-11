@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.1.3';
+const APP_VER = '3.1.4';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1016,27 +1016,6 @@ function renderHoldings() {
     <div class="sum-card"><div class="s-label">盈亏%</div><div class="s-value ${totalPct != null ? pnlCls(totalPct) : ''}">${totalPct != null ? fmtPct(totalPct) : '—'}</div>
       ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>` : '';
 
-  // 占比条
-  const segs = holds.map((h, i) => {
-    const q = qm.get(h.code);
-    const mv = q && q.price != null ? h.qty * q.price : 0;
-    return { name: h.name || h.code, pct: totalMV ? mv / totalMV : 0, color: WB_COLORS[i % WB_COLORS.length] };
-  }).sort((a, b) => b.pct - a.pct);
-  $('weightBar').innerHTML = segs.map(s =>
-    `<div class="wb-seg" style="width:${(s.pct * 100).toFixed(2)}%;background:${s.color}" title="${esc(s.name)} ${(s.pct * 100).toFixed(1)}%"></div>`).join('')
-    + (segs.length ? `<div class="wb-legend-wrap"></div>` : '');
-  // 图例
-  let legend = $('weightLegend');
-  if (legend) legend.remove();
-  if (segs.length) {
-    legend = document.createElement('div');
-    legend.className = 'weight-legend';
-    legend.id = 'weightLegend';
-    legend.innerHTML = segs.map(s => `<span class="wl-item"><span class="wl-dot" style="background:${s.color}"></span>${esc(s.name)} ${(s.pct * 100).toFixed(1)}%</span>`).join('');
-    $('weightBar').after(legend);
-  }
-
-  // 表格（现价一律来自网络行情；未获取时相关列显示「未获取」）
   $('holdEmpty').hidden = holds.length > 0;
   const todayStr = nowLocalInput().slice(0, 10);
   /* 行数据一次算好，PC / 手机两张表共用 */
@@ -1058,17 +1037,17 @@ function renderHoldings() {
     return { h, price, prevClose, costPrice, mv, float, floatPct, avail, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
   });
 
-  /* PC 全列表格 */
+  /* PC 全列表格：股票/市值/盈亏/盈亏%/持仓可用/成本价/现价/当日盈亏/当日盈亏%/仓位/明细 */
   $('holdTable').querySelector('tbody').innerHTML = rows.map(r => {
     const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
     return `<tr data-code="${esc(h.code)}">
       <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${esc(h.code)}</span></div></td>
-      <td class="num"><div class="two-line"><span title="可用 = 持仓 − 当日买入（T+1）">${h.qty}</span><span class="sub">可用 ${avail}</span></div></td>
-      <td class="num">${fmtP(costPrice)}</td>
-      <td class="num price-cell">${price != null ? fmt2(price) : NA}</td>
       <td class="num">${mv != null ? fmt2(mv) : NA}</td>
       <td class="num ${float != null ? pnlCls(float) : ''}">${float != null ? (float >= 0 ? '+' : '') + fmt2(float) : NA}</td>
       <td class="num ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : NA}</td>
+      <td class="num"><div class="two-line"><span title="可用 = 持仓 − 当日买入（T+1）">${h.qty}</span><span class="sub">可用 ${avail}</span></div></td>
+      <td class="num">${fmtP(costPrice)}</td>
+      <td class="num price-cell">${price != null ? fmt2(price) : NA}</td>
       <td class="num ${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? (dayPnl >= 0 ? '+' : '') + fmt2(dayPnl) : NA}</td>
       <td class="num ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : NA}</td>
       <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : NA}</td>
