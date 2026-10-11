@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.9.8';
+const APP_VER = '2.9.9';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -164,8 +164,18 @@ const StockDict = {
 /* ---------- 通用联想下拉（自选 / 交易表单共用） ---------- */
 function bindSuggest(inputId, boxId, onPick) {
   const inp = $(inputId), box = $(boxId);
-  let items = [];
-  const close = () => { box.hidden = true; box.innerHTML = ''; items = []; };
+  let items = [], shield = null;
+  /* 候选打开期间的透明防护罩：第一次点空白处只收起下拉，避免误触下方按钮 */
+  const showShield = () => {
+    if (shield) return;
+    shield = document.createElement('div');
+    shield.className = 'sug-shield';
+    const stop = e => { e.preventDefault(); e.stopPropagation(); close(); };
+    shield.addEventListener('pointerdown', stop);
+    shield.addEventListener('touchstart', stop, { passive: false });
+    (box.closest('.modal-mask') || document.body).appendChild(shield);
+  };
+  const close = () => { box.hidden = true; box.innerHTML = ''; items = []; if (shield) { shield.remove(); shield = null; } };
   inp.addEventListener('input', () => {
     const v = inp.value.trim();
     if (!v || !StockDict.ready) { close(); return; }
@@ -173,12 +183,14 @@ function bindSuggest(inputId, boxId, onPick) {
     if (!items.length) {
       box.innerHTML = '<div class="sug-empty">无匹配结果，可直接手动录入</div>';
       box.hidden = false;
+      showShield();
       return;
     }
     box.innerHTML = items.map(h =>
       `<div class="sug-item" data-code="${esc(h.code)}" data-name="${esc(h.name)}" data-mkt="${esc(h.mkt)}"><b>${esc(h.code)}</b>${esc(h.name)}<span>${esc(MKT_NAME[h.mkt] || '')}</span></div>`
     ).join('');
     box.hidden = false;
+    showShield();
     requestAnimationFrame(() => box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
   });
   const pick = e => {

@@ -675,3 +675,6 @@ select { padding-right: 6px; }
 }
 .quick-input-row.nl-row .btn { flex-shrink: 0; height: auto; min-height: 32px; padding: 8px 14px; }
 .p-saveall-row { gap: 8px; }
+
+/* ---------- v2.9.9 候选下拉打开期间的透明防护罩 ---------- */
+.sug-shield { position: fixed; inset: 0; z-index: 29; background: transparent; }
