@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.5.0';
+const APP_VER = '3.5.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1257,8 +1257,8 @@ function renderTrades() {
       <tr class="stockagg" data-code="${esc(g.code)}" title="点击展开每笔明细与期间盈亏">
         <td><div class="stock-cell"><span class="sc-name">${esc(g.name)}</span><span class="sc-code">${esc(g.code)}</span></div></td>
         <td class="num">${g.cnt}</td>
-        <td class="num"><div class="two-line"><span>${g.buyQty || '—'}</span><span class="sub">${g.sellQty || '—'}</span></div></td>
-        <td class="num"><div class="two-line"><span>${g.buyQty ? fmt2(g.buyAmt / g.buyQty) : '—'}</span><span class="sub">${g.sellQty ? fmt2(g.sellAmt / g.sellQty) : '—'}</span></div></td>
+        <td class="num">${g.buyQty || '—'} / ${g.sellQty || '—'}</td>
+        <td class="num">${g.buyQty ? fmt2(g.buyAmt / g.buyQty) : '—'} / ${g.sellQty ? fmt2(g.sellAmt / g.sellQty) : '—'}</td>
         <td class="num">${fmt2(g.amt)}</td>
         <td class="num">${g.buys} / ${g.sells}</td>
         <td class="num">${fmt2(g.fee)}</td>
