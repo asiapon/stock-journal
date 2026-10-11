@@ -320,10 +320,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 }
 .filters input.w120 { width: 120px; }
 .filter-sep { color: var(--ink-3); }
-/* v3.3.5 起止日期框收窄，手机端「起至止」不换行错开 */
-.filters input[type="date"] { width: 112px; }
+/* v3.3.6 起止日期框：PC/手机均 120px，手机字号略小 */
+.filters input[type="date"] { width: 120px; }
 @media (max-width: 639px) {
-  .filters input[type="date"] { width: 104px; padding: 6px 4px; font-size: 12px; }
+  .filters input[type="date"] { width: 120px; padding: 6px 4px; font-size: 12px; }
 }
 
 /* ---------- 费率编辑 ---------- */
