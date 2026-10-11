@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.1.8';
+const APP_VER = '3.1.9';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1000,20 +1000,21 @@ function renderHoldings() {
   const NA = '<span class="na-tag">未获取</span>';
 
   /* 持仓总览（现价来自网络行情；未获取的股票不计入，并单独提示） */
-  let totalMV = 0, totalCost = 0, missing = 0;
+  let totalMV = 0, totalCost = 0, missing = 0, totalDayPnl = 0;
   for (const h of holds) {
     const q = qm.get(h.code);
-    if (q && q.price != null) { totalMV += h.qty * q.price; totalCost += h.costValue; }
+    if (q && q.price != null) {
+      totalMV += h.qty * q.price; totalCost += h.costValue;
+      if (q.prevClose > 0) totalDayPnl += h.qty * (q.price - q.prevClose);
+    }
     else missing++;
   }
   const totalFloat = totalMV - totalCost;
-  const totalPct = totalCost ? totalFloat / totalCost : null;
   const hs = $('holdSummary');
   if (hs) hs.innerHTML = holds.length ? `
-    <div class="sum-card"><div class="s-label">持仓市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
-    <div class="sum-card"><div class="s-label">持仓成本</div><div class="s-value">¥${fmt2(totalCost)}</div></div>
+    <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div></div>
-    <div class="sum-card"><div class="s-label">盈亏%</div><div class="s-value ${totalPct != null ? pnlCls(totalPct) : ''}">${totalPct != null ? fmtPct(totalPct) : '—'}</div>
+    <div class="sum-card"><div class="s-label">当日参考盈亏</div><div class="s-value ${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</div>
       ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>` : '';
 
   $('holdEmpty').hidden = holds.length > 0;
