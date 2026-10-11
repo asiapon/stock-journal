@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.21">
+<link rel="stylesheet" href="style.css?v=3.8.22">
 </head>
 <body>
 
@@ -248,9 +248,9 @@
         <div class="table-scroll">
           <table class="tbl" id="watchTable">
             <thead><tr>
-              <th>股票</th><th class="num">最新</th><th class="num">涨幅</th>
-              <th class="num">今开</th><th class="num">最高</th><th class="num">最低</th><th class="num">昨收</th>
-              <th>自选日</th><th class="num">自选价</th><th class="num">自选收益</th><th>备注 / 理由</th><th class="num">操作</th>
+              <th>股票</th><th class="num sortable" data-sort="price">最新</th><th class="num sortable" data-sort="chg">涨幅</th>
+              <th class="num sortable" data-sort="open">今开</th><th class="num sortable" data-sort="high">最高</th><th class="num sortable" data-sort="low">最低</th><th class="num sortable" data-sort="prevClose">昨收</th>
+              <th class="num sortable" data-sort="date">自选日</th><th class="num sortable" data-sort="anchor">自选价</th><th class="num sortable" data-sort="gain">自选收益</th><th>备注 / 理由</th><th class="num">操作</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -651,7 +651,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.21"></script>
-<script src="analysis-extra.js?v=3.8.21"></script>
+<script src="app.js?v=3.8.22"></script>
+<script src="analysis-extra.js?v=3.8.22"></script>
 </body>
 </html>

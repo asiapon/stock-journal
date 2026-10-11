@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.21';
+const APP_VER = '3.8.22';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1478,6 +1478,14 @@ async function autoWatchOnBuy(code, name) {
   } catch (e) { /* 失败不影响交易保存主流程 */ }
 }
 let watchTab = (() => { try { return localStorage.getItem('sj_watchTab') || '默认'; } catch (e) { return '默认'; } })();   // 当前分组 Tab（记住上次所在分组）
+/* v3.8.22 自选表表头排序状态：dir 1=降序(第一次点击) / -1=升序 / 0=未排序 */
+let watchSort = { key: null, dir: 0 };
+function updateWatchHead() {
+  document.querySelectorAll('#watchTable th.sortable').forEach(th => {
+    th.classList.toggle('sorted-desc', watchSort.key === th.dataset.sort && watchSort.dir === 1);
+    th.classList.toggle('sorted-asc', watchSort.key === th.dataset.sort && watchSort.dir === -1);
+  });
+}
 function renderWatch() {
   const groups = [...new Set(['默认', ...S.watchlist.map(w => w.group_name || '默认')])];
   const tabGroups = groups.includes(watchTab) ? groups : [...groups, watchTab].filter(Boolean);
@@ -1490,7 +1498,8 @@ function renderWatch() {
   const qm = quoteMap();
   const FAIL = '<span class="na-tag">获取失败</span>';
   const backfilled = new Set();   // 本轮渲染中已触发锚点回填的自选 id
-  $('watchTable').querySelector('tbody').innerHTML = list.map(w => {
+  /* v3.8.22 先算每行的展示数据，再按表头排序状态排序 */
+  const items = list.map(w => {
     const q = qm.get(w.stock_code);
     const price = q ? q.price : null;                       // 网络现价
     const chg = q && q.pct != null && !isNaN(q.pct) ? q.pct / 100 : null;
@@ -1505,6 +1514,29 @@ function renderWatch() {
     const gain = price != null && anchor ? (price - anchor) / anchor : null;
     const d = w.created_at ? new Date(w.created_at) : null;
     const addDate = d && !isNaN(d) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '—';
+    return { w, q, price, chg, anchor, gain, addDate, ts: d && !isNaN(d) ? d.getTime() : null };
+  });
+  if (watchSort.key && watchSort.dir) {
+    const getter = {
+      price: it => it.price, chg: it => it.chg,
+      open: it => it.q && it.q.open != null ? it.q.open : null,
+      high: it => it.q && it.q.high != null ? it.q.high : null,
+      low: it => it.q && it.q.low != null ? it.q.low : null,
+      prevClose: it => it.q && it.q.prevClose != null ? it.q.prevClose : null,
+      date: it => it.ts, anchor: it => it.anchor, gain: it => it.gain
+    }[watchSort.key];
+    if (getter) {
+      items.sort((a, b) => {
+        const va = getter(a), vb = getter(b);
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;    // 空值恒排最后
+        if (vb == null) return -1;
+        return (vb - va) * watchSort.dir;   // dir=1 降序优先，dir=-1 升序
+      });
+    }
+  }
+  updateWatchHead();
+  $('watchTable').querySelector('tbody').innerHTML = items.map(({ w, q, price, chg, anchor, gain, addDate }) => {
     return `<tr data-id="${w.id}">
       <td><div class="stock-cell"><span class="sc-name">${esc(w.stock_name || '')}</span><span class="sc-code">${esc(w.stock_code)}</span></div></td>
       <td class="num">${price != null ? fmt2(price) : FAIL}</td>
@@ -2080,6 +2112,16 @@ function bindEvents() {
     try { localStorage.setItem('sj_watchTab', watchTab); } catch (e) { /* */ }
     renderWatch();
     $('wfGroupQuick').value = g || '';   // 当前分组即默认归组，可手动改
+  });
+  /* v3.8.22 表头排序：点一下降序 → 再点升序 → 再点取消 */
+  $('watchTable').querySelector('thead').addEventListener('click', e => {
+    const th = e.target.closest('th.sortable');
+    if (!th) return;
+    const k = th.dataset.sort;
+    if (watchSort.key !== k) watchSort = { key: k, dir: 1 };
+    else if (watchSort.dir === 1) watchSort = { key: k, dir: -1 };
+    else watchSort = { key: null, dir: 0 };
+    renderWatch();
   });
   /* 删除当前分组：组内股票移回「默认」 */
   $('delGroupBtn').addEventListener('click', () => {
