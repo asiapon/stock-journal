@@ -3,6 +3,7 @@
    视觉：冷白底 / 深灰文字 / 红涨绿跌 / 琥珀提醒 / 蓝中性
    ============================================================ */
 :root {
+  color-scheme: light; /* v3.8.6 强制浅色：修复系统深色模式下原生 select 弹层渲染成黑块、看似无法下拉 */
   --bg: #F5F7F9;
   --card: #FFFFFF;
   --ink: #2A2F36;
@@ -756,7 +757,7 @@ select, textarea {
   padding: 0 10px; box-sizing: border-box;
 }
 textarea { height: auto; min-height: 32px; padding: 8px 10px; resize: vertical; }
-select { padding-right: 6px; }
+select { padding-right: 6px; background: var(--card); color: var(--ink); }
 .btn { height: 32px; padding: 0 14px; font-size: 13px; box-sizing: border-box; }
 .btn.sm { padding: 0 10px; }
 
