@@ -727,3 +727,18 @@ select { padding-right: 6px; }
   #holdTable .two-line .sub, #holdTableM .two-line .sub,
   #tradeTable .tm-cell .tm-sub, #watchTable .tm-cell .tm-sub { font-size: 11px; }
 }
+
+/* ---------- v3.1.8 表格字号完全统一（含第二行小字） ---------- */
+/* 表内所有内容一律 13px，第二行仅用灰色区分主次 */
+#holdTable td, #holdTableM td, #tradeTable td, #watchTable td,
+#holdTable .sc-code, #holdTableM .sc-code, #tradeTable .sc-code, #watchTable .sc-code,
+#holdTable .two-line .sub, #holdTableM .two-line .sub,
+#tradeTable .tm-cell .tm-sub, #watchTable .tm-cell .tm-sub,
+#watchTable .adate { font-size: 13px; }
+@media (max-width: 639px) {
+  #holdTable td, #holdTableM td, #tradeTable td, #watchTable td,
+  #holdTable .sc-code, #holdTableM .sc-code, #tradeTable .sc-code, #watchTable .sc-code,
+  #holdTable .two-line .sub, #holdTableM .two-line .sub,
+  #tradeTable .tm-cell .tm-sub, #watchTable .tm-cell .tm-sub,
+  #watchTable .adate { font-size: 13px; }
+}
