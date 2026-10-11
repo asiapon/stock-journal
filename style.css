@@ -1138,3 +1138,13 @@ select { padding-right: 6px; background: var(--card); color: var(--ink); }
 .w-track { flex: 1; height: 14px; background: #eef1f5; border-radius: 7px; overflow: hidden; position: relative; }
 
 .w-val { width: 52px; }
+/* ---------- v3.8.20 全局原生下拉统一为个股诊断 selpick 同款风格 ---------- */
+select {
+  appearance: none; -webkit-appearance: none; -moz-appearance: none;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: var(--card) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2398A1AC' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
+  padding: 0 28px 0 10px;
+  color: var(--ink); font-size: 13px; cursor: pointer;
+}
+select:hover { border-color: var(--blue); }
+select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
