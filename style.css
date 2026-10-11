@@ -92,7 +92,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 }
 .auth-tab.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
 .auth-form { display: flex; flex-direction: column; gap: 12px; }
-.auth-form input {
+.auth-card .auth-form input {
   width: 100%; height: 40px; box-sizing: border-box; font-size: 13.5px;
   border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
   padding: 0 12px; background: #FBFCFD; outline: none;
