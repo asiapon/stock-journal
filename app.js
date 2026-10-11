@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.6.2';
+const APP_VER = '3.6.3';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1060,7 +1060,7 @@ function renderHoldings() {
     const dayPct = price != null && prevClose > 0 ? (price - prevClose) / prevClose : null;
     return { h, cleared, price, prevClose, costPrice, mv, float, floatPct, avail, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
   });
-  /* 今日清仓股的落地盈亏（已在 rows 中），统计卡单独提示 */
+  /* 今日清仓股的落地盈亏（已在 rows 中） */
 
   /* 持仓统计卡：摊薄口径，与表格行完全一致（浮动盈亏=累计盈亏，当日参考盈亏=券商口径） */
   let totalMV = 0, totalDayPnl = 0, missing = 0;
@@ -1068,11 +1068,8 @@ function renderHoldings() {
     if (r.mv != null) { totalMV += r.mv; if (r.dayPnl != null) totalDayPnl += r.dayPnl; }
     else if (!r.cleared) missing++;
   }
-  const clearedRows = rows.filter(r => r.cleared);
-  const clearedCnt = clearedRows.length;
-  const clearedDayPnl = clearedRows.reduce((s, r) => s + (r.dayPnl != null ? r.dayPnl : 0), 0);
-  const clearedRealized = clearedRows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
-  totalDayPnl += clearedDayPnl;   // 今日清仓的已落地盈亏计入当日参考盈亏
+  /* 今日清仓股的已落地盈亏计入当日参考盈亏 */
+  totalDayPnl += rows.filter(r => r.cleared).reduce((s, r) => s + (r.dayPnl != null ? r.dayPnl : 0), 0);
   const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   /* 账户累计总盈亏 = 持仓市值 − 累计买入净额 + 累计卖出净额（无需初始额度，费用已含在净额中） */
   let buyNetAll = 0, sellNetAll = 0;
@@ -1089,7 +1086,7 @@ function renderHoldings() {
       <div class="s-sub">累计 <b class="${pnlCls(cumPnl)}">${cumPnl >= 0 ? '+' : ''}${fmt2(cumPnl)}</b>（含已清仓轮次）</div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏 · 当日参考盈亏</div>
       <div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div>
-      <div class="s-sub">当日 <b class="${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</b>${clearedCnt ? ` · 含今日清仓 ${clearedCnt} 只` : ''}${missing ? ` · ${missing} 只现价未获取` : ''}</div></div>` : '';
+      <div class="s-sub">当日 <b class="${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</b>${missing ? ` · ${missing} 只现价未获取` : ''}</div></div>` : '';
   $('holdEmpty').hidden = holds.length > 0;
 
   /* PC 全列表格：股票/市值/盈亏/盈亏%/持仓可用/成本价/现价/当日盈亏/当日盈亏%/仓位/明细 */
