@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.2.3';
+const APP_VER = '3.3.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1362,12 +1362,19 @@ function renderWatch() {
   $('watchEmpty').hidden = list.length > 0;
   const qm = quoteMap();
   const FAIL = '<span class="na-tag">获取失败</span>';
+  const backfilled = new Set();   // 本轮渲染中已触发锚点回填的自选 id
   $('watchTable').querySelector('tbody').innerHTML = list.map(w => {
     const q = qm.get(w.stock_code);
     const price = q ? q.price : null;                       // 网络现价
     const chg = q && q.pct != null && !isNaN(q.pct) ? q.pct / 100 : null;
     /* 自选收益：现价 vs 添加/手填时的价格锚点（cur_price） */
-    const anchor = w.cur_price != null ? Number(w.cur_price) : null;
+    let anchor = w.cur_price != null ? Number(w.cur_price) : null;
+    /* 锚点缺失（加自选时行情未取到）→ 首次拿到行情时用最新价回填入库 */
+    if (anchor == null && price != null && w.id != null && !backfilled.has(w.id)) {
+      backfilled.add(w.id);
+      store.update('watchlist', w.id, { cur_price: price }).catch(() => backfilled.delete(w.id));
+      anchor = price;   // 本次渲染先用最新价展示
+    }
     const gain = price != null && anchor ? (price - anchor) / anchor : null;
     const d = w.created_at ? new Date(w.created_at) : null;
     const addDate = d && !isNaN(d) ? `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}` : '—';
