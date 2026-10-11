@@ -1063,10 +1063,9 @@ function renderHoldings() {
   /* 今日清仓股的落地盈亏（已在 rows 中） */
 
   /* 持仓统计卡：摊薄口径，与表格行完全一致（浮动盈亏=累计盈亏，当日参考盈亏=券商口径） */
-  let totalMV = 0, totalDayPnl = 0, missing = 0;
+  let totalMV = 0, totalDayPnl = 0;
   for (const r of rows) {
     if (r.mv != null) { totalMV += r.mv; if (r.dayPnl != null) totalDayPnl += r.dayPnl; }
-    else if (!r.cleared) missing++;
   }
   /* 今日清仓股的已落地盈亏计入当日参考盈亏 */
   totalDayPnl += rows.filter(r => r.cleared).reduce((s, r) => s + (r.dayPnl != null ? r.dayPnl : 0), 0);
@@ -1086,7 +1085,7 @@ function renderHoldings() {
       <div class="s-sub">累计 <b class="${pnlCls(cumPnl)}">${cumPnl >= 0 ? '+' : ''}${fmt2(cumPnl)}</b>（含已清仓轮次）</div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏 · 当日参考盈亏</div>
       <div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div>
-      <div class="s-sub">当日 <b class="${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</b>${missing ? ` · ${missing} 只现价未获取` : ''}</div></div>` : '';
+      <div class="s-sub"><b class="${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</b></div></div>` : '';
   $('holdEmpty').hidden = holds.length > 0;
 
   /* PC 全列表格：股票/市值/盈亏/盈亏%/持仓可用/成本价/现价/当日盈亏/当日盈亏%/仓位/明细 */
