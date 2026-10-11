@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.7.0';
+const APP_VER = '3.8.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -2303,9 +2303,10 @@ function switchView(name) {
   $('view-' + name).classList.add('active');
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   try { localStorage.setItem('sj_view', name); } catch (e) { /* */ }
-  if (name === 'analysis' && typeof renderAnalysisSelect === 'function') {
-    renderAnalysisSelect();
-    setTimeout(() => { try { redrawAnalysisCanvases(); } catch (e) { /* */ } }, 0);
+  if (name === 'analysis' && typeof switchAnalysisTab === 'function') {
+    if (typeof renderAnalysisSelect === 'function') renderAnalysisSelect();
+    if (typeof renderBtOptions === 'function') { try { renderBtOptions(); } catch (e) { /* */ } }
+    switchAnalysisTab(typeof anTab !== 'undefined' ? anTab : 'diag');
   }
 }
 

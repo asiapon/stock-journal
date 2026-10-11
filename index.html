@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=3.7.0">
+<link rel="stylesheet" href="style.css?v=3.8.0">
 </head>
 <body>
 
@@ -264,19 +264,146 @@
 
     <!-- ============ 分析中心 ============ -->
     <section id="view-analysis" class="view">
-      <div class="card">
-        <div class="card-title-row">
-          <span class="card-title">个股诊断</span>
-          <span class="hint">技术面规则引擎秒出：日/周 K 线 · 均线 · MACD · RSI · KDJ · 支撑压力</span>
-        </div>
-        <p class="hint">AI 综合解读在诊断结果里再点一次按钮才生成，结合基本面、消息面与你的持仓 / 交易行为，只给一份结论。收起后结果保留，可随时展开。</p>
-        <div class="diag-form-row">
-          <select id="stockSelect"></select>
-          <button id="stockAnalyzeBtn" class="btn primary" type="button">开始诊断</button>
-        </div>
-        <div id="diagHistory" class="mini-list" style="margin-top:10px"></div>
+      <div class="set-tabs an-tabs" id="anTabs">
+        <button class="set-tab an-tab active" data-an="diag" type="button">🩺 个股诊断</button>
+        <button class="set-tab an-tab" data-an="heat" type="button">🌡️ 市场热度</button>
+        <button class="set-tab an-tab" data-an="profile" type="button">🧩 持仓画像</button>
+        <button class="set-tab an-tab" data-an="risk" type="button">🛡️ 风险分析</button>
+        <button class="set-tab an-tab" data-an="review" type="button">🔍 操作复盘</button>
+        <button class="set-tab an-tab" data-an="bt" type="button">🧪 策略回测</button>
       </div>
-      <div id="diagBox" class="card" hidden></div>
+
+      <!-- 页签 1：个股诊断 -->
+      <div class="set-pane an-pane" data-anpane="diag">
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">🩺 一键个股诊断</span>
+            <span class="hint">技术面规则引擎秒出；AI 综合解读在结果区再点按钮才生成</span>
+          </div>
+          <div class="diag-form-row">
+            <select id="stockSelect"></select>
+            <button id="stockAnalyzeBtn" class="btn primary" type="button">开始诊断</button>
+          </div>
+          <div class="diag-form-row">
+            <button id="batchDiagBtn" class="btn block" type="button">📊 批量诊断（自选 + 持仓）</button>
+          </div>
+          <div id="batchBox" class="card" hidden style="margin-top:10px"></div>
+        </div>
+        <div id="diagBox" class="card" hidden></div>
+      </div>
+
+      <!-- 页签 2：市场热度 -->
+      <div class="set-pane an-pane" data-anpane="heat" hidden>
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">🌡️ 市场热度</span>
+            <button id="heatRefreshBtn" class="btn primary sm" type="button">刷新行情</button>
+          </div>
+          <p class="hint">基于全市场实时快照（5500+ 只，约 3 秒，60 秒复用缓存）：涨跌家数、涨停/跌停、中位涨幅、赚钱效应、成交额、涨跌分布；板块热度榜；涨停复盘找当日主线。全部本地计算，不消耗 AI 额度。</p>
+          <div id="heatBox"><p class="hint">切换到本页会自动拉取；也可以点右上角「刷新行情」</p></div>
+        </div>
+      </div>
+
+      <!-- 页签 3：持仓画像 -->
+      <div class="set-pane an-pane" data-anpane="profile" hidden>
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">🧩 持仓画像</span>
+            <button id="profileRunBtn" class="btn primary sm" type="button">重新计算</button>
+          </div>
+          <p class="hint">把你的持仓逐只映射到所属行业 / 概念板块，算出仓位分布与集中度：同一个板块里放了好几只股票时，实际风险接近「一只票」。纯本地计算，随持仓自动更新。</p>
+          <div id="profileBox"><p class="hint">点「重新计算」查看持仓的板块 / 概念分布</p></div>
+        </div>
+      </div>
+
+      <!-- 页签 4：风险分析 -->
+      <div class="set-pane an-pane" data-anpane="risk" hidden>
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">🛡️ 投资组合风险分析</span>
+            <button id="riskRunBtn" class="btn primary sm" type="button">开始分析</button>
+          </div>
+          <p class="hint">基于持仓权重、日 K 线与上证指数：集中度、波动率、Beta、隐藏相关性、VaR 与压力测试（市场 -20%），给出风险调整再平衡与对冲建议。</p>
+          <div id="riskBox"><p class="hint">点击「开始分析」评估你的持仓组合</p></div>
+        </div>
+      </div>
+
+      <!-- 页签 5：操作复盘 -->
+      <div class="set-pane an-pane" data-anpane="review" hidden>
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">🔍 交易操作复盘</span>
+            <button id="reviewRunBtn" class="btn primary sm" type="button">开始复盘</button>
+          </div>
+          <p class="hint">审阅最近 20 笔交易的进场/出场点位与结果，识别反复出现的错误、错失的机会与行为偏差，并给出 3 条个性化规则提升一致性。</p>
+          <div id="reviewBox"><p class="hint">点击「开始复盘」审阅你的交易</p></div>
+        </div>
+        <div class="card">
+          <h3>🎯 交易行为评分</h3>
+          <p class="hint">从仓位管理、止盈止损纪律、交易频率、盈亏比等维度，对你的全部交易行为打分。</p>
+          <button id="behaviorBtn" class="btn primary block" type="button">开始行为评分</button>
+        </div>
+        <div class="card">
+          <h3>📝 阶段总结与建议</h3>
+          <p class="hint">根据已有交易与历史分析，生成本阶段总结和后续行动建议。</p>
+          <button id="stageBtn" class="btn primary block" type="button">生成阶段总结</button>
+        </div>
+      </div>
+
+      <!-- 页签 6：策略回测 -->
+      <div class="set-pane an-pane" data-anpane="bt" hidden>
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">🧪 策略回测</span>
+            <button id="btRunBtn" class="btn primary sm" type="button">开始回测</button>
+          </div>
+          <div class="diag-form-row" style="flex-wrap:wrap">
+            <select id="btStock" style="max-width:200px"></select>
+            <select id="btStrat" style="max-width:220px">
+              <option value="ma">均线交叉（MA5×MA20）</option>
+              <option value="macd">MACD 金叉死叉</option>
+              <option value="rsi">RSI 背离</option>
+              <option value="drop">跌买涨卖（网格）</option>
+              <option value="boll">布林带（下轨买 / 中轨卖）</option>
+              <option value="donchian">唐奇安通道突破</option>
+              <option value="matrend">双均线 + 趋势过滤</option>
+            </select>
+            <span id="btDropWrap" class="bt-thr-wrap" hidden>
+              <label class="bt-thr"><span>跌</span><input id="btDropPct" type="number" min="0.5" max="50" step="0.5" value="5"><span>% 买入</span></label>
+              <label class="bt-thr"><span>涨</span><input id="btRisePct" type="number" min="0.5" max="50" step="0.5" value="5"><span>% 卖出</span></label>
+            </span>
+            <select id="btPeriod" style="max-width:120px">
+              <option value="22">近1个月</option>
+              <option value="66">近3个月</option>
+              <option value="120">近半年</option>
+              <option value="250" selected>近一年</option>
+              <option value="500">近两年</option>
+              <option value="750">近三年</option>
+            </select>
+          </div>
+          <div class="bt-risk-row">
+            <span class="bt-thr-wrap">
+              <label class="bt-thr"><span>固定止损</span><input id="btStopPct" type="number" min="0" max="50" step="0.5" value="0"><span>%</span></label>
+              <label class="bt-thr"><span>ATR 跟踪止损</span><input id="btAtrK" type="number" min="0" max="10" step="0.5" value="0"><span>倍</span></label>
+              <label class="bt-thr"><span>移动止盈</span><input id="btTrailPct" type="number" min="0" max="50" step="1" value="0"><span>%</span></label>
+              <label class="bt-thr"><span>回撤熔断</span><input id="btCircuitPct" type="number" min="0" max="80" step="1" value="0"><span>%</span></label>
+            </span>
+            <span class="bt-thr-wrap">
+              <select id="btBasketKey" style="max-width:160px">
+                <option value="ret">按总收益排名</option>
+                <option value="pf">按盈利因子排名</option>
+                <option value="mdd">按最大回撤排名</option>
+                <option value="wr">按成功率排名</option>
+              </select>
+              <button id="btBasketBtn" class="btn ghost sm" type="button">📊 批量对比自选 + 持仓</button>
+            </span>
+          </div>
+          <p class="hint">风控四项填 0 表示不启用；ATR 跟踪止损会自动用 14 日 ATR 跟随持仓期最高价。「批量对比」用当前策略与风控设置，跑一遍自选 + 持仓并横截面排名。</p>
+          <div id="btBox"><p class="hint">选择股票、策略与时间周期，点「开始回测」</p></div>
+        </div>
+      </div>
+
+      <div id="diagHistory" class="card" style="margin-top:12px"></div>
     </section>
 
     <!-- ============ 应用设置 ============ -->
@@ -524,6 +651,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.7.0"></script>
+<script src="app.js?v=3.8.0"></script>
+<script src="analysis-extra.js?v=3.8.0"></script>
 </body>
 </html>
