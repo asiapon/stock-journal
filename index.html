@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=3.2.0">
+<link rel="stylesheet" href="style.css?v=3.2.1">
 </head>
 <body>
 
@@ -189,9 +189,18 @@
           <span class="card-title">交易记录</span>
           <button class="btn primary sm" id="recModalBtn" type="button">＋ 记一笔</button>
           <div class="filters">
+            <input type="text" id="ftKw" placeholder="搜索：代码 / 名称 / 备注 / 语句" style="min-width:180px;flex:1 1 180px">
             <input type="date" id="ftFrom" title="开始日期">
             <span class="filter-sep">—</span>
             <input type="date" id="ftTo" title="结束日期">
+            <select id="ftQuick" title="快捷时间段">
+              <option value="">时间段</option>
+              <option value="today">今天</option>
+              <option value="7d">近 7 天</option>
+              <option value="30d">近 30 天</option>
+              <option value="month">本月</option>
+              <option value="year">今年</option>
+            </select>
             <select id="ftType">
               <option value="">全部方向</option>
               <option value="buy">买入</option>
@@ -201,6 +210,7 @@
             <button class="btn ghost sm" id="ftClear" type="button">清空筛选</button>
           </div>
         </div>
+        <div class="filter-stats" id="ftStats"></div>
         <div class="table-scroll">
           <table class="tbl" id="tradeTable">
             <thead><tr>
@@ -491,6 +501,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.2.0"></script>
+<script src="app.js?v=3.2.1"></script>
 </body>
 </html>

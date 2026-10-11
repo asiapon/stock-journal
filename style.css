@@ -602,6 +602,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   #holdTableM .icon-btn { padding: 4px 8px; }
 }
 
+/* ---------- v3.2.1 交易记录检索增强 ---------- */
+.filter-stats {
+  display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 6px 2px 0;
+  font-size: 12.5px; color: var(--ink-3); font-variant-numeric: tabular-nums;
+}
+.filter-stats b { color: var(--ink); font-weight: 600; }
+.filter-stats b.up, .filter-stats b.pos { color: var(--up); }
+.filter-stats b.down, .filter-stats b.neg { color: var(--down); }
+
 /* ---------- v2.6.4 解析确认行按钮成对并排 ---------- */
 .p-btns { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
 
