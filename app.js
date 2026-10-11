@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.0.5';
+const APP_VER = '3.0.6';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1181,6 +1181,20 @@ function scrollRecBottom() {
   requestAnimationFrame(doScroll);
   setTimeout(doScroll, 120);   // 布局（如手机键盘/费用预览撑高）稳定后再校准一次
 }
+/* 键盘弹出时视口变小：弹窗高度跟随可视视口，保存按钮不会被键盘挡住 */
+(function () {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  let t = null;
+  const fit = () => {
+    const m = document.querySelector('#recModal .modal-lg');
+    if (!m || $('recModal').hidden) return;
+    m.style.maxHeight = Math.max(200, Math.round(vv.height - 16)) + 'px';
+    m.scrollTop = m.scrollHeight;   // 高度变化后保持在底部
+  };
+  vv.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(fit, 80); });
+  vv.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(fit, 80); });
+})();
 function setManualOpen(open) {
   const w = $('tfManualWrap'), t = $('tfManualToggle');
   if (w) w.hidden = !open;
@@ -1199,6 +1213,7 @@ function openRecModal(reset = true) {
 function closeRecModal() {
   const m = $('recModal'); if (!m) return;
   m.hidden = true;
+  const lg = m.querySelector('.modal-lg'); if (lg) lg.style.maxHeight = '';   // 清掉键盘适配的内联高度
   $('tradeHint').hidden = true;
   resetTradeForm();
 }
