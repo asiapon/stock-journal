@@ -187,8 +187,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .sum-card .s-label { font-size: 12px; color: var(--ink-2); }
 .sum-card .s-value { font-size: 17px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; word-break: break-all; }
 .sum-card .s-sub { font-size: 11.5px; color: var(--ink-3); margin-top: 1px; }
-/* ---------- v3.6.3 持仓统计卡：两卡并排合计一行、内容居中 ---------- */
+/* ---------- v3.6.3 持仓统计卡：两卡并排合计一行、内容居中、数值字号统一 ---------- */
 #holdSummary { grid-template-columns: repeat(2, 1fr); text-align: center; }
+#holdSummary .s-value, #holdSummary .s-sub { font-size: 17px; font-weight: 600; margin-top: 2px; }
+#holdSummary .s-sub b { font-weight: 600; }
 .pos { color: var(--up); }
 .neg { color: var(--down); }
 .neu { color: var(--ink); }

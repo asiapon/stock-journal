@@ -1081,7 +1081,7 @@ function renderHoldings() {
   const hs = $('holdSummary');
   if (hs) hs.innerHTML = rows.length ? `
     <div class="sum-card"><div class="s-label">总市值/总盈亏</div>
-      <div class="s-value">¥${fmt2(totalMV)}</div>
+      <div class="s-value">${fmt2(totalMV)}</div>
       <div class="s-sub"><b class="${pnlCls(cumPnl)}">${cumPnl >= 0 ? '+' : ''}${fmt2(cumPnl)}</b></div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏/当日盈亏</div>
       <div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div>
