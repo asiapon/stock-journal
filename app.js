@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.3.0';
+const APP_VER = '3.3.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1118,25 +1118,11 @@ function tradeRowFiltered() {
   const type = $('ftType').value;
   const kw = $('ftStock').value.trim().toLowerCase();
   const allKw = $('ftKw').value.trim().toLowerCase();   // 全字段搜索：代码/名称/备注/原始语句/金额数量
-  /* 快捷时间段 */
-  const quick = $('ftQuick').value;
-  let qFrom = '', qTo = '';
-  if (quick) {
-    const now = new Date();
-    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    qTo = iso(now);
-    if (quick === 'today') qFrom = qTo;
-    else if (quick === '7d') { const d = new Date(now); d.setDate(d.getDate() - 6); qFrom = iso(d); }
-    else if (quick === '30d') { const d = new Date(now); d.setDate(d.getDate() - 29); qFrom = iso(d); }
-    else if (quick === 'month') qFrom = iso(new Date(now.getFullYear(), now.getMonth(), 1));
-    else if (quick === 'year') qFrom = `${now.getFullYear()}-01-01`;
-  }
-  const effFrom = qFrom || from, effTo = qTo || to;
   return S.trades.filter(t => {
     if (type && t.transaction_type !== type) return false;
     const d = t.transaction_time.slice(0, 10);
-    if (effFrom && d < effFrom) return false;
-    if (effTo && d > effTo) return false;
+    if (from && d < from) return false;
+    if (to && d > to) return false;
     if (kw && !(`${t.stock_code} ${t.stock_name || ''}`.toLowerCase().includes(kw))) return false;
     if (allKw) {
       const hay = `${t.stock_code} ${t.stock_name || ''} ${t.note || ''} ${t.raw_text || ''} ${t.transaction_type === 'buy' ? '买入 卖' : '卖出 买'} ${t.quantity} ${t.price} ${t.gross_amount}`.toLowerCase();
@@ -1747,24 +1733,35 @@ function bindEvents() {
     renderTrades();
   });
   document.querySelectorAll('#tradeModeTabs .wtab').forEach(x => x.classList.toggle('on', (x.dataset.m || 'list') === tradeMode));
-  ['ftFrom', 'ftTo', 'ftType', 'ftQuick'].forEach(id => $(id).addEventListener('change', () => {
-    if (id === 'ftQuick' && !$('ftQuick').value) return;   // 清空快捷时间段时不回填
-    if (id === 'ftQuick') {   // 选快捷时间段后同步回填日期框，可微调
-      const now = new Date();
-      const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-      const q = $('ftQuick').value;
+  ['ftFrom', 'ftTo', 'ftType'].forEach(id => $(id).addEventListener('change', () => {
+    /* 手动改日期时高亮回落到「全部」；日期清空则回到全部 */
+    document.querySelectorAll('#ftChips .fchip').forEach(x => x.classList.toggle('on', x.dataset.q === 'all' && !$('ftFrom').value && !$('ftTo').value));
+    renderTrades();
+  }));
+  /* 快捷时间 chips：近7天 / 近30天 / 近3月 / 今年以来 / 全部 */
+  $('ftChips').addEventListener('click', e => {
+    const b = e.target.closest('.fchip'); if (!b) return;
+    document.querySelectorAll('#ftChips .fchip').forEach(x => x.classList.toggle('on', x === b));
+    const now = new Date();
+    const iso = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const q = b.dataset.q;
+    if (q === 'all') { $('ftFrom').value = ''; $('ftTo').value = ''; }
+    else {
       $('ftTo').value = iso(now);
-      if (q === 'today') $('ftFrom').value = $('ftTo').value;
-      else if (q === '7d') { const d = new Date(now); d.setDate(d.getDate() - 6); $('ftFrom').value = iso(d); }
+      if (q === '7d') { const d = new Date(now); d.setDate(d.getDate() - 6); $('ftFrom').value = iso(d); }
       else if (q === '30d') { const d = new Date(now); d.setDate(d.getDate() - 29); $('ftFrom').value = iso(d); }
-      else if (q === 'month') $('ftFrom').value = iso(new Date(now.getFullYear(), now.getMonth(), 1));
+      else if (q === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); $('ftFrom').value = iso(d); }
       else if (q === 'year') $('ftFrom').value = `${now.getFullYear()}-01-01`;
     }
     renderTrades();
-  }));
+  });
   $('ftStock').addEventListener('input', renderTrades);
   $('ftKw').addEventListener('input', renderTrades);
-  $('ftClear').addEventListener('click', () => { $('ftFrom').value = ''; $('ftTo').value = ''; $('ftType').value = ''; $('ftStock').value = ''; $('ftKw').value = ''; $('ftQuick').value = ''; renderTrades(); });
+  $('ftClear').addEventListener('click', () => {
+    $('ftFrom').value = ''; $('ftTo').value = ''; $('ftType').value = ''; $('ftStock').value = ''; $('ftKw').value = '';
+    document.querySelectorAll('#ftChips .fchip').forEach(x => x.classList.toggle('on', x.dataset.q === 'all'));
+    renderTrades();
+  });
   $('tradeTable').querySelector('tbody').addEventListener('click', async e => {
     const editBtn = e.target.closest('.edit-trade');
     const delBtn = e.target.closest('.del-trade');
