@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=2.9.5">
+<link rel="stylesheet" href="style.css?v=2.9.6">
 </head>
 <body>
 
@@ -433,7 +433,7 @@
       </div>
       <div id="tfManualWrap" hidden>
       <form id="tradeForm" class="form-grid">
-        <label>方向
+        <div>
           <select id="tfType" hidden>
             <option value="buy">买入</option>
             <option value="sell">卖出</option>
@@ -442,25 +442,23 @@
             <button type="button" class="wtab on" data-t="buy">买</button>
             <button type="button" class="wtab" data-t="sell">卖</button>
           </div>
-        </label>
+        </div>
         <div class="sug-anchor tf-stock-label">
-          <label>股票
-            <input type="text" id="tfStock" placeholder="代码 / 名称 / 拼音筛选，市场自动确定" autocomplete="off" required>
-          </label>
+          <input type="text" id="tfStock" placeholder="股票：代码 / 名称 / 拼音，市场自动定" autocomplete="off" required>
           <div id="tfStockSug" class="sug-box" hidden></div>
         </div>
-        <label>价格
-          <input type="number" id="tfPrice" step="0.01" min="0.01" required>
-        </label>
-        <label>数量（股）
-          <input type="number" id="tfQty" step="1" min="1" placeholder="股数，如 1000" required>
-        </label>
-        <label>成交时间
+        <div>
+          <input type="number" id="tfPrice" step="0.01" min="0.01" placeholder="价格" required>
+        </div>
+        <div>
+          <input type="number" id="tfQty" step="1" min="1" placeholder="数量（股），如 1000" required>
+        </div>
+        <div>
           <input type="datetime-local" id="tfTime" required>
-        </label>
-        <label class="span2">备注
-          <input type="text" id="tfNote" placeholder="选填">
-        </label>
+        </div>
+        <div class="span2">
+          <input type="text" id="tfNote" placeholder="备注 / 交易理由（选填）">
+        </div>
         <div class="fee-preview span2" id="feePreview"></div>
         <div class="form-actions span2">
           <button type="submit" class="btn primary" id="tfSubmit">保存</button>
@@ -488,6 +486,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=2.9.5"></script>
+<script src="app.js?v=2.9.6"></script>
 </body>
 </html>

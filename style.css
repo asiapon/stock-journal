@@ -661,3 +661,8 @@ select { padding-right: 6px; }
 
 /* ---------- v2.9.0 修复：sug-anchor 缺少定位导致弹窗内候选框不可见 ---------- */
 .sug-anchor { position: relative; }
+
+/* ---------- v2.9.6 记一笔手动表单去label ---------- */
+@media (max-width: 639px) {
+  #tradeForm > div:first-child { grid-column: span 2; }
+}
