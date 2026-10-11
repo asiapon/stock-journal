@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.10';
+const APP_VER = '3.8.11';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -2971,6 +2971,20 @@ function renderDiagView() {
   bindKchartHover(cvD, t.daily.bars, 120, t.d);
   bindKchartHover(cvW, t.weekly.bars, 60, t.w);
   bindTechResize();
+  /* v3.8.11 K 线数据下载（CSV：日期,开,收,高,低,成交量） */
+  const dlK = (bars, fname) => {
+    const head = '日期,开盘,收盘,最高,最低,成交量\n';
+    const body = bars.map(b => [b.d, b.o, b.c, b.h, b.l, b.v].join(',')).join('\n');
+    const blob = new Blob(['\ufeff' + head + body], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = fname;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+  };
+  const dDlD = $('kDlDaily'), dDlW = $('kDlWeekly');
+  if (dDlD) dDlD.onclick = () => dlK(t.daily.bars, `${t.code}_${t.name || ''}_日线K.csv`);
+  if (dDlW) dDlW.onclick = () => dlK(t.weekly.bars, `${t.code}_${t.name || ''}_周线K.csv`);
   $('diagCloseBtn').onclick = closeDiag;
   $('diagSaveBtn').onclick = saveDiagReport;
   $('diagAiBtn').onclick = () => runDiagAi();
@@ -3040,11 +3054,11 @@ function diagHtml() {
     </div>
     <div class="tech-charts">
       <div class="tech-chart-block">
-        <h4>日线 K 线（近 120 日）<span class="kc-hint">鼠标移到图上查看当日价格与成交量</span></h4>
+        <h4>日线 K 线（近 120 日）<span class="k-dl" id="kDlDaily" data-k="d" title="下载 CSV（含成交量）">⬇ 下载</span><span class="kc-hint">鼠标移到图上查看当日价格与成交量</span></h4>
         <div class="kchart-wrap"><canvas id="diagDailyCv"></canvas><div class="kchart-tip" hidden></div></div>
       </div>
       <div class="tech-chart-block">
-        <h4>周线 K 线（近 60 周）<span class="kc-hint">鼠标移到图上查看当周价格与成交量</span></h4>
+        <h4>周线 K 线（近 60 周）<span class="k-dl" id="kDlWeekly" data-k="w" title="下载 CSV（含成交量）">⬇ 下载</span><span class="kc-hint">鼠标移到图上查看当周价格与成交量</span></h4>
         <div class="kchart-wrap"><canvas id="diagWeeklyCv"></canvas><div class="kchart-tip" hidden></div></div>
       </div>
     </div>
