@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.9.9';
+const APP_VER = '3.0.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1565,6 +1565,7 @@ function bindEvents() {
   bindSuggest('tfStock', 'tfStockSug', h => {
     setTfStock(h.code, h.name);
     updateFeePreview();       // 内部已滚动到底
+    $('tfPrice').focus();     // 选完股票，光标进价格框
   });
   $('tfStock').addEventListener('input', () => {
     const inp = $('tfStock');
@@ -1690,6 +1691,7 @@ function bindEvents() {
   bindSuggest('wfInput', 'wfSug', h => {
     $('wfInput').value = `${h.code} ${h.name}`;
     $('wfInput').dataset.picked = h.code;
+    $('wfGroupQuick').focus();   // 选完股票，光标进分组框
   });
   /* 分组下拉不筛选：聚焦时临时清空以展示全部分组，未选择则恢复原值 */
   {
