@@ -627,6 +627,12 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 #view-trades .card-title-row { margin-bottom: 10px; }
 #view-trades .wtabs { margin-top: 0; margin-bottom: 10px; }
 #view-trades .ft-kw { max-width: 560px; }
+.kw-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.kw-row .ft-kw { flex: 1; min-width: 0; }
+.kw-row #ftClear { margin-left: auto; }
+@media (max-width: 639px) {
+  .kw-row .ft-kw { flex: 1 1 calc(100% - 88px); }
+}
 /* 其他页面同类工具行（自选分组 Tab、卡内标题行）保持同一节奏 */
 #view-watch .wtabs { margin-top: 0; }
 #view-holdings .card-title-row, #view-watch .card-title-row { margin-bottom: 10px; }
