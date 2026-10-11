@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.1.0';
+const APP_VER = '3.1.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1039,7 +1039,8 @@ function renderHoldings() {
   // 表格（现价一律来自网络行情；未获取时相关列显示「未获取」）
   $('holdEmpty').hidden = holds.length > 0;
   const todayStr = nowLocalInput().slice(0, 10);
-  $('holdTable').querySelector('tbody').innerHTML = holds.map((h, i) => {
+  /* 行数据一次算好，PC / 手机两张表共用 */
+  const rows = holds.map((h, i) => {
     const q = qm.get(h.code);
     const price = q ? q.price : null;
     const prevClose = q ? q.prevClose : null;
@@ -1054,7 +1055,12 @@ function renderHoldings() {
     /* 当日盈亏：按现价与昨收计算 */
     const dayPnl = price != null && prevClose > 0 ? h.qty * (price - prevClose) : null;
     const dayPct = price != null && prevClose > 0 ? (price - prevClose) / prevClose : null;
-    const color = WB_COLORS[i % WB_COLORS.length];
+    return { h, price, prevClose, costPrice, mv, float, floatPct, avail, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
+  });
+
+  /* PC 全列表格 */
+  $('holdTable').querySelector('tbody').innerHTML = rows.map(r => {
+    const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
     return `<tr data-code="${esc(h.code)}">
       <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${esc(h.code)}</span></div></td>
       <td class="num" title="持仓 ${h.qty} · 可用 ${avail}">${h.qty} / ${avail}</td>
@@ -1069,6 +1075,20 @@ function renderHoldings() {
       <td><div class="row-actions">
         <button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button>
       </div></td>
+    </tr>`;
+  }).join('');
+
+  /* 手机端合并列表格：市值 / 盈亏 / 持仓可用 / 成本现价 / 当日盈亏 / 明细 */
+  $('holdTableM').querySelector('tbody').innerHTML = rows.map(r => {
+    const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
+    const sgn = v => (v >= 0 ? '+' : '');
+    return `<tr data-code="${esc(h.code)}">
+      <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${mv != null ? '¥' + fmt2(mv) : NA}</span></div></td>
+      <td class="num"><div class="two-line"><b class="${float != null ? pnlCls(float) : ''}">${float != null ? sgn(float) + fmt2(float) : NA}</b><span class="sub ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : ''}</span></div></td>
+      <td class="num" title="持仓 ${h.qty} · 可用 ${avail}">${h.qty} / ${avail}</td>
+      <td class="num"><div class="two-line"><span>${fmtP(costPrice)}</span><span class="sub">${price != null ? fmt2(price) : '未获取'}</span></div></td>
+      <td class="num"><div class="two-line"><b class="${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? sgn(dayPnl) + fmt2(dayPnl) : NA}</b><span class="sub ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : ''}</span></div></td>
+      <td><button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button></td>
     </tr>`;
   }).join('');
 }
@@ -1703,6 +1723,11 @@ function bindEvents() {
   $('holdTable').querySelector('tbody').addEventListener('click', e => {
     const sp = e.target.closest('.set-price');
     if (sp) { startPriceEdit(sp.closest('tr'), sp.dataset.code, sp.dataset.name); return; }
+    const sd = e.target.closest('.show-detail');
+    if (sd) showHoldDetail(sd.dataset.code);
+  });
+  /* 手机端合并列表格：明细按钮 */
+  $('holdTableM').querySelector('tbody').addEventListener('click', e => {
     const sd = e.target.closest('.show-detail');
     if (sd) showHoldDetail(sd.dataset.code);
   });

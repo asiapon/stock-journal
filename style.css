@@ -584,6 +584,20 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 /* 明细时间线字号统一 */
 .tl-time, .tl-sub, .tl-num .t-val, .tl-num .m-sub { font-size: 12.5px; }
 
+/* ---------- v3.1.1 持仓手机端合并列表格 ---------- */
+#holdTableM { display: none; min-width: 0; }
+#holdTableM .two-line b { font-weight: 500; }
+@media (max-width: 639px) {
+  #holdTable { display: none; }           /* 手机端隐藏全列表格 */
+  #holdTableM { display: table; }
+  #holdTableM th, #holdTableM td { padding: 8px 5px; font-size: 12px; }
+  #holdTableM .two-line { display: flex; flex-direction: column; line-height: 1.4; }
+  #holdTableM .two-line .sub { font-size: 10.5px; color: var(--ink-3); }
+  #holdTableM .stock-cell { min-width: 0; }
+  #holdTableM .sc-code { font-size: 10.5px; }
+  #holdTableM .icon-btn { padding: 4px 8px; }
+}
+
 /* ---------- v2.6.4 解析确认行按钮成对并排 ---------- */
 .p-btns { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
 
