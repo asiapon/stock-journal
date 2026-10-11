@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.3.10';
+const APP_VER = '3.3.11';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -461,7 +461,11 @@ const ModelMgr = {
   loaded: false,
   loadCache() { try { this.platform = JSON.parse(localStorage.getItem('sj_model_list') || '[]'); } catch (e) { /* */ } },
   loadCustom() { try { this.custom = JSON.parse(localStorage.getItem('sj_custom_models') || '[]'); } catch (e) { this.custom = []; } },
-  saveCustom() { localStorage.setItem('sj_custom_models', JSON.stringify(this.custom)); },
+  saveCustom() {
+    localStorage.setItem('sj_custom_models', JSON.stringify(this.custom));
+    /* 同步到云端：其他客户端也能解析「自定义模型」选择（含 apiKey，存于用户自己的 settings） */
+    if (S.mode === 'cloud') saveSetting('model_custom', JSON.stringify(this.custom)).catch(() => {});
+  },
   async reload() {
     if (!cloudLlm) throw new Error('云端模型服务不可用（本地模式）');
     const llm = cloudLlm.llm || cloudLlm;   // SDK 命名空间：cloud.llm.models / cloud.llm.chat
@@ -528,6 +532,19 @@ const ModelMgr = {
   },
   /* 登录后调用：云端有配置时以云端为准（跨设备一致），本地仅作缓存 */
   applyCloudConfig() {
+    /* 合并云端自定义模型：本地优先，按 key 去重 —— 否则其他客户端解析不了 c: 开头的当前模型 */
+    const rawC = S.settings && S.settings['model_custom'];
+    if (rawC) {
+      try {
+        const cloud = JSON.parse(rawC);
+        if (Array.isArray(cloud)) {
+          const map = new Map(cloud.map(c => [c.key, c]));
+          for (const c of this.custom) map.set(c.key, c);
+          this.custom = [...map.values()];
+          localStorage.setItem('sj_custom_models', JSON.stringify(this.custom));
+        }
+      } catch (e) { /* */ }
+    }
     const raw = S.settings && S.settings['model_config'];
     if (!raw) return;
     try {
