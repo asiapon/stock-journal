@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=3.3.3">
+<link rel="stylesheet" href="style.css?v=3.3.4">
 </head>
 <body>
 
@@ -197,26 +197,18 @@
               <span class="filter-sep">至</span>
               <input type="date" id="ftTo" title="结束日期">
               <span class="f-chips" id="ftChips">
-                <button class="fchip" data-q="today" type="button">今天</button>
+                <button class="fchip on" data-q="today" type="button">今天</button>
                 <button class="fchip" data-q="7d" type="button">近 7 天</button>
                 <button class="fchip" data-q="30d" type="button">近 30 天</button>
                 <button class="fchip" data-q="3m" type="button">近 3 月</button>
                 <button class="fchip" data-q="year" type="button">今年以来</button>
-                <button class="fchip on" data-q="all" type="button">全部</button>
+                <button class="fchip" data-q="all" type="button">全部</button>
               </span>
-            </div>
-            <div class="filters">
-              <select id="ftType">
-                <option value="">全部方向</option>
-                <option value="buy">买入</option>
-                <option value="sell">卖出</option>
-              </select>
-              <input type="text" id="ftStock" placeholder="代码/名称" class="w120">
               <button class="btn ghost sm" id="ftClear" type="button">清空筛选</button>
             </div>
         </div>
         <div class="filter-stats" id="ftStats"></div>
-        <div class="wtabs" id="tradeModeTabs" style="margin:2px 0 8px">
+        <div class="wtabs" id="tradeModeTabs">
           <button class="wtab on" data-m="list" type="button">按笔</button>
           <button class="wtab" data-m="stock" type="button">按股票</button>
         </div>
@@ -510,6 +502,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.3.3"></script>
+<script src="app.js?v=3.3.4"></script>
 </body>
 </html>

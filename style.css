@@ -613,10 +613,18 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 
 /* ---------- v3.3.1 交易筛选参考 trade-manager 布局 ---------- */
 /* ---------- v3.3.3 交易筛选区独立成块，全部左对齐 ---------- */
-#view-trades .filters-col { margin-top: 2px; }
+/* ---------- v3.3.4 筛选/工具行统一行距（全站生效）：行与行之间一律 10px ---------- */
+.filter-stats {
+  padding: 0 2px; margin: 10px 0 0;
+}
+#view-trades .filters-col { margin-top: 2px; gap: 10px; }
 #view-trades .filters { justify-content: flex-start; }
 #view-trades .card-title-row { margin-bottom: 10px; }
+#view-trades .wtabs { margin-top: 10px; }
 #view-trades .ft-kw { max-width: 560px; }
+/* 其他页面同类工具行（自选分组 Tab、卡内标题行）保持同一节奏 */
+#view-watch .wtabs { margin-top: 0; }
+#view-holdings .card-title-row, #view-watch .card-title-row { margin-bottom: 10px; }
 
 /* ---------- v3.3.2 快捷时间 chips（沿用） ---------- */
 .filters-col { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
