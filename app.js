@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.8';
+const APP_VER = '3.4.9';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1239,7 +1239,7 @@ function renderTrades() {
     const m = new Map();
     for (const t of rows) {
       const k = t.stock_code;
-      if (!m.has(k)) m.set(k, { code: k, name: t.stock_name || k, qty: 0, amt: 0, fee: 0, buys: 0, sells: 0, cnt: 0, trades: [] });
+      if (!m.has(k)) m.set(k, { code: k, name: t.stock_name || k, qty: 0, amt: 0, fee: 0, buys: 0, sells: 0, cnt: 0, buyQty: 0, buyAmt: 0, sellQty: 0, sellAmt: 0, trades: [] });
       const g = m.get(k);
       g.qty += t.quantity || 0;
       g.amt += t.gross_amount || 0;
