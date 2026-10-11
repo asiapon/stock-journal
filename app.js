@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.0';
+const APP_VER = '3.4.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1045,12 +1045,21 @@ function renderHoldings() {
     const mv = price != null ? h.qty * price : null;
     const float = price != null ? h.qty * price - h.dilutedValue : null;   // 累计盈亏（含已实现）
     const floatPct = price != null && costPrice ? float / h.dilutedValue : null;
-    /* T+1 可用 = 持仓 − 当日买入 */
-    const boughtToday = S.trades.reduce((s, t) =>
-      s + ((t.stock_code === h.code && t.transaction_type === 'buy' && t.transaction_time.slice(0, 10) === todayStr) ? t.quantity : 0), 0);
-    const avail = Math.max(0, h.qty - boughtToday);
-    /* 当日盈亏：按现价与昨收计算 */
-    const dayPnl = price != null && prevClose > 0 ? h.qty * (price - prevClose) : null;
+    /* T+1 可用 = 持仓 − 当日买入；同时统计当日买卖明细（当日盈亏要用） */
+    let boughtQty = 0, boughtAmt = 0, soldQty = 0, soldAmt = 0;
+    for (const t of S.trades) {
+      if (t.stock_code !== h.code || t.transaction_time.slice(0, 10) !== todayStr) continue;
+      if (t.transaction_type === 'buy') { boughtQty += t.quantity; boughtAmt += t.gross_amount + ((t.fee && t.fee.total) || 0); }
+      else { soldQty += t.quantity; soldAmt += t.gross_amount; }
+    }
+    const avail = Math.max(0, h.qty - boughtQty);
+    /* 当日盈亏（券商口径，基准=昨收）：
+       隔夜持仓 (现价-昨收)×量 + 今日买入 (现价-买入均价)×量 + 今日卖出 (卖均价-昨收)×量 */
+    const avgBuyToday = boughtQty ? boughtAmt / boughtQty : 0;
+    const avgSellToday = soldQty ? soldAmt / soldQty : 0;
+    const dayPnl = price != null && prevClose > 0
+      ? (h.qty - boughtQty) * (price - prevClose) + boughtQty * (price - avgBuyToday) + soldQty * (avgSellToday - prevClose)
+      : null;
     const dayPct = price != null && prevClose > 0 ? (price - prevClose) / prevClose : null;
     return { h, price, prevClose, costPrice, mv, float, floatPct, avail, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
   });
