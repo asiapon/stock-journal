@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=3.2.2">
+<link rel="stylesheet" href="style.css?v=3.2.3">
 </head>
 <body>
 
@@ -211,9 +211,13 @@
           </div>
         </div>
         <div class="filter-stats" id="ftStats"></div>
+        <div class="wtabs" id="tradeModeTabs" style="margin:2px 0 8px">
+          <button class="wtab on" data-m="list" type="button">按笔</button>
+          <button class="wtab" data-m="stock" type="button">按股票</button>
+        </div>
         <div class="table-scroll">
           <table class="tbl" id="tradeTable">
-            <thead><tr>
+            <thead><tr id="tradeTheadRow">
               <th>时间</th><th>方向</th><th>股票</th><th class="num">价格</th><th class="num">数量</th>
               <th class="num">成交金额</th><th class="num">费用</th><th class="num">发生金额</th><th>操作</th>
             </tr></thead>
@@ -501,6 +505,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.2.2"></script>
+<script src="app.js?v=3.2.3"></script>
 </body>
 </html>

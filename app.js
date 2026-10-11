@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.2.2';
+const APP_VER = '3.2.3';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1145,9 +1145,44 @@ function tradeRowFiltered() {
     return true;
   });
 }
+/* 交易视图模式：list=按笔（默认），stock=按股票汇总 */
+let tradeMode = (() => { try { return localStorage.getItem('sj_tradeMode') || 'list'; } catch (e) { return 'list'; } })();
+const TRADE_HEAD_LIST = '<th>时间</th><th>方向</th><th>股票</th><th class="num">价格</th><th class="num">数量</th>'
+  + '<th class="num">成交金额</th><th class="num">费用</th><th class="num">发生金额</th><th>操作</th>';
+const TRADE_HEAD_STOCK = '<th>股票</th><th class="num">笔数</th><th class="num">成交量</th><th class="num">成交均价</th>'
+  + '<th class="num">成交额</th><th class="num">买/卖笔数</th><th class="num">费用</th>';
 function renderTrades() {
   const rows = tradeRowFiltered();
   $('tradeEmpty').hidden = rows.length > 0;
+  $('tradeTheadRow').innerHTML = tradeMode === 'stock' ? TRADE_HEAD_STOCK : TRADE_HEAD_LIST;
+  /* 按股票：时间范围内按代码汇总 */
+  if (tradeMode === 'stock') {
+    const m = new Map();
+    for (const t of rows) {
+      const k = t.stock_code;
+      if (!m.has(k)) m.set(k, { code: k, name: t.stock_name || k, qty: 0, amt: 0, fee: 0, buys: 0, sells: 0, cnt: 0 });
+      const g = m.get(k);
+      g.qty += t.quantity || 0;
+      g.amt += t.gross_amount || 0;
+      g.fee += (t.fee && t.fee.total) || 0;
+      g.cnt++;
+      if (t.transaction_type === 'buy') g.buys++; else g.sells++;
+    }
+    const list = [...m.values()].sort((a, b) => b.amt - a.amt);
+    $('tradeTable').querySelector('tbody').innerHTML = list.map(g => `
+      <tr data-code="${esc(g.code)}">
+        <td><div class="stock-cell"><span class="sc-name">${esc(g.name)}</span><span class="sc-code">${esc(g.code)}</span></div></td>
+        <td class="num">${g.cnt}</td>
+        <td class="num">${g.qty}</td>
+        <td class="num">${g.qty ? fmt2(g.amt / g.qty) : '—'}</td>
+        <td class="num">${fmt2(g.amt)}</td>
+        <td class="num">${g.buys} / ${g.sells}</td>
+        <td class="num">${fmt2(g.fee)}</td>
+      </tr>`).join('');
+    const stats = $('ftStats');
+    if (stats) stats.innerHTML = `<span>${list.length} 只股票</span><span>共 <b>${rows.length}</b> 笔</span>`;
+    return;
+  }
   $('tradeTable').querySelector('tbody').innerHTML = rows.map(t => {
     const fee = (t.fee && t.fee.total) || 0;
     const d = new Date(t.transaction_time), p2 = n => String(n).padStart(2, '0');
@@ -1697,6 +1732,14 @@ function bindEvents() {
   });
 
   /* 交易列表：筛选 / 编辑 / 删除 / 费用展开 */
+  $('tradeModeTabs').addEventListener('click', e => {
+    const b = e.target.closest('.wtab'); if (!b) return;
+    tradeMode = b.dataset.m || 'list';
+    try { localStorage.setItem('sj_tradeMode', tradeMode); } catch (err) { /* */ }
+    document.querySelectorAll('#tradeModeTabs .wtab').forEach(x => x.classList.toggle('on', x === b));
+    renderTrades();
+  });
+  document.querySelectorAll('#tradeModeTabs .wtab').forEach(x => x.classList.toggle('on', (x.dataset.m || 'list') === tradeMode));
   ['ftFrom', 'ftTo', 'ftType', 'ftQuick'].forEach(id => $(id).addEventListener('change', () => {
     if (id === 'ftQuick' && !$('ftQuick').value) return;   // 清空快捷时间段时不回填
     if (id === 'ftQuick') {   // 选快捷时间段后同步回填日期框，可微调
