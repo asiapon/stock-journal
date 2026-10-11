@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.3.1';
+const APP_VER = '3.3.2';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1748,7 +1748,8 @@ function bindEvents() {
     if (q === 'all') { $('ftFrom').value = ''; $('ftTo').value = ''; }
     else {
       $('ftTo').value = iso(now);
-      if (q === '7d') { const d = new Date(now); d.setDate(d.getDate() - 6); $('ftFrom').value = iso(d); }
+      if (q === 'today') { $('ftFrom').value = $('ftTo').value; }
+      else if (q === '7d') { const d = new Date(now); d.setDate(d.getDate() - 6); $('ftFrom').value = iso(d); }
       else if (q === '30d') { const d = new Date(now); d.setDate(d.getDate() - 29); $('ftFrom').value = iso(d); }
       else if (q === '3m') { const d = new Date(now); d.setMonth(d.getMonth() - 3); $('ftFrom').value = iso(d); }
       else if (q === 'year') $('ftFrom').value = `${now.getFullYear()}-01-01`;
