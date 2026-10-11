@@ -620,7 +620,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 /* ---------- v3.3.3 交易筛选区独立成块，全部左对齐 ---------- */
 /* ---------- v3.3.4 筛选/工具行统一行距（全站生效）：行与行之间一律 10px ---------- */
 .filter-stats {
-  padding: 0 2px; margin: 10px 0 0;
+  padding: 0 2px; margin: 10px 0;
 }
 #view-trades .filters-col { margin-top: 2px; gap: 10px; }
 #view-trades .filters { justify-content: flex-start; }
