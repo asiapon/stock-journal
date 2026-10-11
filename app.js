@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.6';
+const APP_VER = '3.8.7';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -2871,21 +2871,47 @@ function bindTechResize() {
   });
 }
 /* ---- 股票下拉（自选 + 持仓，按代码去重）---- */
+/* v3.8.6 个股诊断改为自绘下拉（原生 select 弹层受系统深色模式影响，深色下渲染成黑块） */
+let diagPickCode = '';
 function renderAnalysisSelect() {
-  const sel = $('stockSelect');
-  if (!sel) return;
-  const cur = sel.value;
+  const list = $('stockPickList'), label = $('stockPickLabel');
+  if (!list || !label) return;
   const mk = new Map();
   computeHoldings().forEach(h => { if (h.qty > 0 && h.code) mk.set(h.code, h.name || h.code); });
   S.watchlist.forEach(w => { if (w.stock_code && !mk.has(w.stock_code)) mk.set(w.stock_code, w.stock_name || w.stock_code); });
-  sel.innerHTML = [...mk.entries()].map(([c, n]) => `<option value="${esc(c)}">${esc(n)}（${esc(c)}）</option>`).join('')
-    || '<option value="">请先添加自选或持仓</option>';
-  if (cur && mk.has(cur)) sel.value = cur;
+  const entries = [...mk.entries()];
+  if (!entries.some(([c]) => c === diagPickCode)) diagPickCode = entries.length ? entries[0][0] : '';
+  list.innerHTML = entries.map(([c, n]) =>
+    `<div class="selpick-item${c === diagPickCode ? ' on' : ''}" data-code="${esc(c)}" data-name="${esc(n)}">${esc(n)}（${esc(c)}）</div>`
+  ).join('') || '<div class="selpick-empty">请先在自选股或持仓中添加股票</div>';
+  const cur = mk.get(diagPickCode);
+  label.textContent = cur ? `${cur}（${diagPickCode}）` : '请先添加自选或持仓';
 }
+function bindStockPick() {
+  const wrap = $('stockPick'), btn = $('stockPickBtn'), list = $('stockPickList');
+  if (!wrap || !btn || !list) return;
+  const close = () => { wrap.classList.remove('open'); list.hidden = true; };
+  btn.addEventListener('click', e => {
+    e.stopPropagation();
+    const opening = list.hidden;
+    if (opening) { wrap.classList.add('open'); list.hidden = false; }
+    else close();
+  });
+  list.addEventListener('click', e => {
+    const it = e.target.closest('.selpick-item');
+    if (!it || !it.dataset.code) return;
+    diagPickCode = it.dataset.code;
+    const lb = $('stockPickLabel');
+    lb.textContent = `${it.dataset.name}（${it.dataset.code}）`;
+    list.querySelectorAll('.selpick-item').forEach(x => x.classList.toggle('on', x === it));
+    close();
+  });
+  document.addEventListener('click', e => { if (!wrap.contains(e.target)) close(); });
+}
+bindStockPick();
 /* ---- 一键个股诊断 ---- */
 async function diagnoseStock(forceCode) {
-  const sel = $('stockSelect');
-  const code = (typeof forceCode === 'string' ? forceCode : sel.value).trim();
+  const code = (typeof forceCode === 'string' ? forceCode : diagPickCode).trim();
   if (!code) return toast('请先在自选股或持仓中添加股票');
   const btn = $('stockAnalyzeBtn');
   const box = $('diagBox');
@@ -2917,9 +2943,8 @@ async function diagnoseStock(forceCode) {
 }
 window.analyzeStockByCode = async function (code) {
   switchView('analysis');
+  diagPickCode = code;
   renderAnalysisSelect();
-  const sel = $('stockSelect');
-  if (sel) sel.value = code;
   await diagnoseStock(code);
 };
 function renderDiagView() {

@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=3.8.6">
+<link rel="stylesheet" href="style.css?v=3.8.7">
 </head>
 <body>
 
@@ -282,7 +282,10 @@
             <span class="hint">技术面规则引擎秒出；AI 综合解读在结果区再点按钮才生成</span>
           </div>
           <div class="diag-form-row">
-            <select id="stockSelect"></select>
+            <div class="selpick" id="stockPick">
+              <button type="button" class="selpick-btn" id="stockPickBtn" aria-haspopup="listbox"><span class="sp-label" id="stockPickLabel">加载中…</span><span class="sp-arrow">▾</span></button>
+              <div class="selpick-list" id="stockPickList" hidden role="listbox"></div>
+            </div>
             <button id="stockAnalyzeBtn" class="btn primary" type="button">开始诊断</button>
           </div>
           <div class="diag-form-row">
@@ -652,7 +655,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.6"></script>
-<script src="analysis-extra.js?v=3.8.6"></script>
+<script src="app.js?v=3.8.7"></script>
+<script src="analysis-extra.js?v=3.8.7"></script>
 </body>
 </html>
