@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.9.4';
+const APP_VER = '2.9.5';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -756,7 +756,7 @@ function renderPending(hintId, inputId, list, summary) {
         <span class="p-desc">${esc(t.name || t.code)} ${t.qty} 股 @${esc(t.price)} · ${esc(String(t.time).replace('T', ' ').slice(0, 16))}</span>
         <span class="p-btns">
           <button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" data-close="0" type="button">保存</button>
-          ${list.length === 1 ? `<button class="btn sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" data-close="1" type="button">保存并关闭</button>` : ''}
+          ${list.length === 1 ? `<button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" data-close="1" type="button">保存并关闭</button>` : ''}
           <button class="btn ghost sm pfill-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">改</button>
         </span>
       </div>`).join('') + `</div>`;
@@ -1561,6 +1561,8 @@ function bindEvents() {
     e.preventDefault();
     const st = resolveTfStock();
     if (!st.code) { toast('请先从联想中选定股票', 'warn'); return; }
+    /* 「保存并关闭」或编辑列表记录 → 保存后关弹窗；「保存」则留在弹窗继续录入 */
+    const closeAfter = (e.submitter && e.submitter.id === 'tfSubmitClose') || !!S.editingTradeId;
     const row = buildTradeRow({
       type: $('tfType').value,
       code: st.code,
@@ -1583,7 +1585,7 @@ function bindEvents() {
       }
       resetTradeForm();
       await loadAll(); renderAll();
-      closeRecModal();
+      if (closeAfter) closeRecModal();
     } catch (err) { toast(err.message || '保存失败', 'warn'); }
   });
 
