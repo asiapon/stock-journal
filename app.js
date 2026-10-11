@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.4';
+const APP_VER = '3.8.5';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -2456,9 +2456,19 @@ function findLevels(bars, price) {
     if (isL) los.push(bars[i].l);
   }
   const f2 = x => Math.round(x * 100) / 100;
-  const res = [...new Set(his.filter(x => x > price * 1.005).sort((a, b) => a - b))].slice(0, 2).map(f2);
-  const sup = [...new Set(los.filter(x => x < price * 0.995).sort((a, b) => b - a))].slice(0, 2).map(f2);
-  return { support: sup, resistance: res };
+  /* v3.8.5 支撑压力来源标注：聚类 0.6% 内的摆动点计数，多次触碰=密集区，证据更可信 */
+  const cluster = arr => {
+    const s = [...new Set(arr)].sort((a, b) => a - b);
+    const groups = [];
+    s.forEach(x => {
+      const g = groups[groups.length - 1];
+      if (g && Math.abs(x - g[0]) / g[0] < 0.006) g.push(x); else groups.push([x]);
+    });
+    return groups.map(g => ({ p: f2(g.reduce((s2, x) => s2 + x, 0) / g.length), touches: g.length }));
+  };
+  const supG = cluster(los.filter(x => x < price * 0.995)).sort((a, b) => b.p - a.p).slice(0, 2);
+  const resG = cluster(his.filter(x => x > price * 1.005)).sort((a, b) => a.p - b.p).slice(0, 2);
+  return { support: supG.map(g => g.p), resistance: resG.map(g => g.p), supMeta: supG, resMeta: resG };
 }
 /* ---- 单周期信号引擎（规则投票，每个判断给出理由）---- */
 /* v3.8.4 打分引擎重构：按"维度"而非"指标"计数，避免共线性伪确认。
@@ -2485,12 +2495,16 @@ function analyzeTimeframe(bars, label) {
   const trendW = 3;
   const trendText = `${label}趋势维度：${tParts.join('，')}${trendDir === 1 ? '，中期趋势偏多' : trendDir === -1 ? '，中期趋势偏空' : '，均线纠缠、方向不明'}`;
 
-  /* —— 维度2：动能（MACD，绿柱收敛=空头动能衰竭，不再计入看空）—— */
+  /* —— 维度2：动能（MACD，绿柱收敛=空头动能衰竭，不再计入看空；零轴附近设噪声阈值）—— */
+  const macdNoise = price * 0.001; /* 柱线绝对值/单日变化低于股价 0.1% 视为噪声，防止零轴附近反复横跳 */
   let momDir = 0, momW = 2, momText;
-  if (h > 0 && h > hp) { momDir = 1; momText = `MACD 红柱扩大（${f2(hp)}→${f2(h)}），多头动能增强`; }
+  if (Math.abs(h) < macdNoise && Math.abs(h - hp) < macdNoise * 0.5) {
+    momDir = 0; momW = 0; momText = `MACD 柱线（${f2(h)}）贴近零轴且变化微小，属噪声区间，动能信号不计分`;
+  } else if (h > 0 && h > hp) { momDir = 1; momText = `MACD 红柱扩大（${f2(hp)}→${f2(h)}），多头动能增强`; }
   else if (h > 0) { momDir = 1; momW = 1; momText = `MACD 红柱 ${f2(h)}，多头动能维持但略有减弱`; }
   else if (h < 0 && h < hp) { momDir = -1; momText = `MACD 绿柱扩大（${f2(hp)}→${f2(h)}），空头动能增强`; }
-  else if (h < 0 && h > hp) { momDir = 0; momW = 0; momText = `MACD 绿柱收敛（${f2(hp)}→${f2(h)}），空头动能衰竭，需警惕止跌反弹（中性观察）`; }
+  else if (h < 0 && h > hp && (hp - h) >= macdNoise) { momDir = 0; momW = 0; momText = `MACD 绿柱收敛（${f2(hp)}→${f2(h)}），空头动能衰竭，需警惕止跌反弹（中性观察）`; }
+  else if (h < 0) { momDir = 0; momW = 0; momText = `MACD 绿柱 ${f2(h)}，变化幅度过小视为噪声，动能信号不计分`; }
   else { momDir = 0; momW = 1; momText = `MACD 柱线接近零轴，动能中性`; }
   if (macd.dif[i] > 0 && momDir >= 0) { momText += `；DIF(${f2(macd.dif[i])}) 在零轴上方`; }
   else if (macd.dif[i] < 0 && momDir <= 0) { momText += `；DIF(${f2(macd.dif[i])}) 在零轴下方`; }
@@ -2513,13 +2527,15 @@ function analyzeTimeframe(bars, label) {
     oscText = `KDJ 死叉状态（J=${f2(j)}）${r != null && r < 45 ? `，RSI=${f2(r)} 处于弱势区` : '，RSI 中性区，摆动信号不强'}`;
   }
 
-  /* —— 维度4：位置（支撑/压力，独立信息，保持原逻辑）—— */
-  const nearSup = levels.support.find(x => price / x < 1.03);
-  const nearRes = levels.resistance.find(x => x / price < 1.03);
+  /* —— 维度4：位置（支撑/压力，独立信息；标注来源与前低触碰次数，密集区证据更强）—— */
+  const supMeta = (levels.supMeta || []).find(g => price / g.p < 1.03);
+  const resMeta = (levels.resMeta || []).find(g => g.p / price < 1.03);
+  const supSrc = supMeta ? `前低摆动点${supMeta.touches >= 2 ? `（${supMeta.touches} 次触碰，密集区）` : ''}` : '';
+  const resSrc = resMeta ? `前高摆动点${resMeta.touches >= 2 ? `（${resMeta.touches} 次触碰，密集区）` : ''}` : '';
   let posDir = 0, posW = 0, posText = '';
-  if (nearSup && nearRes) { posDir = 0; posW = 1; posText = `${label}现价位于支撑 ${f2(nearSup)} 与压力 ${f2(nearRes)} 之间，空间受限`; }
-  else if (nearSup) { posDir = 1; posW = 1; posText = `${label}现价贴近支撑位 ${f2(nearSup)}，下方抛压相对较小`; }
-  else if (nearRes) { posDir = -1; posW = 1; posText = `${label}现价逼近压力位 ${f2(nearRes)}，突破前上行空间受限`; }
+  if (supMeta && resMeta) { posDir = 0; posW = 1; posText = `${label}现价位于支撑 ${f2(supMeta.p)}${supSrc ? '（' + supSrc + '）' : ''} 与压力 ${f2(resMeta.p)}${resSrc ? '（' + resSrc + '）' : ''} 之间，空间受限`; }
+  else if (supMeta) { posDir = 1; posW = supMeta.touches >= 2 ? 2 : 1; posText = `${label}现价贴近支撑位 ${f2(supMeta.p)}，来源：${supSrc || '前低'}，下方抛压相对较小`; }
+  else if (resMeta) { posDir = -1; posW = resMeta.touches >= 2 ? 2 : 1; posText = `${label}现价逼近压力位 ${f2(resMeta.p)}，来源：${resSrc || '前高'}，突破前上行空间受限`; }
 
   const dims = [
     { name: '趋势', dir: trendDir, w: trendDir === 0 ? 0 : trendW, text: trendText },
@@ -2571,6 +2587,7 @@ function analyzeTimeframe(bars, label) {
   const isLimitLike = Math.abs(dayChg) >= 0.19 || (Math.abs(dayChg) >= 0.095 && Math.abs(dayChg) < 0.11);
   let volState, mult;
   if (isLimitLike) { volState = dayChg > 0 ? '涨停板（量能失真）' : '跌停板（量能失真）'; mult = 1.0; }
+  else if (ratio < loThr * 0.5) { volState = '地量'; mult = 0.5; }
   else if (ratio < loThr) { volState = '缩量'; mult = 0.7; }
   else if (ratio < midLo * 1.0 && ratio >= loThr) { volState = '偏缩量'; mult = 0.85; }
   else if (ratio <= midHi) { volState = '平量'; mult = 1.0; }
@@ -2587,6 +2604,8 @@ function analyzeTimeframe(bars, label) {
   if (isResumeDay) volNote = `量能：近期有停牌复牌，单日量能不可比，本次不做量能修正`;
   else if (isLimitLike) volNote += '。涨跌停板附近量能失真（封板/砸板量不代表真实供需），本次不做量能加减分';
   else if (dayDir !== 0) volNote += `，${dayDir > 0 ? '上涨' : '下跌'}${mult > 1 ? '获量能确认' : mult < 1 ? '缺乏量能支撑' : ''}`;
+  if (volState === '地量' && trendDir < 0) volNote += '。地量变盘：下跌已缩至地量（没人卖了），看空强度已额外下调，警惕变盘窗口临近';
+  else if (volState === '地量') volNote += '。地量状态：交投极度冷清，历史上常是变盘前兆';
   if (!isResumeDay && !isLimitLike && isNewLow && ratio < loThr) {
     volNote += '。量价背离：股价创新低但明显缩量，抛压趋于衰竭，历史统计上此处加速下跌概率下降、注意止跌信号（概率性修正，非买卖依据）';
     pct = Math.round(pct * 0.7);
@@ -2599,11 +2618,28 @@ function analyzeTimeframe(bars, label) {
   const summary = reasons.filter(x => x.dir !== 0).slice(0, 3).map(x => x.text).join('；');
   return { label, price, ma, macd, rsi: r, kdj: { K: k, D: d, J: j }, levels, reasons, raw, pct, signal, summary, caveat, dims, volInfo: { state: volState, ratio, mult } };
 }
+/* v3.8.5 修复一致性判断 bug：原来按 buy/sell/hold 三档比较，+10 与 -10 都落 hold 档
+   被误判为"方向一致"。现按强度符号比较；|综合|<5 强制输出观望；并披露合成公式。 */
 function combineTechSignal(d, w) {
-  const pct = Math.round(d.pct * 0.6 + w.pct * 0.4);
-  const signal = pct >= 30 ? 'buy' : pct <= -30 ? 'sell' : 'hold';
-  const agree = d.signal === w.signal ? '日线与周线方向一致，信号可信度较高' : '日线与周线方向存在分歧，建议控制仓位、等待共振';
-  return { pct, signal, agree, note: agree };
+  const pct = Math.round(d.pct * 0.6 + w.pct * 0.4); /* 公开公式：日线×60% + 周线×40% */
+  let signal = pct >= 30 ? 'buy' : pct <= -30 ? 'sell' : 'hold';
+  const ds = Math.sign(d.pct), ws = Math.sign(w.pct);
+  let agree;
+  if (ds !== 0 && ds === ws) {
+    agree = ds > 0 ? '日线与周线方向一致看多，信号可信度较高' : '日线与周线方向一致看空，信号可信度较高';
+  } else if (ds !== 0 && ws !== 0 && ds !== ws) {
+    agree = ds > 0
+      ? '日线反弹信号与周线下跌趋势冲突，属于逆势反弹，可信度偏低，仓位需谨慎'
+      : '日线回落与周线上涨趋势冲突，可能是周线上行中的回踩，注意日线企稳信号';
+  } else {
+    agree = '日线或周线一方强度接近零轴、方向不明，信号强度有限';
+  }
+  let note = agree;
+  if (Math.abs(pct) < 5) {
+    signal = 'hold';
+    note = `多空胶着（综合强度 ${pct > 0 ? '+' : ''}${pct}，接近零轴），方向不明，建议观望，不宜据此建仓`;
+  }
+  return { pct, signal, agree, note };
 }
 function fmtVol(v) {
   const n = Number(v) || 0;
@@ -2979,6 +3015,7 @@ function diagHtml() {
       <div class="tech-reason"><h4>📉 日线信号明细（强度 ${d.pct > 0 ? '+' : ''}${d.pct}）</h4><ul>${d.reasons.map(reasonLi).join('')}</ul></div>
       <div class="tech-reason"><h4>📊 周线信号明细（强度 ${w.pct > 0 ? '+' : ''}${w.pct}）</h4><ul>${w.reasons.map(reasonLi).join('')}</ul></div>
     </div>
+    <div class="formula-note">强度合成公式：单周期强度 = Σ(维度方向×权重) ÷ Σ权重 × 100（维度：趋势/动能/摆动/位置），再乘量能系数（地量 0.5 / 缩量 0.7 / 平量 1.0 / 温和放量 1.1 / 显著放量 1.2，涨跌停与停牌复牌不做修正），矛盾状态下再 ×0.7。综合强度 = 日线 × 60% + 周线 × 40%，|综合| &lt; 5 强制观望。</div>
     <div class="diag-ai">
       <div class="diag-ai-title">🤖 综合诊断 <span class="diag-ai-sub">技术面 ＋ 基本面 ＋ 你的持仓与交易行为，只给一个结论</span></div>
       <div id="diagAiOut" class="diag-ai-out">${t.ai ? esc(t.ai) : (t.busy ? '生成中…' : '<span class="diag-ai-idle">技术面已经出好了。点下面的按钮，再结合基本面、消息面与你的持仓 / 交易行为，生成一段可执行的操作建议。</span>')}</div>
