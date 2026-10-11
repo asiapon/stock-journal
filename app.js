@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.6';
+const APP_VER = '3.4.7';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1012,19 +1012,19 @@ function renderToday() {
 const WB_COLORS = ['#3468D6', '#D93A2B', '#0E9463', '#B7791F', '#7C5CBF', '#2E9AA8', '#C2557A', '#6B7280'];
 function renderHoldings() {
   const all = computeHoldings();
-  const holds = all.filter(h => h.qty > 0);
   const qm = quoteMap();
   const NA = '<span class="na-tag">未获取</span>';
 
-  /* 行数据一次算好，PC / 手机两张表共用 */
-  const todayStr = nowLocalInput().slice(0, 10);
   /* 当日交易按代码分组（当日盈亏与今日清仓都要用） */
+  const todayStr = nowLocalInput().slice(0, 10);
   const todayByCode = new Map();
   for (const t of S.trades) {
     if (t.transaction_time.slice(0, 10) !== todayStr) continue;
     if (!todayByCode.has(t.stock_code)) todayByCode.set(t.stock_code, []);
     todayByCode.get(t.stock_code).push(t);
   }
+  /* 持仓表：正常持仓 + 今日清仓的股票（清仓当日保留展示，盈亏已落地） */
+  const holds = all.filter(h => h.qty > 0 || (todayByCode.get(h.code) || []).some(t => t.transaction_type === 'sell'));
   /* 当日盈亏（券商口径）：卖出净得 + 期末持仓现价 − 买入净额 − 期初持仓×昨收
      净额含费用；期初持仓 = 期末 + 今日卖出 − 今日买入。对「今日买今日卖」「今日清仓」均成立 */
   function dayPnlOf(code, endQty, price, prevClose) {
@@ -1045,37 +1045,33 @@ function renderHoldings() {
     const q = qm.get(h.code);
     const price = q ? q.price : null;
     const prevClose = q ? q.prevClose : null;
-    const costPrice = h.qty ? h.dilutedValue / h.qty : 0;   // 摊薄成本：已实现盈亏滚入（表格展示口径）
-    const mv = price != null ? h.qty * price : null;
-    const float = price != null ? h.qty * price - h.dilutedValue : null;   // 累计盈亏（含已实现）
-    const floatPct = price != null && costPrice ? float / h.dilutedValue : null;
+    const cleared = h.qty <= 0;                               // 今日清仓：保留展示，盈亏已落地
+    const costPrice = h.qty ? h.dilutedValue / h.qty : null;  // 摊薄成本：已实现盈亏滚入（表格展示口径）
+    const mv = !cleared && price != null ? h.qty * price : null;
+    const dayPnl = dayPnlOf(h.code, h.qty, price, prevClose);
+    const float = cleared ? dayPnl : (price != null ? h.qty * price - h.dilutedValue : null);   // 累计盈亏（含已实现）；清仓股=当日落地盈亏
+    const floatPct = !cleared && price != null && costPrice ? float / h.dilutedValue : null;
     /* T+1 可用 = 持仓 − 当日买入 */
     const boughtQty = (todayByCode.get(h.code) || []).reduce((s, t) => s + (t.transaction_type === 'buy' ? t.quantity : 0), 0);
     const avail = Math.max(0, h.qty - boughtQty);
-    const dayPnl = dayPnlOf(h.code, h.qty, price, prevClose);
     const dayPct = price != null && prevClose > 0 ? (price - prevClose) / prevClose : null;
-    return { h, price, prevClose, costPrice, mv, float, floatPct, avail, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
+    return { h, cleared, price, prevClose, costPrice, mv, float, floatPct, avail, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
   });
-  /* 今日清仓的股票不在持仓表里，但当日盈亏必须落地（清仓=盈亏确定） */
-  const heldCodes = new Set(holds.map(h => h.code));
-  let clearedDayPnl = 0, clearedCnt = 0;
-  for (const h of all) {
-    if (h.qty > 0 || heldCodes.has(h.code) || !todayByCode.has(h.code)) continue;
-    const q = qm.get(h.code);
-    const dp = dayPnlOf(h.code, 0, q ? q.price : null, q ? q.prevClose : null);
-    if (dp != null) { clearedDayPnl += dp; clearedCnt++; }
-  }
+  /* 今日清仓股的落地盈亏（已在 rows 中），统计卡单独提示 */
 
   /* 持仓统计卡：摊薄口径，与表格行完全一致（浮动盈亏=累计盈亏，当日参考盈亏=券商口径） */
   let totalMV = 0, totalDayPnl = 0, missing = 0;
   for (const r of rows) {
     if (r.mv != null) { totalMV += r.mv; if (r.dayPnl != null) totalDayPnl += r.dayPnl; }
-    else missing++;
+    else if (!r.cleared) missing++;
   }
+  const clearedRows = rows.filter(r => r.cleared);
+  const clearedCnt = clearedRows.length;
+  const clearedDayPnl = clearedRows.reduce((s, r) => s + (r.dayPnl != null ? r.dayPnl : 0), 0);
   totalDayPnl += clearedDayPnl;   // 今日清仓的已落地盈亏计入当日参考盈亏
   const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   const hs = $('holdSummary');
-  if (hs) hs.innerHTML = holds.length ? `
+  if (hs) hs.innerHTML = rows.length ? `
     <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div></div>
     <div class="sum-card"><div class="s-label">当日参考盈亏</div><div class="s-value ${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</div>
@@ -1087,16 +1083,16 @@ function renderHoldings() {
   $('holdTable').querySelector('tbody').innerHTML = rows.map(r => {
     const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
     return `<tr data-code="${esc(h.code)}">
-      <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${esc(h.code)}</span></div></td>
+      <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}${r.cleared ? ' <span class="tag cleared">已清仓</span>' : ''}</span><span class="sc-code">${esc(h.code)}</span></div></td>
       <td class="num">${mv != null ? fmt2(mv) : NA}</td>
       <td class="num ${float != null ? pnlCls(float) : ''}">${float != null ? (float >= 0 ? '+' : '') + fmt2(float) : NA}</td>
       <td class="num ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : NA}</td>
       <td class="num"><div class="two-line"><span title="可用 = 持仓 − 当日买入（T+1）">${h.qty}</span><span class="sub">${avail}</span></div></td>
-      <td class="num">${fmtP(costPrice)}</td>
+      <td class="num">${costPrice != null ? fmtP(costPrice) : '—'}</td>
       <td class="num price-cell">${price != null ? fmt2(price) : NA}</td>
       <td class="num ${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? (dayPnl >= 0 ? '+' : '') + fmt2(dayPnl) : NA}</td>
       <td class="num ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : NA}</td>
-      <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : NA}</td>
+      <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : (r.cleared ? '0.00%' : NA)}</td>
       <td><div class="row-actions">
         <button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button>
       </div></td>
@@ -1111,7 +1107,7 @@ function renderHoldings() {
       <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${mv != null ? fmt2(mv) : NA}</span></div></td>
       <td class="num"><div class="two-line"><b class="${float != null ? pnlCls(float) : ''}">${float != null ? sgn(float) + fmt2(float) : NA}</b><span class="sub ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : ''}</span></div></td>
       <td class="num"><div class="two-line"><span title="可用 = 持仓 − 当日买入（T+1）">${h.qty}</span><span class="sub">${avail}</span></div></td>
-      <td class="num"><div class="two-line"><span>${fmtP(costPrice)}</span><span class="sub">${price != null ? fmt2(price) : '未获取'}</span></div></td>
+      <td class="num"><div class="two-line"><span>${costPrice != null ? fmtP(costPrice) : '—'}</span><span class="sub">${price != null ? fmt2(price) : '未获取'}</span></div></td>
       <td class="num"><div class="two-line"><b class="${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? sgn(dayPnl) + fmt2(dayPnl) : NA}</b><span class="sub ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : ''}</span></div></td>
       <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : NA}</td>
       <td><div class="stock-cell"><span class="sc-code">${esc(h.code)}</span></div></td>

@@ -657,6 +657,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   .fchip { height: 30px; }
 }
 
+/* ---------- v3.4.7 今日清仓股保留在持仓表 ---------- */
+.tag.cleared { background: #F1F3F6; color: var(--ink-3); font-weight: 400; }
+
 /* ---------- v3.4.5 按股票视图展开明细 ---------- */
 tr.stockagg { cursor: pointer; }
 tr.stockagg:hover td { background: #F5F8FC; }
