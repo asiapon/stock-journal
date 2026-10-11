@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.9.0';
+const APP_VER = '2.9.1';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -748,13 +748,13 @@ function renderPending(hintId, inputId, list, summary) {
   const el = $(hintId);
   el.className = 'quick-hint';
   el.innerHTML = (summary ? `<div class="p-sum">${esc(summary)}</div>` : '')
-    + (list.length > 1 ? `<div class="p-saveall-row"><button class="btn primary sm p-saveall-btn" type="button">全部保存（${list.length} 笔）</button></div>` : '')
+    + (list.length > 1 ? `<div class="p-saveall-row"><button class="btn primary sm p-saveall-btn" type="button">全部保存并关闭（${list.length} 笔）</button></div>` : '')
     + `<div class="pending-list">` + list.map((t, i) => `
       <div class="p-item">
         <span class="tag ${t.type}">${t.type === 'buy' ? '买入' : '卖出'}</span>
         <span class="p-desc">${esc(t.name || t.code)} ${t.qty} 股 @${esc(t.price)} · ${esc(String(t.time).replace('T', ' ').slice(0, 16))}</span>
         <span class="p-btns">
-          <button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">保存</button>
+          <button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" data-close="${list.length === 1 ? 1 : 0}" type="button">${list.length === 1 ? '保存并关闭' : '保存'}</button>
           <button class="btn ghost sm pfill-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" type="button">改</button>
         </span>
       </div>`).join('') + `</div>`;
@@ -1411,7 +1411,7 @@ function bindEvents() {
     const saveB = e.target.closest('.p-save-btn');
     if (saveB) {
       const t = pendingTrades[Number(saveB.dataset.i)];
-      if (t) savePendingTrade(t, saveB);
+      if (t) savePendingTrade(t, saveB, saveB.dataset.close === '1');
       return;
     }
     const b = e.target.closest('.pfill-btn');
@@ -1425,7 +1425,7 @@ function bindEvents() {
     $(b.dataset.input).value = '';
   }));
   /* 解析结果一键入库（免表单） */
-  async function savePendingTrade(t, btn) {
+  async function savePendingTrade(t, btn, closeAfter = false) {
     let code = t.code || '', name = t.name || '';
     if (!code && name) { const hit = StockDict.resolve(name); if (hit && hit.code) { code = hit.code; name = hit.name || name; } }
     if (!code) { toast('未能识别股票代码，请点「改」手动确认', 'warn'); return; }
@@ -1443,6 +1443,7 @@ function bindEvents() {
       btn.textContent = '已存';
       t._saved = true;
       await loadAll(); renderAll(); refreshQuotes();
+      if (closeAfter && $('recModal') && !$('recModal').hidden) closeRecModal();
     } catch (err) { btn.disabled = false; toast(err.message || '保存失败', 'warn'); }
   }
   /* 多条解析结果一键全部入库 */
@@ -1459,7 +1460,7 @@ function bindEvents() {
     if (ok === targets.length) {
       btn.textContent = `已全部保存`;
       toast(`已全部保存（${ok} 笔）`);
-      $('tradeHint').hidden = true;
+      if ($('recModal') && !$('recModal').hidden) closeRecModal(); else $('tradeHint').hidden = true;
     } else {
       btn.textContent = `已保存 ${ok}/${targets.length}，其余请点「改」确认`;
     }
