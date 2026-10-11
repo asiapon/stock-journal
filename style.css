@@ -625,7 +625,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 #view-trades .filters-col { margin-top: 2px; gap: 10px; }
 #view-trades .filters { justify-content: flex-start; }
 #view-trades .card-title-row { margin-bottom: 10px; }
-#view-trades .wtabs { margin-top: 10px; }
+#view-trades .wtabs { margin-top: 0; margin-bottom: 10px; }
 #view-trades .ft-kw { max-width: 560px; }
 /* 其他页面同类工具行（自选分组 Tab、卡内标题行）保持同一节奏 */
 #view-watch .wtabs { margin-top: 0; }
