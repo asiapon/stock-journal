@@ -93,8 +93,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .auth-tab.active { background: var(--card); color: var(--ink); box-shadow: var(--shadow); }
 .auth-form { display: flex; flex-direction: column; gap: 12px; }
 .auth-form input {
-  width: 100%; border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
-  padding: 10px 12px; background: #FBFCFD; outline: none;
+  width: 100%; height: 40px; box-sizing: border-box; font-size: 13.5px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  padding: 0 12px; background: #FBFCFD; outline: none;
   transition: border-color .15s, box-shadow .15s;
 }
 .auth-form input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
@@ -981,7 +982,7 @@ select { padding-right: 6px; background: var(--card); color: var(--ink); }
 
 .bt-trig b { color: var(--text); }
 
-.auth-form .btn.block { height: 44px; }
+.auth-form .btn.block { height: 40px; font-size: 13.5px; }
 
 /* v3.8.3：删除 tm 迁移时带入的 .btn/.btn.primary/.btn.ghost/.btn.sm/.btn.block 重定义，
    其覆盖了 sj 通用按钮样式且引用未定义变量导致蓝色按钮透明隐形。
