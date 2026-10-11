@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.2';
+const APP_VER = '3.4.3';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1016,27 +1016,8 @@ function renderHoldings() {
   const qm = quoteMap();
   const NA = '<span class="na-tag">未获取</span>';
 
-  /* 持仓总览（现价来自网络行情；未获取的股票不计入，并单独提示） */
-  let totalMV = 0, totalCost = 0, missing = 0, totalDayPnl = 0;
-  for (const h of holds) {
-    const q = qm.get(h.code);
-    if (q && q.price != null) {
-      totalMV += h.qty * q.price; totalCost += h.costValue;
-      if (q.prevClose > 0) totalDayPnl += h.qty * (q.price - q.prevClose);
-    }
-    else missing++;
-  }
-  const totalFloat = totalMV - totalCost;
-  const hs = $('holdSummary');
-  if (hs) hs.innerHTML = holds.length ? `
-    <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
-    <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div></div>
-    <div class="sum-card"><div class="s-label">当日参考盈亏</div><div class="s-value ${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</div>
-      ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>` : '';
-
-  $('holdEmpty').hidden = holds.length > 0;
-  const todayStr = nowLocalInput().slice(0, 10);
   /* 行数据一次算好，PC / 手机两张表共用 */
+  const todayStr = nowLocalInput().slice(0, 10);
   const rows = holds.map((h, i) => {
     const q = qm.get(h.code);
     const price = q ? q.price : null;
@@ -1063,6 +1044,21 @@ function renderHoldings() {
     const dayPct = price != null && prevClose > 0 ? (price - prevClose) / prevClose : null;
     return { h, price, prevClose, costPrice, mv, float, floatPct, avail, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
   });
+
+  /* 持仓统计卡：摊薄口径，与表格行完全一致（浮动盈亏=累计盈亏，当日参考盈亏=券商口径） */
+  let totalMV = 0, totalDayPnl = 0, missing = 0;
+  for (const r of rows) {
+    if (r.mv != null) { totalMV += r.mv; if (r.dayPnl != null) totalDayPnl += r.dayPnl; }
+    else missing++;
+  }
+  const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
+  const hs = $('holdSummary');
+  if (hs) hs.innerHTML = holds.length ? `
+    <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div></div>
+    <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div></div>
+    <div class="sum-card"><div class="s-label">当日参考盈亏</div><div class="s-value ${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</div>
+      ${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>` : '';
+  $('holdEmpty').hidden = holds.length > 0;
 
   /* PC 全列表格：股票/市值/盈亏/盈亏%/持仓可用/成本价/现价/当日盈亏/当日盈亏%/仓位/明细 */
   $('holdTable').querySelector('tbody').innerHTML = rows.map(r => {
