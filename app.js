@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.15';
+const APP_VER = '3.8.16';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1957,6 +1957,7 @@ function bindEvents() {
   /* 持仓：刷新 / 改价 / 明细 */
   $('refreshHoldBtn').addEventListener('click', async () => { await loadAll(); await refreshQuotes(true); toast('已刷新行情'); });
   $('holdRecBtn').addEventListener('click', () => openRecModal());
+  $('holdEmptyRec') && $('holdEmptyRec').addEventListener('click', () => openRecModal());
   /* 持仓页自动刷新行情 */
   let holdTimer = null;
   function setHoldAuto() {
