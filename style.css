@@ -620,13 +620,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 @media (max-width: 639px) {
   #holdTable { display: none; }           /* 手机端隐藏全列表格 */
   #holdTableM { display: table; }
-  #holdTableM th, #holdTableM td { padding: 8px 5px; font-size: 12px; }
+  #holdTableM th, #holdTableM td { padding: 8px 5px; font-size: 12px; font-weight: 500; font-family: inherit; }
   #holdTableM .two-line { display: flex; flex-direction: column; line-height: 1.4; }
-  #holdTableM .two-line .sub { font-size: 12px; color: var(--ink-3); }
+  #holdTableM .two-line b { font-weight: 500; }
+  #holdTableM .two-line .sub { font-size: 12px; font-weight: 500; color: var(--ink-3); }
   #holdTableM .stock-cell { min-width: 0; }
-  #holdTableM .sc-name { font-size: 12px; }
-  #holdTableM .sc-code { font-size: 12px; }
-  #holdTableM .icon-btn { padding: 4px 8px; }
+  #holdTableM .sc-name { font-size: 12px; font-weight: 500; }
+  #holdTableM .sc-code { font-size: 12px; font-weight: 500; }
+  #holdTableM .sc-mv { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
+  #holdTableM .icon-btn { font-size: 12px; font-weight: 500; }
 }
 
 /* ---------- v3.2.1 交易记录检索增强 ---------- */
