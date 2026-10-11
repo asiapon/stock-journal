@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=3.6.3">
+<link rel="stylesheet" href="style.css?v=3.7.0">
 </head>
 <body>
 
@@ -90,6 +90,7 @@
     <button class="tab" data-view="holdings"><span class="tab-ico">▤</span>持仓</button>
     <button class="tab" data-view="trades"><span class="tab-ico">≡</span>交易记录</button>
     <button class="tab" data-view="watch"><span class="tab-ico">☆</span>自选股</button>
+    <button class="tab" data-view="analysis"><span class="tab-ico">◎</span>分析中心</button>
     <button class="tab" data-view="me"><span class="tab-ico">⚙</span>应用设置</button>
   </nav>
 
@@ -261,6 +262,23 @@
       </div>
     </section>
 
+    <!-- ============ 分析中心 ============ -->
+    <section id="view-analysis" class="view">
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">个股诊断</span>
+          <span class="hint">技术面规则引擎秒出：日/周 K 线 · 均线 · MACD · RSI · KDJ · 支撑压力</span>
+        </div>
+        <p class="hint">AI 综合解读在诊断结果里再点一次按钮才生成，结合基本面、消息面与你的持仓 / 交易行为，只给一份结论。收起后结果保留，可随时展开。</p>
+        <div class="diag-form-row">
+          <select id="stockSelect"></select>
+          <button id="stockAnalyzeBtn" class="btn primary" type="button">开始诊断</button>
+        </div>
+        <div id="diagHistory" class="mini-list" style="margin-top:10px"></div>
+      </div>
+      <div id="diagBox" class="card" hidden></div>
+    </section>
+
     <!-- ============ 应用设置 ============ -->
     <section id="view-me" class="view">
       <!-- 设置分类页签（参考 trade-manager）：窄屏自动等分 -->
@@ -420,6 +438,10 @@
       <svg viewBox="0 0 24 24"><path d="M12 3.6l2.5 5.1 5.6.8-4 4 .9 5.6-5-2.7-5 2.7.9-5.6-4-4 5.6-.8z"/></svg>
       <span>自选股</span>
     </button>
+    <button class="bnav-item" data-view="analysis">
+      <svg viewBox="0 0 24 24"><path d="M4 20V4m0 16h16M7 15l3.5-4.5 3 2.5L18 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>分析中心</span>
+    </button>
     <button class="bnav-item" data-view="me">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>
       <span>应用设置</span>
@@ -502,6 +524,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.6.3"></script>
+<script src="app.js?v=3.7.0"></script>
 </body>
 </html>

@@ -818,3 +818,62 @@ select { padding-right: 6px; }
   #tradeTable .tm-cell .tm-sub, #watchTable .tm-cell .tm-sub,
   #watchTable .adate { font-size: 13px; }
 }
+
+/* ============================================================
+   v3.7.0 分析中心 · 个股诊断（完整迁移自 trade-manager）
+   ============================================================ */
+.diag-form-row { display: flex; gap: 10px; margin-top: 10px; }
+.diag-form-row select { flex: 1; min-width: 0; }
+.diag-form-row .btn { white-space: nowrap; }
+.diag-hist-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; cursor: pointer; }
+.diag-hist-item b { font-size: 13px; }
+.diag-hist-item .hint { display: block; font-size: 11.5px; }
+.diag-hist-item .pct { font-size: 13px; font-weight: 600; white-space: nowrap; }
+.tech-signal { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-top: 12px; padding: 14px; border-radius: 12px; border: 1px solid var(--line); }
+.sig-badge { font-size: 20px; font-weight: 800; padding: 8px 22px; border-radius: 10px; letter-spacing: 2px; }
+.sig-buy  { background: var(--up-bg); color: var(--up); border: 1px solid #F3C4BE; }
+.sig-sell { background: var(--down-bg); color: var(--down); border: 1px solid #B5DEC9; }
+.sig-hold { background: var(--amber-bg); color: var(--amber); border: 1px solid #EBD9B0; }
+.sig-score { font-size: 13px; color: var(--ink-2); line-height: 1.7; min-width: 0; }
+.sig-score b { font-size: 15px; }
+.tech-charts { display: grid; grid-template-columns: 1fr; gap: 16px; margin-top: 14px; }
+@media (min-width: 900px) { .tech-charts { grid-template-columns: 1fr 1fr; } }
+.tech-chart-block { border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+.tech-chart-block h4 { margin: 0 0 8px; font-size: 13.5px; color: var(--ink-2); font-weight: 600; display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.kc-hint { font-size: 12px; font-weight: 400; color: var(--ink-3); }
+.kchart-wrap { position: relative; }
+.tech-chart-block canvas { width: 100%; height: 360px; display: block; cursor: crosshair; touch-action: pan-y; }
+@media (max-width: 700px) { .tech-chart-block canvas { height: 260px; } }
+.kchart-tip { position: absolute; pointer-events: none; width: 242px; box-sizing: border-box; background: rgba(255,255,255,.97); border: 1px solid var(--line); border-radius: 10px; box-shadow: 0 6px 20px rgba(20,40,80,.14); padding: 8px 10px; font-size: 12px; color: var(--ink); z-index: 5; }
+.kchart-tip[hidden] { display: none; }
+.kt-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; font-weight: 600; margin-bottom: 6px; padding-bottom: 5px; border-bottom: 1px solid var(--line); }
+.kt-chg { font-weight: 700; }
+.kt-chg.up { color: var(--up); }
+.kt-chg.down { color: var(--down); }
+.kt-grid { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 3px 8px; }
+.kt-grid span, .kt-ma span { color: var(--ink-3); white-space: nowrap; }
+.kt-grid b { text-align: right; font-weight: 600; white-space: nowrap; }
+.kt-grid b.up { color: var(--up); }
+.kt-grid b.down { color: var(--down); }
+.kt-ma { display: grid; grid-template-columns: auto 1fr auto 1fr; gap: 3px 8px; margin-top: 5px; padding-top: 5px; border-top: 1px dashed var(--line); }
+.kt-ma b { text-align: right; font-weight: 600; white-space: nowrap; }
+.levels-legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12.5px; color: var(--ink-2); margin-top: 8px; }
+.levels-legend b { color: var(--ink); }
+.lv-note { font-size: 12px; color: var(--ink-3); }
+.tech-cols { display: grid; grid-template-columns: 1fr; gap: 14px; margin-top: 14px; }
+@media (min-width: 900px) { .tech-cols { grid-template-columns: 1fr 1fr; } }
+.tech-reason { border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; min-width: 0; }
+.tech-reason h4 { margin: 0 0 8px; font-size: 13.5px; }
+.tech-reason ul { margin: 0; padding: 0 0 0 4px; list-style: none; }
+.tech-reason li { font-size: 13px; line-height: 1.9; color: var(--ink); }
+.r-bull { color: var(--up); } .r-bear { color: var(--down); } .r-neu { color: var(--ink-2); }
+.diag-ai { margin-top: 16px; border: 1px solid var(--line); border-radius: 10px; padding: 14px; }
+.diag-ai-title { font-size: 13.5px; font-weight: 600; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.diag-ai-sub { font-size: 12px; font-weight: 400; color: var(--ink-2); }
+.diag-ai-out { margin-top: 10px; white-space: pre-wrap; font-size: 13.5px; line-height: 1.85; color: var(--ink); min-height: 44px; }
+.diag-ai-actions { margin-top: 12px; display: flex; gap: 10px; flex-wrap: wrap; }
+.diag-ai-idle { color: var(--ink-2); }
+.diag-folded { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.diag-folded-txt { font-size: 13px; color: var(--ink-2); }
+.diag-folded-txt b { color: var(--ink); }
+.diag-folded-act { display: flex; gap: 8px; }

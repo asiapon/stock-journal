@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.6.3';
+const APP_VER = '3.7.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -601,9 +601,10 @@ const ModelMgr = {
 };
 
 /* ---------- LLM 调用（流式，返回完整文本） ---------- */
-async function customLlmStream(m, messages) {
+async function customLlmStream(m, messages, opts) {
   let url = m.baseUrl.replace(/\/+$/, '');
   if (!/\/chat\/completions$/.test(url)) url += '/chat/completions';
+  const onDelta = (opts && opts.onDelta) || null;
   const res = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + m.apiKey },
@@ -628,23 +629,23 @@ async function customLlmStream(m, messages) {
       try {
         const j = JSON.parse(data);
         const d = j.choices && j.choices[0] && j.choices[0].delta;
-        if (d && d.content) text += d.content;
+        if (d && d.content) { text += d.content; if (onDelta) try { onDelta(d.content); } catch (e) { /* */ } }
       } catch (e) { /* 忽略无法解析的行 */ }
     }
   }
   return text;
 }
-async function llmComplete(messages) {
+async function llmComplete(messages, opts) {
   const m = ModelMgr.cur;
   if (!m) throw new Error('尚未选择模型，请到「应用设置 → AI 模型」选择');
-  if (m.custom) return customLlmStream(m, messages);
+  if (m.custom) return customLlmStream(m, messages, opts);
   if (!cloudLlm) throw new Error('云端模型服务不可用');
   const llm = cloudLlm.llm || cloudLlm;   // SDK 命名空间：cloud.llm.chat
   let text = '';
   const params = { model: m.id, messages, stream: true };
   for await (const chunk of llm.chat.completions.create(params)) {
     const d = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
-    if (d && d.content) text += d.content;
+    if (d && d.content) { text += d.content; if (opts && opts.onDelta) try { opts.onDelta(d.content); } catch (e) { /* */ } }
   }
   return text;
 }
@@ -2302,6 +2303,695 @@ function switchView(name) {
   $('view-' + name).classList.add('active');
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   try { localStorage.setItem('sj_view', name); } catch (e) { /* */ }
+  if (name === 'analysis' && typeof renderAnalysisSelect === 'function') {
+    renderAnalysisSelect();
+    setTimeout(() => { try { redrawAnalysisCanvases(); } catch (e) { /* */ } }, 0);
+  }
 }
+
+/* ============================================================
+   分析中心 · 个股诊断（完整迁移自 trade-manager）
+   技术面规则引擎（确定性、可复现）+ AI 综合解读（用户点按钮才生成）
+   ============================================================ */
+/* ---- K 线数据（腾讯为主——浏览器可跨域直连，东财兜底）---- */
+function secidOf(code) {
+  if (inferMarket(code) === 'bj') return '0.' + code;   // 东财北交所用 0 前缀
+  return /^(6|5|9)/.test(code) ? '1.' + code : '0.' + code;
+}
+async function fetchKlineEast(code, klt, lmt) {
+  const url = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=' + secidOf(code)
+    + '&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56&klt=' + klt + '&fqt=1&end=20500101&lmt=' + lmt;
+  const res = await fetch(url);
+  const j = await res.json();
+  const bars = ((j.data && j.data.klines) || []).map(s => {
+    const a = s.split(',');
+    return { d: a[0], o: +a[1], c: +a[2], h: +a[3], l: +a[4], v: +a[5] || 0 };
+  });
+  return { name: (j.data && j.data.name) || code, bars };
+}
+/* 腾讯日 / 周 K：3 个等价端点轮询（fqkline 路径在高频下可能被 WAF 拦截 501） */
+const KL_URLS = [
+  function (sym, period, lmt) { return 'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + sym + ',' + period + ',,,' + lmt + ',qfq'; },
+  function (sym, period, lmt) { return 'https://web.ifzq.gtimg.cn/appstock/app/newfqkline/get?param=' + sym + ',' + period + ',,,' + lmt + ',qfq'; },
+  function (sym, period, lmt) { return 'https://ifzq.gtimg.cn/appstock/app/newfqkline/get?param=' + sym + ',' + period + ',,,' + lmt + ',qfq'; },
+];
+async function fetchKlineTxRaw(code, period, lmt) {
+  const sym = inferMarket(code) === 'bj' ? 'bj' + code : inferMarket(code) + code;
+  let sawBlock = false, last = { name: code, bars: [] };
+  for (const mk of KL_URLS) {
+    try {
+      const res = await fetch(mk(sym, period, lmt));
+      if (!res.ok) { sawBlock = true; continue; }
+      const txt = await res.text();
+      if (!txt || txt.charCodeAt(0) === 60) { sawBlock = true; continue; }
+      const j = JSON.parse(txt);
+      const d = (j.data && j.data[sym]) || {};
+      const arr = d[period] || d['qfq' + period] || [];
+      const name = (d.qt && d.qt.data && d.qt.data[1]) || last.name;
+      if (arr.length) {
+        return {
+          name: name, sawBlock: sawBlock,
+          bars: arr.map(function (k) { return { d: k[0], o: +k[1], c: +k[2], h: +k[3], l: +k[4], v: +k[5] || 0 }; }),
+        };
+      }
+      last = { name: name, bars: [] };
+    } catch (e) { /* 换下一个端点 */ }
+  }
+  return { name: last.name, bars: last.bars, sawBlock: sawBlock };
+}
+async function fetchKlineTx(code, period, lmt) {
+  const r = await fetchKlineTxRaw(code, period, lmt);
+  if (!r.bars.length && r.sawBlock) throw new Error('腾讯 K 线接口被临时限流，请稍后重试');
+  return { name: r.name, bars: r.bars };
+}
+async function fetchKline(code, klt, lmt) { // klt: 101 日线 / 102 周线
+  const period = klt === 102 ? 'week' : 'day';
+  try {
+    const r = await fetchKlineTx(code, period, lmt);
+    if (r.bars.length > 30) return r;
+  } catch (e) { /* 降级东财 */ }
+  const r2 = await fetchKlineEast(code, klt, lmt);
+  if (r2.bars.length < 30) throw new Error('K 线数据获取失败');
+  return r2;
+}
+/* ---- 指标计算 ---- */
+function calcMA(vals, n) {
+  const out = new Array(vals.length).fill(null); let s = 0;
+  for (let i = 0; i < vals.length; i++) { s += vals[i]; if (i >= n) s -= vals[i - n]; if (i >= n - 1) out[i] = s / n; }
+  return out;
+}
+function calcEMA(vals, n) {
+  const k = 2 / (n + 1); const out = []; let e = vals[0];
+  vals.forEach((v, i) => { e = i ? v * k + e * (1 - k) : v; out.push(e); });
+  return out;
+}
+function calcMACD(closes) {
+  const e12 = calcEMA(closes, 12), e26 = calcEMA(closes, 26);
+  const dif = closes.map((_, i) => e12[i] - e26[i]);
+  const dea = calcEMA(dif, 9);
+  const hist = dif.map((d, i) => (d - dea[i]) * 2);
+  return { dif, dea, hist };
+}
+function calcRSI(closes, n = 14) {
+  const out = new Array(closes.length).fill(null); let g = 0, l = 0;
+  for (let i = 1; i < closes.length; i++) {
+    const ch = closes[i] - closes[i - 1], up = Math.max(ch, 0), dn = Math.max(-ch, 0);
+    if (i <= n) { g += up; l += dn; if (i === n) out[i] = 100 - 100 / (1 + (g / n) / ((l / n) || 1e-9)); }
+    else { g = (g * (n - 1) + up) / n; l = (l * (n - 1) + dn) / n; out[i] = 100 - 100 / (1 + g / (l || 1e-9)); }
+  }
+  return out;
+}
+function calcKDJ(bars) {
+  const K = [], D = [], J = []; let pk = 50, pd = 50;
+  bars.forEach((b, i) => {
+    const s = Math.max(0, i - 8); let hh = -Infinity, ll = Infinity;
+    for (let k = s; k <= i; k++) { hh = Math.max(hh, bars[k].h); ll = Math.min(ll, bars[k].l); }
+    const rsv = hh === ll ? 50 : (b.c - ll) / (hh - ll) * 100;
+    const k = pk * 2 / 3 + rsv / 3, d = pd * 2 / 3 + k / 3;
+    K.push(k); D.push(d); J.push(3 * k - 2 * d); pk = k; pd = d;
+  });
+  return { K, D, J };
+}
+function calcBOLL(closes, n = 20, k = 2) {
+  const mid = calcMA(closes, n);
+  const up = new Array(closes.length).fill(null), dn = new Array(closes.length).fill(null);
+  let s = 0, s2 = 0;
+  for (let i = 0; i < closes.length; i++) {
+    s += closes[i]; s2 += closes[i] * closes[i];
+    if (i >= n) { s -= closes[i - n]; s2 -= closes[i - n] * closes[i - n]; }
+    if (i >= n - 1) {
+      const m = s / n;
+      const v = Math.max(0, s2 / n - m * m);
+      const sd = Math.sqrt(v);
+      up[i] = m + k * sd; dn[i] = m - k * sd;
+    }
+  }
+  return { mid, up, dn };
+}
+function calcATR(bars, n = 14) {
+  const out = new Array(bars.length).fill(null);
+  let sum = 0;
+  for (let i = 0; i < bars.length; i++) {
+    const b = bars[i];
+    const tr = i === 0 ? (b.h - b.l)
+      : Math.max(b.h - b.l, Math.abs(b.h - bars[i - 1].c), Math.abs(b.l - bars[i - 1].c));
+    if (i < n) { sum += tr; out[i] = sum / (i + 1); }
+    else out[i] = (out[i - 1] * (n - 1) + tr) / n;
+  }
+  return out;
+}
+function findLevels(bars, price) {
+  const n = bars.length, w = 3, his = [], los = [];
+  for (let i = w; i < n - w; i++) {
+    let isH = true, isL = true;
+    for (let k = i - w; k <= i + w; k++) {
+      if (k === i) continue;
+      if (bars[k].h >= bars[i].h) isH = false;
+      if (bars[k].l <= bars[i].l) isL = false;
+    }
+    if (isH) his.push(bars[i].h);
+    if (isL) los.push(bars[i].l);
+  }
+  const f2 = x => Math.round(x * 100) / 100;
+  const res = [...new Set(his.filter(x => x > price * 1.005).sort((a, b) => a - b))].slice(0, 2).map(f2);
+  const sup = [...new Set(los.filter(x => x < price * 0.995).sort((a, b) => b - a))].slice(0, 2).map(f2);
+  return { support: sup, resistance: res };
+}
+/* ---- 单周期信号引擎（规则投票，每个判断给出理由）---- */
+function analyzeTimeframe(bars, label) {
+  const closes = bars.map(b => b.c);
+  const i = closes.length - 1, price = closes[i];
+  const ma = { 5: calcMA(closes, 5), 10: calcMA(closes, 10), 20: calcMA(closes, 20), 60: calcMA(closes, 60) };
+  const macd = calcMACD(closes), rsi = calcRSI(closes), kdj = calcKDJ(bars);
+  const levels = findLevels(bars, price);
+  const reasons = [];
+  const vote = (dir, w, text) => { if (dir) reasons.push({ dir, w, text }); };
+  const f2 = x => Math.round(x * 100) / 100;
+  const ma20 = ma[20][i], ma60 = ma[60][i];
+  if (ma20 != null) vote(price > ma20 ? 1 : -1, 1, `${label}收盘 ${f2(price)} ${price > ma20 ? '站上' : '跌破'} MA20(${f2(ma20)})`);
+  if (ma20 != null && ma60 != null) vote(ma20 > ma60 ? 1 : -1, 1, `MA20(${f2(ma20)}) 在 MA60(${f2(ma60)}) ${ma20 > ma60 ? '上方，中期趋势向上' : '下方，中期趋势向下'}`);
+  if (ma[5][i] != null && ma[10][i] != null) vote(ma[5][i] > ma[10][i] ? 1 : -1, 1, `MA5(${f2(ma[5][i])}) ${ma[5][i] > ma[10][i] ? '上穿/位于' : '下穿/位于'} MA10(${f2(ma[10][i])})，短期动能${ma[5][i] > ma[10][i] ? '偏强' : '偏弱'}`);
+  const h = macd.hist[i], hp = macd.hist[i - 1];
+  if (h > 0 && h > hp) vote(1, 2, `MACD 红柱扩大（${f2(hp)}→${f2(h)}），多头动能增强`);
+  else if (h > 0) vote(1, 1, `MACD 红柱 ${f2(h)}，多头动能略有减弱`);
+  else if (h < 0 && h < hp) vote(-1, 2, `MACD 绿柱扩大（${f2(hp)}→${f2(h)}），空头动能增强`);
+  else vote(-1, 1, `MACD 绿柱 ${f2(h)}，空头动能有所收敛`);
+  vote(macd.dif[i] > 0 ? 1 : -1, 1, `DIF(${f2(macd.dif[i])}) 位于零轴${macd.dif[i] > 0 ? '上方' : '下方'}`);
+  const r = rsi[i];
+  if (r != null) {
+    if (r < 30) vote(1, 2, `RSI(${f2(r)}) 进入超卖区，存在反弹修复需求`);
+    else if (r > 70) vote(-1, 2, `RSI(${f2(r)}) 进入超买区，短期回撤风险加大`);
+    else if (r > 55) vote(1, 1, `RSI(${f2(r)}) 处于强势区间`);
+    else if (r < 45) vote(-1, 1, `RSI(${f2(r)}) 处于弱势区间`);
+  }
+  const k = kdj.K[i], d = kdj.D[i], j = kdj.J[i];
+  vote(k > d ? 1 : -1, 1, `KDJ ${k > d ? 'K 线在 D 线上方（金叉状态）' : 'K 线在 D 线下方（死叉状态）'}，J=${f2(j)}`);
+  if (j < 15) vote(1, 1, `J 值(${f2(j)})深度超卖，随时可能触发反弹`);
+  else if (j > 95) vote(-1, 1, `J 值(${f2(j)})深度超买，谨防短线冲高回落`);
+  const nearSup = levels.support.find(x => price / x < 1.03);
+  const nearRes = levels.resistance.find(x => x / price < 1.03);
+  if (nearSup) vote(1, 1, `${label}现价贴近支撑位 ${f2(nearSup)}，下方抛压相对较小`);
+  if (nearRes) vote(-1, 1, `${label}现价逼近压力位 ${f2(nearRes)}，突破前上行空间受限`);
+  const raw = reasons.reduce((s, x) => s + x.dir * x.w, 0);
+  const maxW = reasons.reduce((s, x) => s + x.w, 0) || 1;
+  const pct = Math.round(raw / maxW * 100);
+  const signal = pct >= 30 ? 'buy' : pct <= -30 ? 'sell' : 'hold';
+  const summary = reasons.filter(x => x.dir !== 0).slice(0, 3).map(x => x.text).join('；');
+  return { label, price, ma, macd, rsi: r, kdj: { K: k, D: d, J: j }, levels, reasons, raw, pct, signal, summary };
+}
+function combineTechSignal(d, w) {
+  const pct = Math.round(d.pct * 0.6 + w.pct * 0.4);
+  const signal = pct >= 30 ? 'buy' : pct <= -30 ? 'sell' : 'hold';
+  const agree = d.signal === w.signal ? '日线与周线方向一致，信号可信度较高' : '日线与周线方向存在分歧，建议控制仓位、等待共振';
+  return { pct, signal, agree, note: agree };
+}
+function fmtVol(v) {
+  const n = Number(v) || 0;
+  if (n >= 1e8) return (n / 1e8).toFixed(2) + ' 亿手';
+  if (n >= 1e4) return (n / 1e4).toFixed(2) + ' 万手';
+  return Math.round(n) + ' 手';
+}
+/* ---- 蜡烛图绘制（红涨绿跌；主图 + 成交量副图 + 悬停十字光标）---- */
+const KC_UP = '#e03131', KC_DOWN = '#12b76a';
+function drawCandleChart(canvas, bars, count, an, hover) {
+  const wrap = canvas.parentElement;
+  const tip = wrap ? wrap.querySelector('.kchart-tip') : null;
+  const dpr = window.devicePixelRatio || 1;
+  const W = canvas.clientWidth || 800, H = canvas.clientHeight || 340;
+  canvas.width = W * dpr; canvas.height = H * dpr;
+  const ctx = canvas.getContext('2d');
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.clearRect(0, 0, W, H);
+  const data = bars.slice(-count);
+  if (!data.length) { canvas._kc = null; if (tip) tip.hidden = true; return; }
+  const vis = k => (an && an.ma && an.ma[k]) ? an.ma[k].slice(-count) : null;
+  const maLines = [
+    { k: 5, v: vis(5), c: '#f0a020', t: 'MA5' },
+    { k: 10, v: vis(10), c: '#e0559a', t: 'MA10' },
+    { k: 20, v: vis(20), c: '#3b82f6', t: 'MA20' },
+    { k: 60, v: vis(60), c: '#10b981', t: 'MA60' },
+  ];
+  let min = Math.min(...data.map(b => b.l)), max = Math.max(...data.map(b => b.h));
+  maLines.forEach(m => { if (!m.v) return; m.v.forEach(v => { if (v != null) { min = Math.min(min, v); max = Math.max(max, v); } }); });
+  if (!isFinite(min) || !isFinite(max)) { min = 0; max = 1; }
+  if (max - min < 1e-9) { max += 1; min -= 1; }
+  const pad = (max - min) * 0.06; min -= pad; max += pad;
+  const lvTags = [];
+  an.levels.support.forEach((p, i) => { if (p >= min && p <= max) lvTags.push({ p, no: i + 1, kind: 'sup', line: 'rgba(224,48,48,.55)' }); });
+  an.levels.resistance.forEach((p, i) => { if (p >= min && p <= max) lvTags.push({ p, no: i + 1, kind: 'res', line: 'rgba(10,157,78,.55)' }); });
+  const supLs = lvTags.filter(t => t.kind === 'sup'), resLs = lvTags.filter(t => t.kind === 'res');
+  const lgLines = [{ kind: 'ma' }];
+  if (supLs.length) lgLines.push({ kind: 'lv', ls: supLs, color: 'rgba(224,48,48,.95)', label: '支撑' });
+  if (resLs.length) lgLines.push({ kind: 'lv', ls: resLs, color: 'rgba(10,157,78,.95)', label: '压力' });
+  const lgTop = 12, lgGap = 17;
+  const padT = lgTop + lgGap * (lgLines.length - 1) + 12;
+  const padL = 8, padR = 56, axisH = 20;
+  const plotW = Math.max(40, W - padL - padR);
+  const bodyH = Math.max(120, H - padT - axisH - 8);
+  const volH = Math.max(44, Math.round(bodyH * 0.24));
+  const gapH = 12;
+  const priceH = Math.max(60, bodyH - volH - gapH);
+  const priceTop = padT, priceBot = padT + priceH;
+  const volTop = priceBot + gapH, volBot = volTop + volH;
+  const y = p => priceTop + (max - p) / (max - min) * priceH;
+  const maxVol = Math.max(1, ...data.map(b => Number(b.v) || 0));
+  const vh = v => Math.max(1, (Number(v) || 0) / maxVol * volH);
+  const step = plotW / data.length;
+  const xc = i => padL + step * i + step / 2;
+  ctx.font = '11px -apple-system, "PingFang SC", "Microsoft YaHei", sans-serif';
+  ctx.textBaseline = 'middle';
+  for (let g = 0; g <= 4; g++) {
+    const p = max - (max - min) * g / 4, yy = y(p);
+    ctx.strokeStyle = 'rgba(128,128,128,.15)'; ctx.beginPath();
+    ctx.moveTo(padL, yy); ctx.lineTo(padL + plotW, yy); ctx.stroke();
+    ctx.fillStyle = '#8a8f98'; ctx.textAlign = 'left';
+    ctx.fillText(p.toFixed(2), padL + plotW + 6, yy);
+  }
+  ctx.strokeStyle = 'rgba(128,128,128,.22)'; ctx.beginPath();
+  ctx.moveTo(padL, volBot); ctx.lineTo(padL + plotW, volBot); ctx.stroke();
+  ctx.fillStyle = '#9aa0a8'; ctx.textAlign = 'left';
+  ctx.fillText('成交量', padL + 2, volTop - 7);
+  ctx.fillText(fmtVol(maxVol), padL + plotW + 6, volTop + 4);
+  ctx.setLineDash([5, 4]);
+  lvTags.forEach(t => {
+    ctx.strokeStyle = t.line; ctx.beginPath();
+    ctx.moveTo(padL, y(t.p)); ctx.lineTo(padL + plotW, y(t.p)); ctx.stroke();
+  });
+  ctx.setLineDash([]);
+  data.forEach((b, i) => {
+    const x = xc(i);
+    const up = b.c >= b.o, col = up ? KC_UP : KC_DOWN;
+    ctx.strokeStyle = col; ctx.fillStyle = col;
+    ctx.beginPath(); ctx.moveTo(x, y(b.h)); ctx.lineTo(x, y(b.l)); ctx.stroke();
+    const bw = Math.max(1.5, step * 0.62);
+    const yo = y(b.o), yc = y(b.c);
+    if (up) ctx.fillRect(x - bw / 2, yc, bw, Math.max(1, yo - yc));
+    else ctx.fillRect(x - bw / 2, yo, bw, Math.max(1, yc - yo));
+  });
+  data.forEach((b, i) => {
+    const x = xc(i);
+    const up = b.c >= b.o, col = up ? KC_UP : KC_DOWN;
+    const h2 = vh(b.v);
+    const bw = Math.max(1.5, step * 0.62);
+    ctx.fillStyle = col; ctx.globalAlpha = 0.72;
+    ctx.fillRect(x - bw / 2, volBot - h2, bw, h2);
+    ctx.globalAlpha = 1;
+  });
+  maLines.forEach(m => {
+    if (!m.v) return;
+    ctx.strokeStyle = m.c; ctx.lineWidth = 1.2; ctx.beginPath();
+    let started = false;
+    m.v.forEach((v, i) => {
+      if (v == null) return;
+      const x = xc(i);
+      if (!started) { ctx.moveTo(x, y(v)); started = true; } else ctx.lineTo(x, y(v));
+    });
+    ctx.stroke(); ctx.lineWidth = 1;
+  });
+  ctx.fillStyle = '#8a8f98'; ctx.textAlign = 'center';
+  const tickN = Math.min(7, data.length);
+  for (let g = 0; g < tickN; g++) {
+    const idx = Math.floor(g * (data.length - 1) / Math.max(1, tickN - 1));
+    ctx.fillText(data[idx].d.slice(5), xc(idx), volBot + 12);
+  }
+  ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+  lgLines.forEach((ln, i) => {
+    const ly = lgTop + lgGap * i;
+    if (ln.kind === 'ma') {
+      let lx = padL + 2;
+      maLines.forEach(m => { ctx.fillStyle = m.c; ctx.fillText(m.t, lx, ly); lx += 44; });
+      return;
+    }
+    const items = ln.ls.map(t => ln.label + t.no + ': ' + t.p.toFixed(2));
+    let txt = items.join('　');
+    if (ctx.measureText(txt).width > plotW - 6 && items.length > 1) txt = items[0] + ' 等' + items.length + '档';
+    ctx.fillStyle = ln.color;
+    ctx.fillText(txt, padL + 2, ly);
+  });
+  const hoverIdx = (hover && hover.idx != null && hover.idx >= 0 && hover.idx < data.length) ? hover.idx : null;
+  if (hoverIdx != null) {
+    const hx = xc(hoverIdx), b = data[hoverIdx];
+    ctx.strokeStyle = 'rgba(90,100,115,.55)'; ctx.lineWidth = 1;
+    ctx.setLineDash([4, 3]);
+    ctx.beginPath(); ctx.moveTo(hx, priceTop); ctx.lineTo(hx, volBot); ctx.stroke();
+    const cy = y(b.c);
+    ctx.setLineDash([]);
+    ctx.fillStyle = '#5a6473';
+    const lab = b.c.toFixed(2);
+    ctx.fillRect(padL + plotW + 2, cy - 8, Math.max(52, ctx.measureText(lab).width + 10), 16);
+    ctx.fillStyle = '#fff'; ctx.textAlign = 'left'; ctx.textBaseline = 'middle';
+    ctx.fillText(lab, padL + plotW + 6, cy + 0.5);
+    if (hover.y != null && hover.y >= priceTop && hover.y <= priceBot) {
+      ctx.strokeStyle = 'rgba(90,100,115,.35)';
+      ctx.beginPath(); ctx.moveTo(padL, hover.y); ctx.lineTo(padL + plotW, hover.y); ctx.stroke();
+      const pv = max - (hover.y - priceTop) / priceH * (max - min);
+      const t2 = pv.toFixed(2);
+      ctx.fillStyle = 'rgba(90,100,115,.9)';
+      ctx.fillRect(padL + plotW + 2, hover.y - 8, Math.max(52, ctx.measureText(t2).width + 10), 16);
+      ctx.fillStyle = '#fff'; ctx.fillText(t2, padL + plotW + 6, hover.y + 0.5);
+    }
+    ctx.strokeStyle = 'rgba(37,99,235,.9)'; ctx.lineWidth = 1.2;
+    ctx.strokeRect(hx - step * 0.45, priceTop, Math.max(2, step * 0.9), priceH);
+    ctx.lineWidth = 1;
+  }
+  canvas._kc = { padL, step, n: data.length, data, priceTop, priceBot, volTop, volBot, W, H };
+  if (tip) {
+    if (hoverIdx == null) { tip.hidden = true; }
+    else {
+      const i = hoverIdx, b = data[i], iOff = bars.length - data.length;
+      const prev = (iOff + i - 1 >= 0) ? bars[iOff + i - 1] : null;
+      const pctChg = prev && prev.c ? (b.c - prev.c) / prev.c * 100 : null;
+      const cls = b.c >= b.o ? 'up' : 'down';
+      const chgCls = pctChg == null ? '' : (pctChg >= 0 ? 'up' : 'down');
+      const amp = b.o ? (b.h - b.l) / b.o * 100 : 0;
+      const r2 = n => (n == null ? '—' : Number(n).toFixed(2));
+      tip.innerHTML =
+        `<div class="kt-head">${esc(b.d)}${pctChg == null ? '' : `<span class="kt-chg ${chgCls}">${pctChg >= 0 ? '+' : ''}${pctChg.toFixed(2)}%</span>`}</div>`
+        + `<div class="kt-grid">`
+        + `<span>开</span><b>${r2(b.o)}</b><span>高</span><b>${r2(b.h)}</b>`
+        + `<span>低</span><b>${r2(b.l)}</b><span>收</span><b class="${cls}">${r2(b.c)}</b>`
+        + `<span>量</span><b>${fmtVol(b.v)}</b><span>振幅</span><b>${amp.toFixed(2)}%</b>`
+        + `</div>`
+        + `<div class="kt-ma">`
+        + maLines.map(m => `<span style="color:${m.c}">${m.t}</span><b>${m.v && m.v[i] != null ? Number(m.v[i]).toFixed(2) : '—'}</b>`).join('')
+        + `</div>`;
+      tip.hidden = false;
+      const tw = tip.offsetWidth || 242, th = tip.offsetHeight || 104;
+      const axisX = padL + plotW;
+      const cx = xc(i);
+      let left = cx + 16;
+      if (left + tw > axisX - 4) left = cx - 16 - tw;
+      if (left + tw > axisX - 4) left = axisX - 4 - tw;
+      if (left < 2) left = 2;
+      let top = (hover && hover.y != null ? hover.y : priceTop) - th / 2;
+      top = Math.max(2, Math.min(H - th - 2, top));
+      tip.style.left = left + 'px';
+      tip.style.top = top + 'px';
+    }
+  }
+}
+function bindKchartHover(canvas, bars, count, an) {
+  if (!canvas) return;
+  let raf = 0, pending = null;
+  const flush = () => {
+    raf = 0;
+    if (!pending) return;
+    drawCandleChart(canvas, bars, count, an, pending);
+    pending = null;
+  };
+  const onMove = (clientX, clientY) => {
+    const st = canvas._kc;
+    if (!st) return;
+    const r = canvas.getBoundingClientRect();
+    const x = clientX - r.left, y = clientY - r.top;
+    let idx = Math.floor((x - st.padL) / st.step);
+    idx = Math.max(0, Math.min(st.n - 1, idx));
+    pending = { idx, y };
+    if (!raf) raf = requestAnimationFrame(flush);
+  };
+  canvas.onpointermove = e => onMove(e.clientX, e.clientY);
+  canvas.onpointerdown = e => onMove(e.clientX, e.clientY);
+  canvas.onpointerleave = () => {
+    if (raf) { cancelAnimationFrame(raf); raf = 0; }
+    pending = null;
+    drawCandleChart(canvas, bars, count, an, null);
+  };
+}
+function redrawAnalysisCanvases() {
+  const g = S.diag;
+  if (g) {
+    const gd = $('diagDailyCv'), gw = $('diagWeeklyCv');
+    if (gd && gd.clientWidth) drawCandleChart(gd, g.daily.bars, 120, g.d);
+    if (gw && gw.clientWidth) drawCandleChart(gw, g.weekly.bars, 60, g.w);
+  }
+}
+let _techResizeTimer = 0;
+function bindTechResize() {
+  if (window._techResizeBound) return;
+  window._techResizeBound = true;
+  window.addEventListener('resize', () => {
+    clearTimeout(_techResizeTimer);
+    _techResizeTimer = setTimeout(redrawAnalysisCanvases, 180);
+  });
+}
+/* ---- 股票下拉（自选 + 持仓，按代码去重）---- */
+function renderAnalysisSelect() {
+  const sel = $('stockSelect');
+  if (!sel) return;
+  const cur = sel.value;
+  const mk = new Map();
+  computeHoldings().forEach(h => { if (h.qty > 0 && h.code) mk.set(h.code, h.name || h.code); });
+  S.watchlist.forEach(w => { if (w.stock_code && !mk.has(w.stock_code)) mk.set(w.stock_code, w.stock_name || w.stock_code); });
+  sel.innerHTML = [...mk.entries()].map(([c, n]) => `<option value="${esc(c)}">${esc(n)}（${esc(c)}）</option>`).join('')
+    || '<option value="">请先添加自选或持仓</option>';
+  if (cur && mk.has(cur)) sel.value = cur;
+}
+/* ---- 一键个股诊断 ---- */
+async function diagnoseStock(forceCode) {
+  const sel = $('stockSelect');
+  const code = (typeof forceCode === 'string' ? forceCode : sel.value).trim();
+  if (!code) return toast('请先在自选股或持仓中添加股票');
+  const btn = $('stockAnalyzeBtn');
+  const box = $('diagBox');
+  if (!box) return;
+  btn.disabled = true; btn.textContent = '诊断中…';
+  box.hidden = false;
+  box.innerHTML = '<p class="hint">正在获取 K 线与行情、计算技术指标…</p>';
+  try {
+    const [daily, weekly] = await Promise.all([fetchKline(code, 101, 260), fetchKline(code, 102, 180)]);
+    if (!daily.bars.length || !weekly.bars.length) throw new Error('K 线数据不足，无法诊断');
+    const d = analyzeTimeframe(daily.bars, '日线');
+    const w = analyzeTimeframe(weekly.bars, '周线');
+    const comb = combineTechSignal(d, w);
+    try { await NetQuote.refresh(); } catch (e) { /* 行情失败不阻断技术面 */ }
+    const q = NetQuote.get(code);
+    const h = computeHoldings().find(x => x.code === code) || null;
+    const pos = h && h.qty > 0 ? { qty: h.qty, avgCost: h.costValue / h.qty } : null;
+    const name = (daily.name && daily.name !== code && /[\u4e00-\u9fa5]/.test(daily.name) ? daily.name : null)
+      || (h && h.name) || (q && q.name) || code;
+    S.diag = { code, name, daily, weekly, d, w, comb, q, pos, ai: '', busy: false };
+    renderDiagView();
+    box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) {
+    S.diag = null;
+    box.innerHTML = '<p class="hint">' + esc(e && e.message || '诊断失败，请重试') + '</p>';
+  } finally {
+    btn.disabled = false; btn.textContent = '开始诊断';
+  }
+}
+window.analyzeStockByCode = async function (code) {
+  switchView('analysis');
+  renderAnalysisSelect();
+  const sel = $('stockSelect');
+  if (sel) sel.value = code;
+  await diagnoseStock(code);
+};
+function renderDiagView() {
+  const t = S.diag;
+  const box = $('diagBox');
+  if (!t || !box) return;
+  box.hidden = false;
+  box.innerHTML = diagHtml();
+  const cvD = $('diagDailyCv'), cvW = $('diagWeeklyCv');
+  drawCandleChart(cvD, t.daily.bars, 120, t.d);
+  drawCandleChart(cvW, t.weekly.bars, 60, t.w);
+  bindKchartHover(cvD, t.daily.bars, 120, t.d);
+  bindKchartHover(cvW, t.weekly.bars, 60, t.w);
+  bindTechResize();
+  $('diagCloseBtn').onclick = closeDiag;
+  $('diagSaveBtn').onclick = saveDiagReport;
+  $('diagAiBtn').onclick = () => runDiagAi();
+  syncDiagAiBtn();
+}
+function syncDiagAiBtn() {
+  const btn = $('diagAiBtn');
+  const t = S.diag;
+  if (!btn) return;
+  btn.disabled = !!(t && t.busy);
+  btn.textContent = t && t.busy ? '生成中…' : (t && t.ai ? '↻ 重新生成解读' : '🤖 生成 AI 综合解读');
+}
+function closeDiag() {
+  const t = S.diag;
+  const box = $('diagBox');
+  if (!box || !t) return;
+  const sig = t.comb.signal === 'buy' ? '买入' : t.comb.signal === 'sell' ? '卖出' : '持有';
+  box.innerHTML = `
+    <div class="diag-folded">
+      <span class="diag-folded-txt">🩺 个股诊断：<b>${esc(t.name)}（${esc(t.code)}）</b> · 技术面 ${sig}（${t.comb.pct > 0 ? '+' : ''}${t.comb.pct}）${t.ai ? '' : ' · 尚未生成 AI 解读'}</span>
+      <span class="diag-folded-act">
+        <button id="diagReopenBtn" class="btn ghost sm">展开</button>
+        <button id="diagDropBtn" class="btn ghost sm">关闭</button>
+      </span>
+    </div>`;
+  $('diagReopenBtn').onclick = reopenDiag;
+  $('diagDropBtn').onclick = dropDiag;
+}
+function reopenDiag() {
+  if (!S.diag) return toast('请先开始诊断');
+  renderDiagView();
+  const box = $('diagBox');
+  if (box) box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+function dropDiag() {
+  const box = $('diagBox');
+  if (box) { box.hidden = true; box.innerHTML = ''; }
+  S.diag = null;
+}
+function diagHtml() {
+  const t = S.diag;
+  if (!t) return '';
+  const { name, code, d, w, comb, q, pos } = t;
+  const qLine = q && q.price != null
+    ? `实时行情 最新 ${q.price}，涨跌幅 ${q.pct > 0 ? '+' : ''}${q.pct}%`
+    : '实时行情获取失败（技术面仍基于历史 K 线）';
+  const posLine = pos
+    ? `你的持仓 ${fmt2(pos.qty)} 股，成本 ${fmt2(pos.avgCost)}`
+    : '你当前未持仓这只股票';
+  const reasonLi = (r) => `<li class="${r.dir > 0 ? 'r-bull' : 'r-bear'}">${r.dir > 0 ? '▲ 看多' : '▼ 看空'}（+${r.w}）：${esc(r.text)}</li>`;
+  return `
+    <div class="card-title-row">
+      <span class="card-title">🩺 个股诊断：${esc(name)}（${esc(code)}）</span>
+      <button id="diagCloseBtn" class="btn ghost sm">收起</button>
+    </div>
+    <div class="tech-signal">
+      <div class="sig-badge sig-${comb.signal}">${comb.signal === 'buy' ? '买入' : comb.signal === 'sell' ? '卖出' : '持有'}</div>
+      <div class="sig-score">
+        <div><b>${esc(name)}（${esc(code)}）</b>　${esc(qLine)}</div>
+        <div>技术面综合强度 <b>${comb.pct > 0 ? '+' : ''}${comb.pct}</b>（日线 ${d.pct > 0 ? '+' : ''}${d.pct} × 60% ＋ 周线 ${w.pct > 0 ? '+' : ''}${w.pct} × 40%）</div>
+        <div>${esc(posLine)}</div>
+        <div>${esc(comb.note)}</div>
+      </div>
+    </div>
+    <div class="tech-charts">
+      <div class="tech-chart-block">
+        <h4>日线 K 线（近 120 日）<span class="kc-hint">鼠标移到图上查看当日价格与成交量</span></h4>
+        <div class="kchart-wrap"><canvas id="diagDailyCv"></canvas><div class="kchart-tip" hidden></div></div>
+      </div>
+      <div class="tech-chart-block">
+        <h4>周线 K 线（近 60 周）<span class="kc-hint">鼠标移到图上查看当周价格与成交量</span></h4>
+        <div class="kchart-wrap"><canvas id="diagWeeklyCv"></canvas><div class="kchart-tip" hidden></div></div>
+      </div>
+    </div>
+    <div class="levels-legend">关键价位：<b>支撑</b> ${d.levels.support.length ? d.levels.support.join(' / ') : '近 3 年低点下方'} ／ <b>压力</b> ${d.levels.resistance.length ? d.levels.resistance.join(' / ') : '近 3 年高点上方'}　<span class="lv-note">（K 线图左上角图例只标出落在当前可见区间内的档位，档号与这里一一对应）</span></div>
+    <div class="tech-cols">
+      <div class="tech-reason"><h4>📉 日线信号明细（强度 ${d.pct > 0 ? '+' : ''}${d.pct}）</h4><ul>${d.reasons.map(reasonLi).join('')}</ul></div>
+      <div class="tech-reason"><h4>📊 周线信号明细（强度 ${w.pct > 0 ? '+' : ''}${w.pct}）</h4><ul>${w.reasons.map(reasonLi).join('')}</ul></div>
+    </div>
+    <div class="diag-ai">
+      <div class="diag-ai-title">🤖 综合诊断 <span class="diag-ai-sub">技术面 ＋ 基本面 ＋ 你的持仓与交易行为，只给一个结论</span></div>
+      <div id="diagAiOut" class="diag-ai-out">${t.ai ? esc(t.ai) : (t.busy ? '生成中…' : '<span class="diag-ai-idle">技术面已经出好了。点下面的按钮，再结合基本面、消息面与你的持仓 / 交易行为，生成一段可执行的操作建议。</span>')}</div>
+      <div class="diag-ai-actions">
+        <button id="diagAiBtn" class="btn primary">${t.ai ? '↻ 重新生成解读' : '🤖 生成 AI 综合解读'}</button>
+        <button id="diagSaveBtn" class="btn ghost">💾 保存到报告历史</button>
+      </div>
+    </div>`;
+}
+async function runDiagAi() {
+  const t = S.diag;
+  if (!t) return;
+  if (t.busy) return;
+  const paint = (txt) => {
+    if (S.diag !== t) return;
+    const el = $('diagAiOut');
+    if (el) el.textContent = txt;
+  };
+  t.busy = true;
+  syncDiagAiBtn();
+  paint('生成中…');
+  const { d, w, comb, name, code, q, pos } = t;
+  const last = (a) => (a && a.length ? Math.round(a[a.length - 1] * 100) / 100 : '-');
+  const anDesc = (an) => `${an.label}：现价 ${an.price}，RSI=${an.rsi == null ? '-' : Math.round(an.rsi)}，KDJ K=${Math.round((an.kdj && an.kdj.K) || 0)}/D=${Math.round((an.kdj && an.kdj.D) || 0)}/J=${Math.round((an.kdj && an.kdj.J) || 0)}，MACD DIF=${last(an.macd && an.macd.dif)}/DEA=${last(an.macd && an.macd.dea)}，强度 ${an.pct}；信号要点：${an.reasons.map(r => (r.dir > 0 ? '看多' : '看空') + r.text).join('；')}`;
+  const myTrades = S.trades.filter(x => x.stock_code === code).slice(0, 10)
+    .map(x => `${String(x.transaction_time || '').slice(0, 16)} ${x.transaction_type === 'buy' ? '买入' : '卖出'} ${x.quantity}股 @${x.price}`);
+  const sys = `你是资深证券分析师。用户已经在界面上看到了技术指标与 K 线图，你不需要复述原始数值。
+请输出一份结构清晰的「个股诊断」，纯文本 Markdown，全文 600 字以内，严格分四节：
+一、技术面小结（用一句话概括日线＋周线的位置关系，并说明关键支撑/压力对操作的实际意义）
+二、基本面与消息面视角（基于你的知识，注明信息可能滞后）
+三、结合该用户持仓与交易行为的个性化提醒
+四、操作建议（给出可执行的分步动作：什么价位做什么、止损位、加减仓条件）
+最后单独一行写：以上分析由 AI 生成，仅供参考，不构成投资建议。`;
+  const user = `股票：${name}（${code}）
+实时行情：${q && q.price != null ? `最新价 ${q.price}，涨跌幅 ${q.pct}%` : '（获取失败，请基于你的知识分析并说明数据可能滞后）'}
+技术面规则信号：${comb.signal === 'buy' ? '买入' : comb.signal === 'sell' ? '卖出' : '持有'}（综合强度 ${comb.pct}）｜${comb.note}
+关键价位：支撑 ${d.levels.support.join(' / ') || '近 3 年低点下方'}；压力 ${d.levels.resistance.join(' / ') || '近 3 年高点上方'}
+${anDesc(d)}
+${anDesc(w)}
+用户持仓：${pos ? `${fmt2(pos.qty)} 股，成本价 ${fmt2(pos.avgCost)}` : '未持仓'}
+用户近期交易：
+${myTrades.join('\n') || '无记录'}`;
+  try {
+    let text = '';
+    const ret = await llmComplete([
+      { role: 'system', content: sys },
+      { role: 'user', content: user },
+    ], {
+      onDelta: (delta) => { text += delta; paint(text); },
+    });
+    t.ai = (typeof ret === 'string' && ret) ? ret : text;
+    paint(t.ai || '（无输出）');
+  } catch (e) {
+    paint('综合诊断生成失败：' + (e && e.message || '请稍后重试'));
+  } finally {
+    t.busy = false;
+    syncDiagAiBtn();
+  }
+}
+/* ---- 报告历史（localStorage，本机保存最近 30 条）---- */
+const DIAG_HIST_KEY = 'sj_diag_reports_v1';
+function loadDiagHistory() { try { return JSON.parse(localStorage.getItem(DIAG_HIST_KEY) || '[]'); } catch (e) { return []; } }
+function saveDiagHistoryItem(item) {
+  const list = loadDiagHistory();
+  list.unshift(item);
+  try { localStorage.setItem(DIAG_HIST_KEY, JSON.stringify(list.slice(0, 30))); } catch (e) { /* */ }
+  renderDiagHistory();
+}
+function renderDiagHistory() {
+  const el = $('diagHistory');
+  if (!el) return;
+  const list = loadDiagHistory();
+  if (!list.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="card-title-row" style="margin-top:4px"><span class="card-title" style="font-size:13px">诊断报告历史（本机保存）</span>'
+    + '<button class="btn ghost sm" id="diagHistClear" type="button">清空</button></div>'
+    + list.map((r, i) => `<div class="mini-item diag-hist-item" data-i="${i}"><div><b>${esc(r.title)}</b><span class="hint">${esc(r.time)}</span></div><span class="pct ${r.sig === '买入' ? 'pos' : r.sig === '卖出' ? 'neg' : 'neu'}">${esc(r.sig)} ${r.pct > 0 ? '+' : ''}${r.pct}</span></div>`).join('');
+  $('diagHistClear').onclick = () => { localStorage.removeItem(DIAG_HIST_KEY); renderDiagHistory(); toast('报告历史已清空'); };
+  el.querySelectorAll('.diag-hist-item').forEach(item => {
+    item.onclick = () => {
+      const r = loadDiagHistory()[+item.dataset.i];
+      if (!r) return;
+      const box = $('diagBox');
+      box.hidden = false;
+      box.innerHTML = `<div class="card-title-row"><span class="card-title">${esc(r.title)}</span><button class="btn ghost sm" onclick="document.getElementById('diagBox').hidden=true">关闭</button></div><div class="diag-ai-out" style="margin-top:10px">${esc(r.content)}</div>`;
+      box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    };
+  });
+}
+async function saveDiagReport() {
+  const t = S.diag;
+  if (!t) return;
+  const sig = t.comb.signal === 'buy' ? '买入' : t.comb.signal === 'sell' ? '卖出' : '持有';
+  const content = [
+    `综合信号：${sig}（技术面强度 ${t.comb.pct}）`,
+    t.comb.note,
+    `关键价位：支撑 ${t.d.levels.support.join(' / ') || '近 3 年低点下方'}；压力 ${t.d.levels.resistance.join(' / ') || '近 3 年高点上方'}`,
+    '',
+    `【日线信号（${t.d.pct > 0 ? '+' : ''}${t.d.pct}）】`,
+    ...t.d.reasons.map(r => (r.dir > 0 ? '▲ ' : '▼ ') + r.text),
+    '',
+    `【周线信号（${t.w.pct > 0 ? '+' : ''}${t.w.pct}）】`,
+    ...t.w.reasons.map(r => (r.dir > 0 ? '▲ ' : '▼ ') + r.text),
+    t.ai ? '\n【综合诊断】\n' + t.ai : '',
+  ].join('\n');
+  saveDiagHistoryItem({
+    title: `个股诊断：${t.name}（${t.code}）`,
+    time: new Date().toLocaleString('zh-CN', { hour12: false }),
+    sig, pct: t.comb.pct, content,
+  });
+  toast(t.ai ? '诊断已保存到报告历史' : '已保存技术面结论（AI 解读还没生成）');
+}
+/* ---- 模块初始化（DOM 就绪后直接绑定；boot() 在本文件末尾执行）---- */
+(function initAnalysis() {
+  $('stockAnalyzeBtn').onclick = () => diagnoseStock();
+  renderDiagHistory();
+})();
 
 boot();
