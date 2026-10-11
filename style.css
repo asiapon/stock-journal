@@ -657,6 +657,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   .fchip { height: 30px; }
 }
 
+/* ---------- v3.3.10 编辑交易仅可改备注：锁定字段置灰 ---------- */
+.lock-dim { opacity: .55; pointer-events: none; background: #F3F5F7; }
+#tfEditHint { margin-bottom: 6px; }
+
 /* ---------- v2.6.4 解析确认行按钮成对并排 ---------- */
 .p-btns { display: flex; gap: 6px; margin-left: auto; flex-shrink: 0; }
 

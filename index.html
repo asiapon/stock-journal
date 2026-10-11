@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=3.3.9">
+<link rel="stylesheet" href="style.css?v=3.3.10">
 </head>
 <body>
 
@@ -472,6 +472,7 @@
           <input type="datetime-local" id="tfTime" required>
         </div>
         <div class="span2">
+          <div class="quick-hint" id="tfEditHint" hidden>编辑模式：仅可修改备注 / 交易理由，买卖方向、股票、价格、数量、时间不可更改。</div>
           <input type="text" id="tfNote" placeholder="备注 / 交易理由（选填）">
         </div>
         <div class="fee-preview span2" id="feePreview"></div>
@@ -501,6 +502,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.3.9"></script>
+<script src="app.js?v=3.3.10"></script>
 </body>
 </html>

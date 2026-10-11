@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.3.9';
+const APP_VER = '3.3.10';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1218,12 +1218,29 @@ function fillTradeForm(t) {
   $('tfTime').value = `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`;
   $('tfNote').value = t.note || '';
   $('tfSubmit').textContent = '保存修改';
+  /* 编辑模式锁定：只允许改备注/理由，买卖方向、股票、价格、数量、时间不可改 */
+  ['tfPrice', 'tfQty', 'tfTime', 'tfStock'].forEach(id => { const el = $(id); if (el) el.readOnly = true; });
+  $('tfType').disabled = true;
+  document.querySelectorAll('#tfTypeTabs .wtab').forEach(x => x.disabled = true);
+  document.querySelectorAll('#tradeForm input, #tradeForm select').forEach(el => el.classList.add('lock-dim'));
+  $('tfNote').classList.remove('lock-dim');
+  const hint = $('tfEditHint');
+  if (hint) hint.hidden = false;
   setManualOpen(true);
   updateFeePreview();
   openRecModal(false);
 }
+function unlockTradeForm() {
+  ['tfPrice', 'tfQty', 'tfTime', 'tfStock'].forEach(id => { const el = $(id); if (el) el.readOnly = false; });
+  const sel = $('tfType'); if (sel) sel.disabled = false;
+  document.querySelectorAll('#tfTypeTabs .wtab').forEach(x => x.disabled = false);
+  document.querySelectorAll('#tradeForm .lock-dim').forEach(el => el.classList.remove('lock-dim'));
+  const hint = $('tfEditHint');
+  if (hint) hint.hidden = true;
+}
 function resetTradeForm() {
   S.editingTradeId = null;
+  unlockTradeForm();
   $('tradeForm').reset();
   setTfStock('', '');
   $('tfTime').value = nowLocalInput();
@@ -1607,7 +1624,7 @@ function bindEvents() {
   }
   $('openFormBtn').addEventListener('click', () => { switchView('trades'); openRecModal(); });
   /* 记一笔弹窗：开关与关闭 */
-  $('recModalBtn').addEventListener('click', () => openRecModal());
+  $('recModalBtn').addEventListener('click', () => { resetTradeForm(); openRecModal(); });
   $('recModalClose').addEventListener('click', closeRecModal);
   $('recModal').addEventListener('mousedown', e => { if (e.target === $('recModal')) closeRecModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('recModal').hidden) closeRecModal(); });
