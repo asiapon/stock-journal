@@ -733,6 +733,10 @@ tr.stockagg:hover td { background: #F5F8FC; }
   .tbl .sc-name { font-size: 12.5px; }
   .tbl .sc-code { font-size: 10.5px; }
   .tbl th, .tbl td { padding: 8px 6px; }
+  /* v3.8.17 手机端持仓：名称/代码/市值三行 */
+  #holdTableM .stock-cell { max-width: 120px; }
+  #holdTableM .sc-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #holdTableM .sc-mv { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
 }
 
 /* ---------- v2.7.4 添加/编辑自选合一 ---------- */
