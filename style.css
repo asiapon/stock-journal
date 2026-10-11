@@ -22,6 +22,12 @@
   --radius-sm: 8px;
   --shadow: 0 1px 3px rgba(23, 30, 38, .06), 0 1px 2px rgba(23, 30, 38, .04);
   --nav-h: 56px;
+  /* v3.8.3 兼容 tm 迁移规则的变量别名（修复蓝色按钮隐形等问题） */
+  --accent: #3468D6;         /* = --blue */
+  --accent-light: #EDF2FC;   /* = --blue-bg */
+  --text: #2A2F36;           /* = --ink */
+  --muted: #98A1AC;          /* = --ink-3 */
+  --border: #D8DDE3;         /* = --line-strong */
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -946,19 +952,15 @@ select { padding-right: 6px; }
 
 .auth-form .btn.block { height: 44px; }
 
-.btn { border: 0; border-radius: 10px; padding: 10px 18px; font-size: 14px; transition: opacity .15s; }
-
-.btn:hover { opacity: .88; }
+/* v3.8.3：删除 tm 迁移时带入的 .btn/.btn.primary/.btn.ghost/.btn.sm/.btn.block 重定义，
+   其覆盖了 sj 通用按钮样式且引用未定义变量导致蓝色按钮透明隐形。
+   仅保留 tm 新增按钮类型： */
 
 .btn:disabled { opacity: .5; cursor: not-allowed; }
 
-.btn.primary { background: var(--accent); color: #fff; }
+.btn.danger-solid { background: var(--up); color: #fff; }
 
-.btn.ghost { background: var(--bg); color: var(--text); border: 1px solid var(--border); }
-
-.btn.sm { padding: 6px 12px; font-size: 13px; }
-
-.btn.block { width: 100%; }
+.btn.danger-solid:hover { opacity: .9; }
 
 .btn.danger { background: #fef2f2; color: var(--up); }
 
