@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.20';
+const APP_VER = '3.8.21';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -996,7 +996,7 @@ function renderToday() {
   }).join('') : '<div class="empty">暂无自选，去「自选」页添加</div>';
 
   // 近期操作
-  const rt = S.trades.slice(0, 5);
+  const rt = S.trades.filter(t => t.source !== 'init').slice(0, 5);
   $('recentTrades').innerHTML = rt.length ? rt.map(t => {
     const amt = t.gross_amount;
     return `<div class="mini-item">
@@ -1023,6 +1023,7 @@ function renderHoldings() {
   const todayStr = nowLocalInput().slice(0, 10);
   const todayByCode = new Map();
   for (const t of S.trades) {
+    if (t.source === 'init') continue; /* 初始化持仓不进当日交易 */
     if (t.transaction_time.slice(0, 10) !== todayStr) continue;
     if (!todayByCode.has(t.stock_code)) todayByCode.set(t.stock_code, []);
     todayByCode.get(t.stock_code).push(t);
@@ -1145,8 +1146,8 @@ function showHoldDetail(code) {
     <div class="sum-card"><div class="s-label">累计已实现</div><div class="s-value ${pnlCls(h.realized)}">${h.realized >= 0 ? '+' : ''}${fmt2(h.realized)}</div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(price != null ? h.qty * (price - costPrice) : 0)}">${price != null && h.qty ? (h.qty * (price - costPrice) >= 0 ? '+' : '') + fmt2(h.qty * (price - costPrice)) : '—'}</div></div>
     <div class="sum-card"><div class="s-label">现价</div><div class="s-value">${price != null ? fmt2(price) : '未获取'}</div></div>`;
-  const sorted = [...h.timeline].sort((a, b) => new Date(b.t.transaction_time) - new Date(a.t.transaction_time));
-  $('holdTimeline').innerHTML = sorted.map(ev => {
+  const sorted = [...h.timeline].filter(ev => ev.t.source !== 'init').sort((a, b) => new Date(b.t.transaction_time) - new Date(a.t.transaction_time));
+  $('holdTimeline').innerHTML = sorted.length ? sorted.map(ev => {
     const t = ev.t;
     return `<div class="tl-item">
       <div class="tl-time">${fmtTime(t.transaction_time, true)}</div>
@@ -1161,7 +1162,7 @@ function showHoldDetail(code) {
         </div>
       </div>
     </div>`;
-  }).join('');
+  }).join('') : '<div class="empty" style="padding:14px">初始化持仓，暂无买卖记录</div>';
   $('holdDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
@@ -1218,6 +1219,7 @@ function tradeRowFiltered() {
   const from = $('ftFrom').value, to = $('ftTo').value;
   const allKw = $('ftKw').value.trim().toLowerCase();   // 全字段搜索：代码/名称/备注/原始语句/金额数量
   return S.trades.filter(t => {
+    if (t.source === 'init') return false; /* 初始化持仓不进交易流水 */
     const d = t.transaction_time.slice(0, 10);
     if (from && d < from) return false;
     if (to && d > to) return false;
