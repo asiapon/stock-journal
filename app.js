@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.1.4';
+const APP_VER = '3.1.5';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1057,16 +1057,18 @@ function renderHoldings() {
     </tr>`;
   }).join('');
 
-  /* 手机端合并列表格：市值 / 盈亏 / 持仓可用 / 成本现价 / 当日盈亏 / 明细 */
+  /* 手机端合并列表格：市值 / 盈亏 / 持仓可用 / 成本现价 / 当日盈亏 / 仓位 / 明细 */
   $('holdTableM').querySelector('tbody').innerHTML = rows.map(r => {
     const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
     const sgn = v => (v >= 0 ? '+' : '');
     return `<tr data-code="${esc(h.code)}">
-      <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${mv != null ? '¥' + fmt2(mv) : NA}</span></div></td>
+      <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}</span><span class="sc-code">${mv != null ? fmt2(mv) : NA}</span></div></td>
+      <td><div class="stock-cell"><span class="sc-code">${esc(h.code)}</span></div></td>
       <td class="num"><div class="two-line"><b class="${float != null ? pnlCls(float) : ''}">${float != null ? sgn(float) + fmt2(float) : NA}</b><span class="sub ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : ''}</span></div></td>
       <td class="num"><div class="two-line"><span title="可用 = 持仓 − 当日买入（T+1）">${h.qty}</span><span class="sub">可用 ${avail}</span></div></td>
       <td class="num"><div class="two-line"><span>${fmtP(costPrice)}</span><span class="sub">${price != null ? fmt2(price) : '未获取'}</span></div></td>
       <td class="num"><div class="two-line"><b class="${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? sgn(dayPnl) + fmt2(dayPnl) : NA}</b><span class="sub ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : ''}</span></div></td>
+      <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : NA}</td>
       <td><button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button></td>
     </tr>`;
   }).join('');
