@@ -658,3 +658,6 @@ select { padding-right: 6px; }
 @media (max-width: 639px) {
   #tradeForm .tf-stock-label { grid-column: span 2; }
 }
+
+/* ---------- v2.9.0 修复：sug-anchor 缺少定位导致弹窗内候选框不可见 ---------- */
+.sug-anchor { position: relative; }
