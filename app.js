@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.9.6';
+const APP_VER = '2.9.7';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -749,7 +749,7 @@ function renderPending(hintId, inputId, list, summary) {
   const el = $(hintId);
   el.className = 'quick-hint';
   el.innerHTML = (summary ? `<div class="p-sum">${esc(summary)}</div>` : '')
-    + (list.length > 1 ? `<div class="p-saveall-row"><button class="btn primary sm p-saveall-btn" type="button">全部保存并关闭（${list.length} 笔）</button></div>` : '')
+    + (list.length > 1 ? `<div class="p-saveall-row"><button class="btn primary sm p-saveall-btn" data-close="0" type="button">全部保存</button><button class="btn primary sm p-saveall-btn" data-close="1" type="button">全部保存并关闭（${list.length} 笔）</button></div>` : '')
     + `<div class="pending-list">` + list.map((t, i) => `
       <div class="p-item">
         <span class="tag ${t.type}">${t.type === 'buy' ? '买入' : '卖出'}</span>
@@ -1408,12 +1408,11 @@ function bindEvents() {
   $('quickParseBtn').addEventListener('click', () => aiParseEntry('quickNl', 'quickHint'));
   $('quickNl').addEventListener('keydown', e => { if (e.key === 'Enter') aiParseEntry('quickNl', 'quickHint'); });
   $('tradeParseBtn').addEventListener('click', () => aiParseEntry('tradeNl', 'tradeHint'));
-  $('tradeNl').addEventListener('keydown', e => { if (e.key === 'Enter') aiParseEntry('tradeNl', 'tradeHint'); });
   ['quickHint', 'tradeHint'].forEach(hid => $(hid).addEventListener('click', e => {
     const openM = e.target.closest('.p-open-manual');
     if (openM) { setManualOpen(true); if (hid !== 'tradeHint') { openRecModal(true); setManualOpen(true); } return; }
     const saveAllB = e.target.closest('.p-saveall-btn');
-    if (saveAllB) { saveAllPending(saveAllB); return; }
+    if (saveAllB) { saveAllPending(saveAllB, saveAllB.dataset.close === '1'); return; }
     const saveB = e.target.closest('.p-save-btn');
     if (saveB) {
       const t = pendingTrades[Number(saveB.dataset.i)];
@@ -1454,7 +1453,7 @@ function bindEvents() {
     } catch (err) { btn.disabled = false; toast(err.message || '保存失败', 'warn'); }
   }
   /* 多条解析结果一键全部入库 */
-  async function saveAllPending(btn) {
+  async function saveAllPending(btn, closeAfter = false) {
     const targets = pendingTrades.filter(t => !t._saved);
     if (!targets.length) { toast('没有待保存的记录'); return; }
     btn.disabled = true;
@@ -1465,9 +1464,19 @@ function bindEvents() {
     }
     btn.disabled = false;
     if (ok === targets.length) {
-      btn.textContent = `已全部保存`;
-      toast(`已全部保存（${ok} 笔）`);
-      if ($('recModal') && !$('recModal').hidden) closeRecModal(); else $('tradeHint').hidden = true;
+      if (closeAfter) {
+        if ($('recModal') && !$('recModal').hidden) closeRecModal(); else $('tradeHint').hidden = true;
+        toast(`已全部保存（${ok} 笔）`);
+      } else {
+        /* 不关闭：刷新列表按钮状态，可继续解析录入 */
+        const hid = btn.closest('.quick-hint');
+        if (hid) hid.querySelectorAll('.p-save-btn').forEach(b => {
+          const t = pendingTrades[Number(b.dataset.i)];
+          if (t && t._saved) { b.textContent = '已存'; b.disabled = true; }
+        });
+        btn.textContent = '已全部保存';
+        toast(`已全部保存（${ok} 笔）`);
+      }
     } else {
       btn.textContent = `已保存 ${ok}/${targets.length}，其余请点「改」确认`;
     }

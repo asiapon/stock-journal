@@ -666,3 +666,12 @@ select { padding-right: 6px; }
 @media (max-width: 639px) {
   #tradeForm > div:first-child { grid-column: span 2; }
 }
+
+/* ---------- v2.9.7 记一笔：多行描述框 + 全部保存(不关闭) ---------- */
+.quick-input-row.nl-row { align-items: flex-start; }
+.quick-input-row.nl-row textarea {
+  flex: 1; min-width: 0; min-height: 72px; height: auto;
+  resize: vertical; line-height: 1.5; padding: 8px 10px;
+}
+.quick-input-row.nl-row .btn { flex-shrink: 0; height: auto; min-height: 32px; padding: 8px 14px; }
+.p-saveall-row { gap: 8px; }
