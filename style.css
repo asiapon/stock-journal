@@ -612,6 +612,13 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .filter-stats b.down, .filter-stats b.neg { color: var(--down); }
 
 /* ---------- v3.3.1 交易筛选参考 trade-manager 布局 ---------- */
+/* ---------- v3.3.3 交易筛选区独立成块，全部左对齐 ---------- */
+#view-trades .filters-col { margin-top: 2px; }
+#view-trades .filters { justify-content: flex-start; }
+#view-trades .card-title-row { margin-bottom: 10px; }
+#view-trades .ft-kw { max-width: 560px; }
+
+/* ---------- v3.3.2 快捷时间 chips（沿用） ---------- */
 .filters-col { display: flex; flex-direction: column; gap: 8px; flex: 1; min-width: 0; }
 .ft-kw {
   width: 100%; height: 34px; padding: 0 12px; box-sizing: border-box;

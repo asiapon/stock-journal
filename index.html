@@ -7,7 +7,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记 · 个人交易信息管家</title>
-<link rel="stylesheet" href="style.css?v=3.3.2">
+<link rel="stylesheet" href="style.css?v=3.3.3">
 </head>
 <body>
 
@@ -188,7 +188,8 @@
         <div class="card-title-row">
           <span class="card-title">交易记录</span>
           <button class="btn primary sm" id="recModalBtn" type="button">＋ 记一笔</button>
-          <div class="filters-col">
+        </div>
+        <div class="filters-col">
             <input type="text" id="ftKw" class="ft-kw" placeholder="关键词搜索：股票 / 代码 / 备注 / 语句">
             <div class="filters">
               <span class="f-label">成交时间</span>
@@ -213,7 +214,6 @@
               <input type="text" id="ftStock" placeholder="代码/名称" class="w120">
               <button class="btn ghost sm" id="ftClear" type="button">清空筛选</button>
             </div>
-          </div>
         </div>
         <div class="filter-stats" id="ftStats"></div>
         <div class="wtabs" id="tradeModeTabs" style="margin:2px 0 8px">
@@ -510,6 +510,6 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.3.2"></script>
+<script src="app.js?v=3.3.3"></script>
 </body>
 </html>
