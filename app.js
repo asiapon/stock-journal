@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.5';
+const APP_VER = '3.4.6';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1224,7 +1224,7 @@ function tradeRowFiltered() {
 let tradeMode = (() => { try { return localStorage.getItem('sj_tradeMode') || 'list'; } catch (e) { return 'list'; } })();
 const TRADE_HEAD_LIST = '<th>时间</th><th>方向</th><th>股票</th><th class="num">价格</th><th class="num">数量</th>'
   + '<th class="num">成交金额</th><th class="num">费用</th><th class="num">发生金额</th><th>操作</th>';
-const TRADE_HEAD_STOCK = '<th>股票</th><th class="num">笔数</th><th class="num">成交量</th><th class="num">成交均价</th>'
+const TRADE_HEAD_STOCK = '<th>股票</th><th class="num">笔数</th><th class="num">成交量(买/卖)</th><th class="num">成交均价(买/卖)</th>'
   + '<th class="num">成交额</th><th class="num">买/卖笔数</th><th class="num">费用</th>';
 function renderTrades() {
   const rows = tradeRowFiltered();
@@ -1247,7 +1247,8 @@ function renderTrades() {
       g.amt += t.gross_amount || 0;
       g.fee += (t.fee && t.fee.total) || 0;
       g.cnt++;
-      if (t.transaction_type === 'buy') g.buys++; else g.sells++;
+      if (t.transaction_type === 'buy') { g.buys++; g.buyQty += t.quantity || 0; g.buyAmt += t.gross_amount || 0; }
+      else { g.sells++; g.sellQty += t.quantity || 0; g.sellAmt += t.gross_amount || 0; }
       g.trades.push(t);
     }
     lastStockAgg = m;
@@ -1256,8 +1257,8 @@ function renderTrades() {
       <tr class="stockagg" data-code="${esc(g.code)}" title="点击展开每笔明细与期间盈亏">
         <td><div class="stock-cell"><span class="sc-name">${esc(g.name)}</span><span class="sc-code">${esc(g.code)}</span></div></td>
         <td class="num">${g.cnt}</td>
-        <td class="num">${g.qty}</td>
-        <td class="num">${g.qty ? fmt2(g.amt / g.qty) : '—'}</td>
+        <td class="num"><div class="two-line"><span>${g.buyQty || '—'}</span><span class="sub">${g.sellQty || '—'}</span></div></td>
+        <td class="num"><div class="two-line"><span>${g.buyQty ? fmt2(g.buyAmt / g.buyQty) : '—'}</span><span class="sub">${g.sellQty ? fmt2(g.sellAmt / g.sellQty) : '—'}</span></div></td>
         <td class="num">${fmt2(g.amt)}</td>
         <td class="num">${g.buys} / ${g.sells}</td>
         <td class="num">${fmt2(g.fee)}</td>
