@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.4';
+const APP_VER = '3.4.5';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1160,6 +1160,52 @@ function showHoldDetail(code) {
 /* ---------- 操作（交易） ---------- */
 /* 展开的费用明细行 id 集合：重渲染后恢复，仅再次点击才收起 */
 const feeOpenIds = new Set();
+/* 按股票视图：展开状态与最近一次聚合数据 */
+let stockOpenCodes = new Set();
+let lastStockAgg = new Map();
+function stockDetailRow(g) {
+  const list = [...g.trades].sort((a, b) => new Date(a.transaction_time) - new Date(b.transaction_time));
+  const holdByCode = new Map();
+  for (const h of computeHoldings()) holdByCode.set(h.code, h);
+  let realizedSum = 0;
+  const items = list.map(t => {
+    const fee = (t.fee && t.fee.total) || 0;
+    const d = new Date(t.transaction_time), p = n => String(n).padStart(2, '0');
+    return { t, fee, dateStr: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`, pnl: null };
+  });
+  /* 从 timeline 拿每笔卖出已实现盈亏 */
+  const tlMap = new Map();
+  for (const ev of (holdByCode.get(g.code) || { timeline: [] }).timeline) if (ev.realized != null && ev.t) tlMap.set(String(ev.t.id), ev.realized);
+  for (const it of items) { it.pnl = tlMap.has(String(it.t.id)) ? tlMap.get(String(it.t.id)) : null; if (it.pnl != null) realizedSum += it.pnl; }
+  /* 期末仍持仓部分：摊薄口径浮动盈亏（已清仓为0） */
+  const h = holdByCode.get(g.code);
+  const q = quoteMap().get(g.code);
+  const floatNow = h && h.qty > 0 && q && q.price != null ? h.qty * q.price - h.dilutedValue : 0;
+  const holdingNote = h && h.qty > 0 ? `期末仍持有 ${h.qty} 股，浮动 ${floatNow >= 0 ? '+' : ''}${fmt2(floatNow)}` : '该股已清仓，盈亏全部落地';
+  const total = realizedSum + floatNow;
+  return `<tr class="stock-detail-row"><td colspan="7">
+    <div class="sd-title">${esc(g.name)}（${esc(g.code)}）筛选期间共 ${list.length} 笔 · ${holdingNote}</div>
+    <table class="sd-tbl">
+      <thead><tr><th>时间</th><th>方向</th><th class="num">价格</th><th class="num">数量</th><th class="num">成交金额</th><th class="num">费用</th><th class="num">已实现盈亏</th></tr></thead>
+      <tbody>
+        ${items.map(it => `<tr>
+          <td>${it.dateStr}</td>
+          <td><span class="tag ${it.t.transaction_type}">${it.t.transaction_type === 'buy' ? '买入' : '卖出'}</span></td>
+          <td class="num">${fmt2(it.t.price)}</td>
+          <td class="num">${it.t.quantity}</td>
+          <td class="num">${fmt2(it.t.gross_amount)}</td>
+          <td class="num">${fmt2(it.fee)}</td>
+          <td class="num ${it.pnl != null ? pnlCls(it.pnl) : ''}">${it.pnl != null ? (it.pnl >= 0 ? '+' : '') + fmt2(it.pnl) : '—'}</td>
+        </tr>`).join('')}
+      </tbody>
+    </table>
+    <div class="sd-sum">
+      <span>期间已实现合计 <b class="${pnlCls(realizedSum)}">${realizedSum >= 0 ? '+' : ''}${fmt2(realizedSum)}</b></span>
+      ${h && h.qty > 0 ? `<span>期末持仓浮动 <b class="${pnlCls(floatNow)}">${floatNow >= 0 ? '+' : ''}${fmt2(floatNow)}</b></span>` : ''}
+      <span>期间总盈亏 <b class="${pnlCls(total)}">${total >= 0 ? '+' : ''}${fmt2(total)}</b></span>
+    </div>
+  </td></tr>`;
+}
 function tradeRowFiltered() {
   const from = $('ftFrom').value, to = $('ftTo').value;
   const allKw = $('ftKw').value.trim().toLowerCase();   // 全字段搜索：代码/名称/备注/原始语句/金额数量
@@ -1184,22 +1230,30 @@ function renderTrades() {
   const rows = tradeRowFiltered();
   $('tradeEmpty').hidden = rows.length > 0;
   $('tradeTheadRow').innerHTML = tradeMode === 'stock' ? TRADE_HEAD_STOCK : TRADE_HEAD_LIST;
-  /* 按股票：时间范围内按代码汇总 */
+  /* 按股票：时间范围内按代码汇总，点行展开每笔明细 + 期间总盈亏 */
   if (tradeMode === 'stock') {
+    /* 每笔已实现盈亏：从持仓引擎 timeline 取（卖出时有值） */
+    const pnlById = new Map(), holdByCode = new Map();
+    for (const h of computeHoldings()) {
+      holdByCode.set(h.code, h);
+      for (const ev of h.timeline) if (ev.realized != null && ev.t) pnlById.set(String(ev.t.id), ev.realized);
+    }
     const m = new Map();
     for (const t of rows) {
       const k = t.stock_code;
-      if (!m.has(k)) m.set(k, { code: k, name: t.stock_name || k, qty: 0, amt: 0, fee: 0, buys: 0, sells: 0, cnt: 0 });
+      if (!m.has(k)) m.set(k, { code: k, name: t.stock_name || k, qty: 0, amt: 0, fee: 0, buys: 0, sells: 0, cnt: 0, trades: [] });
       const g = m.get(k);
       g.qty += t.quantity || 0;
       g.amt += t.gross_amount || 0;
       g.fee += (t.fee && t.fee.total) || 0;
       g.cnt++;
       if (t.transaction_type === 'buy') g.buys++; else g.sells++;
+      g.trades.push(t);
     }
+    lastStockAgg = m;
     const list = [...m.values()].sort((a, b) => b.amt - a.amt);
     $('tradeTable').querySelector('tbody').innerHTML = list.map(g => `
-      <tr data-code="${esc(g.code)}">
+      <tr class="stockagg" data-code="${esc(g.code)}" title="点击展开每笔明细与期间盈亏">
         <td><div class="stock-cell"><span class="sc-name">${esc(g.name)}</span><span class="sc-code">${esc(g.code)}</span></div></td>
         <td class="num">${g.cnt}</td>
         <td class="num">${g.qty}</td>
@@ -1208,8 +1262,16 @@ function renderTrades() {
         <td class="num">${g.buys} / ${g.sells}</td>
         <td class="num">${fmt2(g.fee)}</td>
       </tr>`).join('');
+    /* 恢复已展开的股票明细 */
+    if (stockOpenCodes.size) {
+      for (const tr of $('tradeTable').querySelectorAll('tbody tr.stockagg')) {
+        if (!stockOpenCodes.has(tr.dataset.code)) continue;
+        const g = lastStockAgg.get(tr.dataset.code);
+        if (g) tr.insertAdjacentHTML('afterend', stockDetailRow(g));
+      }
+    }
     const stats = $('ftStats');
-    if (stats) stats.innerHTML = `<span>${list.length} 只股票</span><span>共 <b>${rows.length}</b> 笔</span>`;
+    if (stats) stats.innerHTML = `<span>${list.length} 只股票</span><span>共 <b>${rows.length}</b> 笔</span><span>点股票行可展开每笔明细</span>`;
     return;
   }
   $('tradeTable').querySelector('tbody').innerHTML = rows.map(t => {
@@ -1840,6 +1902,17 @@ function bindEvents() {
     const editBtn = e.target.closest('.edit-trade');
     const delBtn = e.target.closest('.del-trade');
     const feeCell = e.target.closest('.fee-cell');
+    const aggRow = e.target.closest('tr.stockagg');
+    if (!editBtn && !delBtn && !feeCell && aggRow) {
+      const code = aggRow.dataset.code;
+      const next = aggRow.nextElementSibling;
+      if (next && next.classList.contains('stock-detail-row')) { next.remove(); stockOpenCodes.delete(code); }
+      else {
+        const g = lastStockAgg.get(code);
+        if (g) { aggRow.insertAdjacentHTML('afterend', stockDetailRow(g)); stockOpenCodes.add(code); }
+      }
+      return;
+    }
     if (editBtn) {
       const t = S.trades.find(x => x.id == editBtn.dataset.id);
       if (t) fillTradeForm(t);

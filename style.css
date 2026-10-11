@@ -657,6 +657,18 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   .fchip { height: 30px; }
 }
 
+/* ---------- v3.4.5 按股票视图展开明细 ---------- */
+tr.stockagg { cursor: pointer; }
+tr.stockagg:hover td { background: #F5F8FC; }
+.stock-detail-row > td { background: #FAFBFD; padding: 10px 14px; }
+.stock-detail-row .sd-title { font-size: 12.5px; color: var(--ink-2); margin-bottom: 8px; }
+.stock-detail-row .sd-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; }
+.stock-detail-row .sd-tbl th, .stock-detail-row .sd-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.stock-detail-row .sd-tbl th { font-size: 11.5px; color: var(--ink-3); font-weight: 500; }
+.stock-detail-row .sd-tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+.stock-detail-row .sd-sum { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
+.stock-detail-row .sd-sum b { font-weight: 600; }
+
 /* ---------- v3.3.10 编辑交易仅可改备注：锁定字段置灰 ---------- */
 .lock-dim { opacity: .55; pointer-events: none; background: #F3F5F7; }
 #tfEditHint { margin-bottom: 6px; }
