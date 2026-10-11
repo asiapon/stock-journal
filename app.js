@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.4.1';
+const APP_VER = '3.4.2';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1139,6 +1139,8 @@ function showHoldDetail(code) {
 }
 
 /* ---------- 操作（交易） ---------- */
+/* 展开的费用明细行 id 集合：重渲染后恢复，仅再次点击才收起 */
+const feeOpenIds = new Set();
 function tradeRowFiltered() {
   const from = $('ftFrom').value, to = $('ftTo').value;
   const allKw = $('ftKw').value.trim().toLowerCase();   // 全字段搜索：代码/名称/备注/原始语句/金额数量
@@ -1211,6 +1213,14 @@ function renderTrades() {
       </div></td>
     </tr>`;
   }).join('');
+  /* 恢复已展开的费用明细行（重渲染后保持，直到用户再点一次收起） */
+  if (feeOpenIds.size) {
+    for (const tr of $('tradeTable').querySelectorAll('tbody tr[data-id]')) {
+      if (!feeOpenIds.has(String(tr.dataset.id))) continue;
+      const t = S.trades.find(x => String(x.id) === String(tr.dataset.id));
+      if (t) tr.insertAdjacentHTML('afterend', feeDetailRow(t));
+    }
+  }
   /* 筛选结果汇总 */
   const stats = $('ftStats');
   if (stats) {
@@ -1821,6 +1831,7 @@ function bindEvents() {
       confirmDlg('删除交易记录', `确认删除 ${t.stock_name || t.stock_code} ${t.transaction_type === 'buy' ? '买入' : '卖出'} ${t.quantity}股 @${fmtP(t.price)} 的记录？删除后持仓将重新计算。`, async () => {
         try {
           await store.remove('trades', t.id);
+          feeOpenIds.delete(String(t.id));
           await store.log('delete', `删除交易 ${t.stock_name || t.stock_code} ${fmtP(t.price)}x${t.quantity}`);
           await loadAll(); renderAll();
           toast('已删除');
@@ -1830,11 +1841,12 @@ function bindEvents() {
     }
     if (feeCell) {
       const tr = feeCell.closest('tr');
+      const id = String(feeCell.dataset.id);
       const next = tr.nextElementSibling;
-      if (next && next.classList.contains('fee-detail-row')) next.remove();
+      if (next && next.classList.contains('fee-detail-row')) { next.remove(); feeOpenIds.delete(id); }
       else {
         const t = S.trades.find(x => x.id == feeCell.dataset.id);
-        if (t) tr.insertAdjacentHTML('afterend', feeDetailRow(t));
+        if (t) { tr.insertAdjacentHTML('afterend', feeDetailRow(t)); feeOpenIds.add(id); }
       }
     }
   });
