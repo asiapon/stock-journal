@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.1.9';
+const APP_VER = '3.2.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1275,6 +1275,18 @@ function updateFeePreview() {
 }
 
 /* ---------- 自选 ---------- */
+/* 买入自动加自选（不在自选时才加，归入「默认」分组） */
+async function autoWatchOnBuy(code, name) {
+  try {
+    if (!code || S.watchlist.some(w => w.stock_code === code)) return;
+    let anchor = NetQuote.get(code);
+    if (!anchor) { try { await refreshQuotes(true); } catch (e) { /* */ } anchor = NetQuote.get(code); }
+    const row = { stock_code: code, stock_name: name || code, group_name: '默认', note: '买入自动加入', cur_price: anchor ? anchor.price : null, prev_close: null };
+    await store.insert('watchlist', row);
+    await store.log('watch', `买入自动加入自选 ${row.stock_name}（${code}）`);
+    toast(`已自动加入自选 ${row.stock_name}`);
+  } catch (e) { /* 失败不影响交易保存主流程 */ }
+}
 let watchTab = (() => { try { return localStorage.getItem('sj_watchTab') || '默认'; } catch (e) { return '默认'; } })();   // 当前分组 Tab（记住上次所在分组）
 function renderWatch() {
   const groups = [...new Set(['默认', ...S.watchlist.map(w => w.group_name || '默认')])];
@@ -1504,6 +1516,7 @@ function bindEvents() {
       await store.insert('trades', row);
       await store.log('trade', `新增交易 ${row.stock_name || row.stock_code} ${row.transaction_type === 'buy' ? '买入' : '卖出'} ${row.quantity}股@${row.price}`);
       toast(`已保存：${row.stock_name || row.stock_code} ${row.transaction_type === 'buy' ? '买入' : '卖出'} ${row.quantity}股`);
+      if (row.transaction_type === 'buy') await autoWatchOnBuy(code, row.stock_name);   // 买入自动加自选
       btn.textContent = '已存';
       t._saved = true;
       await loadAll(); renderAll(); refreshQuotes();
@@ -1646,6 +1659,7 @@ function bindEvents() {
         await store.insert('trades', row);
         await store.log('trade', `新增交易 ${row.stock_name || row.stock_code} ${row.transaction_type === 'buy' ? '买入' : '卖出'} ${row.quantity}股@${row.price}`);
         toast('已记录一笔操作');
+        if (row.transaction_type === 'buy') await autoWatchOnBuy(row.stock_code, row.stock_name);   // 买入自动加自选
       }
       resetTradeForm();
       await loadAll(); renderAll();
