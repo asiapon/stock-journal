@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.5.1';
+const APP_VER = '3.5.2';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1558,12 +1558,12 @@ function renderFeeEditor() {
   $('feeEditor').innerHTML = mkts.map(mk => {
     const f = feeCfg(mk);
     const fields = [
-      ['rate', '佣金费率 ‰'], ['min', '最低佣金 元'],
+      ['rate', '佣金费率 ‰'], ['min', '最低费用 元'],
       ['stamp', '印花税 ‰ (卖出)'], ['transfer', '过户费 ‰'],
       ['handling', '经手费 ‰'], ['gov', '证管费 ‰']
     ];
     return `<div class="fee-mkt">
-      <div class="fee-mkt-head">${MKT_NAME[mk] || mk}</div>
+      <div class="fee-mkt-head">${MKT_NAME[mk] || mk}<span class="hint">最低费用：佣金+规费合计不足该值时按该值收取（印花税除外）</span></div>
       <div class="fee-mkt-grid">
         ${fields.map(([k, label]) => `<label>${label}<input type="number" step="0.001" min="0" data-mkt="${mk}" data-key="${k}" value="${f[k]}"></label>`).join('')}
       </div>
