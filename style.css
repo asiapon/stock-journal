@@ -557,6 +557,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 /* ---------- v2.6.3 记一笔弹窗布局修正 ---------- */
 /* 解析确认行：按钮可换行不挤压 */
 .pending-list .p-item { flex-wrap: wrap; row-gap: 6px; }
+/* ---------- v3.0.9 记一笔手动表单 PC 分行 ---------- */
+/* 大屏：买/卖+股票一行；价格+数量+时间一行；备注独占一行 */
+@media (min-width: 640px) {
+  #tradeForm > div:nth-child(2) { grid-column: span 3; }   /* 股票联想框 */
+  #tradeForm > div:nth-child(5) { grid-column: span 2; }   /* 时间 */
+  #tradeForm > div:nth-child(6) { grid-column: 1 / -1; }   /* 备注 */
+}
+
+
 /* 手机端：弹窗近全屏、表单两列，span 对齐两列栅格 */
 @media (max-width: 639px) {
   #recModal { padding: 10px; align-items: flex-end; }
