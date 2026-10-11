@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '2.9.7';
+const APP_VER = '2.9.8';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1153,14 +1153,16 @@ function resetTradeForm() {
   updateFeePreview();
 }
 /* 「记一笔」弹窗 */
+/* 记一笔弹窗滚到底（保存按钮可见） */
+function scrollRecBottom() {
+  const m = document.querySelector('#recModal .modal-lg');
+  if (m && !$('recModal').hidden) requestAnimationFrame(() => { m.scrollTop = m.scrollHeight; });
+}
 function setManualOpen(open) {
   const w = $('tfManualWrap'), t = $('tfManualToggle');
   if (w) w.hidden = !open;
   if (t) t.textContent = open ? '收起手动录入 ▴' : '手动录入 ▸';
-  if (open) requestAnimationFrame(() => {   // 展开后滚到底，保存按钮可见
-    const m = document.querySelector('#recModal .modal-lg');
-    if (m && !$('recModal').hidden) m.scrollTop = m.scrollHeight;
-  });
+  if (open) scrollRecBottom();   // 展开后滚到底，保存按钮可见
 }
 function openRecModal(reset = true) {
   const m = $('recModal'); if (!m) return;
@@ -1214,6 +1216,7 @@ function updateFeePreview() {
     <span>经手费 <b>${fmt2(f.handling)}</b></span>
     <span>证管费 <b>${fmt2(f.gov)}</b></span>
     <span>${type === 'buy' ? '总投入' : '净到手'} <b>${fmt2(net)}</b></span>`;
+  scrollRecBottom();   // 费用预览出现/变化后滚到底，保存按钮可见
 }
 
 /* ---------- 自选 ---------- */
@@ -1549,11 +1552,7 @@ function bindEvents() {
   /* 交易表单：股票联想（选定后代码/名称/市场自动确定） */
   bindSuggest('tfStock', 'tfStockSug', h => {
     setTfStock(h.code, h.name);
-    updateFeePreview();
-    requestAnimationFrame(() => {             // 选完股票滚到底，保存按钮可见
-      const m = document.querySelector('#recModal .modal-lg');
-      if (m && !$('recModal').hidden) m.scrollTop = m.scrollHeight;
-    });
+    updateFeePreview();       // 内部已滚动到底
   });
   $('tfStock').addEventListener('input', () => {
     const inp = $('tfStock');
