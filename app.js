@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.3.11';
+const APP_VER = '3.4.0';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -955,8 +955,8 @@ function renderToday() {
   for (const h of holds) {
     const q = qm.get(h.code);
     const price = q ? Number(q.price) : null;
-    const costPrice = h.costValue / h.qty;
-    if (price != null) { totalMV += h.qty * price; totalFloat += h.qty * (price - costPrice); totalCost += h.costValue; }
+    const dilCost = h.dilutedValue;                  // 摊薄口径：已实现盈亏滚入，剩余持仓成本
+    if (price != null) { totalMV += h.qty * price; totalFloat += h.qty * price - dilCost; totalCost += dilCost; }
     else missing++;
   }
   // 今日已实现（来自各持仓 timeline 的卖出事件）
@@ -1041,10 +1041,10 @@ function renderHoldings() {
     const q = qm.get(h.code);
     const price = q ? q.price : null;
     const prevClose = q ? q.prevClose : null;
-    const costPrice = h.costValue / h.qty;
+    const costPrice = h.qty ? h.dilutedValue / h.qty : 0;   // 摊薄成本：已实现盈亏滚入（表格展示口径）
     const mv = price != null ? h.qty * price : null;
-    const float = price != null ? h.qty * (price - costPrice) : null;
-    const floatPct = price != null && costPrice ? (price - costPrice) / costPrice : null;
+    const float = price != null ? h.qty * price - h.dilutedValue : null;   // 累计盈亏（含已实现）
+    const floatPct = price != null && costPrice ? float / h.dilutedValue : null;
     /* T+1 可用 = 持仓 − 当日买入 */
     const boughtToday = S.trades.reduce((s, t) =>
       s + ((t.stock_code === h.code && t.transaction_type === 'buy' && t.transaction_time.slice(0, 10) === todayStr) ? t.quantity : 0), 0);
