@@ -1150,8 +1150,8 @@ select:hover { border-color: var(--blue); }
 select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 
 /* ---------- v3.8.22 自选表表头排序（三态：降序/升序/取消） ---------- */
-#watchTable th.sortable { cursor: pointer; user-select: none; }
-#watchTable th.sortable:hover { color: var(--blue); }
-#watchTable th.sortable::after { content: '⇅'; margin-left: 3px; font-size: 10px; opacity: .35; }
-#watchTable th.sortable.sorted-desc::after { content: '▼'; opacity: 1; color: var(--blue); }
-#watchTable th.sortable.sorted-asc::after { content: '▲'; opacity: 1; color: var(--blue); }
+#watchTable th.sortable, #holdTable th.sortable { cursor: pointer; user-select: none; }
+#watchTable th.sortable, #holdTable th.sortable:hover { color: var(--blue); }
+#watchTable th.sortable, #holdTable th.sortable::after { content: '⇅'; margin-left: 3px; font-size: 10px; opacity: .35; }
+#watchTable th.sortable, #holdTable th.sortable.sorted-desc::after { content: '▼'; opacity: 1; color: var(--blue); }
+#watchTable th.sortable, #holdTable th.sortable.sorted-asc::after { content: '▲'; opacity: 1; color: var(--blue); }

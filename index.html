@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.22">
+<link rel="stylesheet" href="style.css?v=3.8.23">
 </head>
 <body>
 
@@ -151,13 +151,14 @@
             <button class="btn primary sm" id="holdRecBtn" type="button">＋ 记一笔</button>
           </div>
         </div>
+        <div class="hint" id="quoteTimeInfo" style="margin:0 0 6px">—</div>
         <div class="sum-cards sm" id="holdSummary"></div>
         <div class="table-scroll">
           <table class="tbl" id="holdTable">
             <thead><tr>
-              <th>股票</th><th class="num">市值</th><th class="num">盈亏</th><th class="num">盈亏%</th>
-              <th class="num" title="可用 = 持仓 − 当日买入（T+1）">持仓/可用</th><th class="num">成本价</th><th class="num">现价</th>
-              <th class="num">当日盈亏</th><th class="num">当日盈亏%</th><th class="num">仓位</th><th></th>
+              <th>股票</th><th class="num sortable" data-sort="mv">市值</th><th class="num sortable" data-sort="float">盈亏</th><th class="num sortable" data-sort="floatPct">盈亏%</th>
+              <th class="num sortable" data-sort="qty" title="可用 = 持仓 − 当日买入（T+1）">持仓/可用</th><th class="num sortable" data-sort="cost">成本价</th><th class="num sortable" data-sort="price">现价</th>
+              <th class="num sortable" data-sort="dayPnl">当日盈亏</th><th class="num sortable" data-sort="dayPct">当日盈亏%</th><th class="num sortable" data-sort="pos">仓位</th><th></th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -527,6 +528,15 @@
           </div>
         </div>
       </div>
+      <div class="card">
+        <div class="card-title">网络日志</div>
+        <div class="hint" id="netLogSummary" style="margin-bottom:8px">—</div>
+        <div class="btn-row">
+          <button class="btn ghost" id="netLogDlBtn" type="button">下载日志文件 (.log)</button>
+          <button class="btn ghost" id="netLogClearBtn" type="button">清空日志</button>
+        </div>
+        <div class="hint" style="margin-top:8px">记录所有网络调用：行情（新浪/腾讯）、K线、云端读写。获取失败会标 FAIL 并附原因，可用于排查“数据不准/不实时”。</div>
+      </div>
       </div>
 
       <div class="set-pane" data-pane="log" hidden>
@@ -651,7 +661,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.22"></script>
-<script src="analysis-extra.js?v=3.8.22"></script>
+<script src="app.js?v=3.8.23"></script>
+<script src="analysis-extra.js?v=3.8.23"></script>
 </body>
 </html>

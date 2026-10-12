@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.22';
+const APP_VER = '3.8.23';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -303,14 +303,44 @@ function quoteMap() {
 }
 
 /* ============================================================
-   网络行情（腾讯公开接口，浏览器可直连；参考 trade-manager）
-   map: code -> { price, name, pct }；获取失败的代码不在 map 中
+   v3.8.23 网络日志：所有网络调用（云RPC / 行情 / K线）统一记录
+   内存环 + localStorage 持久化；「我的 → 数据管理」可下载 .log 文件
+   ============================================================ */
+const NetLog = {
+  buf: [],
+  max: 800,
+  _saveT: null,
+  load() { try { this.buf = JSON.parse(localStorage.getItem('sj_netlog') || '[]'); } catch (e) { this.buf = []; } },
+  push(kind, name, ok, ms, detail) {
+    const e = { t: new Date().toISOString(), kind, name, ok: !!ok, ms: Math.round(ms), detail: detail || '' };
+    this.buf.unshift(e);
+    if (this.buf.length > this.max) this.buf.length = this.max;
+    clearTimeout(this._saveT);
+    this._saveT = setTimeout(() => {
+      try { localStorage.setItem('sj_netlog', JSON.stringify(this.buf.slice(0, 300))); } catch (err) { /* 存储满则只在内存 */ }
+    }, 1500);
+    if (!ok) console.warn('[net-fail]', kind, name, detail, Math.round(ms) + 'ms');
+  },
+  text() {
+    return this.buf.map(e => `${e.t} [${e.ok ? 'OK' : 'FAIL'}] ${e.kind} ${e.name} ${e.ms}ms${e.detail ? ' | ' + e.detail : ''}`).join('\n');
+  },
+  clear() { this.buf = []; try { localStorage.removeItem('sj_netlog'); } catch (e) { /* */ } }
+};
+NetLog.load();
+
+/* ============================================================
+   网络行情（v3.8.23 新浪主源 + 腾讯备选，浏览器可直连）
+   map: code -> { price, name, pct, prevClose, open, high, low }
+   获取失败的代码不在 map 中；quoteTime 为行情商报价时间
    ============================================================ */
 const NetQuote = {
   map: new Map(),
   fetchedAt: 0,
+  quoteTime: '',
   pending: null,
-  ttl: 60 * 1000,
+  ttl: 15 * 1000,            // v3.8.23 缓存 60s → 15s
+  sinaFailStreak: 0,
+  sinaDeadUntil: 0,          // 新浪连续失败 3 次熔断 10 分钟（期间直接走腾讯）
   prefix(market, code) {
     if (market === 'bj' || market === 'bse') return 'bj' + code;
     if (market === 'sz') return 'sz' + code;
@@ -324,6 +354,59 @@ const NetQuote = {
     S.watchlist.forEach(w => add(w.stock_code, w.market));
     return { codes, mk };
   },
+  /* 新浪行情：hq_str_sh600000="名称,今开,昨收,现价,最高,最低,...,日期,时间,..." */
+  async fetchSina(syms) {
+    const t0 = Date.now();
+    try {
+      const res = await fetch('https://hq.sinajs.cn/list=' + syms.join(','));
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const buf = await res.arrayBuffer();
+      const text = new TextDecoder('gbk').decode(buf);
+      const out = new Map(); let qt = '';
+      const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+      for (const m of text.matchAll(/hq_str_[a-z]{2}(\d{6})="([^"]*)"/g)) {
+        const p = m[2].split(',');
+        if (p.length < 32) continue;
+        const price = parseFloat(p[3]);
+        if (!(price > 0)) continue;              // 停牌/无数据
+        const prevClose = num(p[2]), open = num(p[1]), high = num(p[4]), low = num(p[5]);
+        out.set(m[1], { price, name: p[0],
+          pct: prevClose > 0 ? (price - prevClose) / prevClose * 100 : null,
+          prevClose, open, high, low });
+        if (p[30] && p[31]) qt = p[30].replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') + ' ' + p[31];
+      }
+      NetLog.push('quote', '新浪 hq.sinajs.cn', out.size > 0, Date.now() - t0, `${out.size}/${syms.length} 只`);
+      return out.size ? { out, qt } : null;
+    } catch (e) {
+      NetLog.push('quote', '新浪 hq.sinajs.cn', false, Date.now() - t0, e.message || String(e));
+      return null;
+    }
+  },
+  /* 腾讯行情（备选）：v_sz000001="..."，~ 分隔 */
+  async fetchTx(syms) {
+    const t0 = Date.now();
+    try {
+      const res = await fetch('https://qt.gtimg.cn/q=' + syms.join(','));
+      const buf = await res.arrayBuffer();
+      const text = new TextDecoder('gbk').decode(buf);
+      const out = new Map(); let qt = '';
+      const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
+      for (const m of text.matchAll(/v_[a-z]{2}(\d{6})="([^"]*)"/g)) {
+        const p = m[2].split('~');
+        if (p.length < 40) continue;
+        const price = parseFloat(p[3]);
+        if (!(price > 0)) continue;
+        out.set(m[1], { price, name: p[1], pct: parseFloat(p[32]),
+          prevClose: num(p[4]), open: num(p[5]), high: num(p[33]), low: num(p[34]) });
+        if (p[30] && p[31]) qt = p[30].replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') + ' ' + p[31];
+      }
+      NetLog.push('quote', '腾讯 qt.gtimg.cn', out.size > 0, Date.now() - t0, `${out.size}/${syms.length} 只`);
+      return out.size ? { out, qt } : null;
+    } catch (e) {
+      NetLog.push('quote', '腾讯 qt.gtimg.cn', false, Date.now() - t0, e.message || String(e));
+      return null;
+    }
+  },
   async refresh(force = false) {
     const { codes, mk } = this.allCodes();
     if (!codes.length) return this.map;
@@ -331,29 +414,40 @@ const NetQuote = {
     if (this.pending) return this.pending;
     if (!force && fresh && codes.every(c => this.map.has(c))) return this.map;
     this.pending = (async () => {
-      const out = new Map();
+      const merged = new Map(); let qt = ''; let used = [];
       for (let i = 0; i < codes.length; i += 50) {
         const batch = codes.slice(i, i + 50);
-        try {
-          const q = batch.map(c => this.prefix(mk[c], c)).join(',');
-          const res = await fetch('https://qt.gtimg.cn/q=' + q);
-          const buf = await res.arrayBuffer();
-          const text = new TextDecoder('gbk').decode(buf);
-          for (const m of text.matchAll(/v_[a-z]{2}(\d{6})="([^"]*)"/g)) {
-            const p = m[2].split('~');
-            if (p.length < 40) continue;
-            const price = parseFloat(p[3]);
-            if (!(price > 0)) continue;          // 停牌/无数据
-            const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-            out.set(m[1], { price, name: p[1], pct: parseFloat(p[32]),
-              prevClose: num(p[4]), open: num(p[5]), high: num(p[33]), low: num(p[34]) });
+        const syms = batch.map(c => this.prefix(mk[c], c));
+        let got = null;
+        /* 主源新浪（连续失败熔断期跳过，直接走腾讯） */
+        if (Date.now() >= this.sinaDeadUntil) {
+          got = await this.fetchSina(syms);
+          if (got) { this.sinaFailStreak = 0; used.push('sina'); }
+          else {
+            this.sinaFailStreak++;
+            if (this.sinaFailStreak >= 3) {
+              this.sinaDeadUntil = Date.now() + 10 * 60 * 1000;
+              NetLog.push('quote', '新浪熔断→切腾讯', true, 0, `连续失败 ${this.sinaFailStreak} 次，10 分钟后重试新浪`);
+            }
           }
-        } catch (e) { /* 网络失败：保持空，页面显示「未获取」 */ }
+        }
+        /* 备选腾讯 */
+        if (!got) {
+          got = await this.fetchTx(syms);
+          if (got) used.push('tx');
+        }
+        if (got) {
+          for (const [k, v] of got.out) merged.set(k, v);
+          if (got.qt) qt = got.qt;
+        }
       }
-      this.map = out;
-      this.fetchedAt = Date.now();
+      if (merged.size) {
+        this.map = merged;
+        this.fetchedAt = Date.now();
+        if (qt) this.quoteTime = qt;
+      }
       this.pending = null;
-      return out;
+      return merged;
     })();
     return this.pending;
   },
@@ -364,18 +458,30 @@ async function refreshQuotes(force = false) {
   await NetQuote.refresh(force);
   renderAll();
 }
+/* v3.8.23 页面从后台切回前台时自动强刷行情（数据不实时补偿） */
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden && typeof S !== 'undefined' && S.token) refreshQuotes(true).catch(() => { /* */ });
+});
 
 /* ============================================================
    存储适配层
    ============================================================ */
 async function rpc(fn, params) {
-  const r = await fetch(`${RPC_BASE}/${fn}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'x-wb-webapp-access-key': ACCESS_KEY },
-    body: JSON.stringify(params || {})
-  });
-  if (r.status === 404 || r.status >= 500) throw new Error('服务不可用(' + r.status + ')');
-  return r.json();
+  const t0 = Date.now();
+  try {
+    const r = await fetch(`${RPC_BASE}/${fn}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-wb-webapp-access-key': ACCESS_KEY },
+      body: JSON.stringify(params || {})
+    });
+    if (r.status === 404 || r.status >= 500) throw new Error('服务不可用(' + r.status + ')');
+    const j = await r.json();
+    NetLog.push('rpc', fn, !!(j && j.ok), Date.now() - t0, (j && !j.ok) ? (j.msg || '') : '');
+    return j;
+  } catch (e) {
+    NetLog.push('rpc', fn, false, Date.now() - t0, e.message || String(e));
+    throw e;
+  }
 }
 
 const cloudStore = {
@@ -1074,6 +1180,30 @@ function renderHoldings() {
   }
   /* 今日清仓股的已落地盈亏计入当日参考盈亏 */
   totalDayPnl += rows.filter(r => r.cleared).reduce((s, r) => s + (r.dayPnl != null ? r.dayPnl : 0), 0);
+  /* v3.8.23 持仓表头三态排序（与自选表一致）：降序→升序→取消，空值恒排最后 */
+  if (holdSort.key && holdSort.dir) {
+    const getter = {
+      mv: r => r.mv, float: r => r.float, floatPct: r => r.floatPct,
+      qty: r => r.cleared ? 0 : r.h.qty, cost: r => r.costPrice, price: r => r.price,
+      dayPnl: r => r.dayPnl, dayPct: r => r.dayPct,
+      pos: r => (r.mv != null && totalMV ? r.mv / totalMV : null)
+    }[holdSort.key];
+    if (getter) {
+      rows.sort((a, b) => {
+        const va = getter(a), vb = getter(b);
+        if (va == null && vb == null) return 0;
+        if (va == null) return 1;
+        if (vb == null) return -1;
+        return (vb - va) * holdSort.dir;
+      });
+    }
+  }
+  updateSortHead('#holdTable', holdSort);
+  /* 报价时间提示 */
+  const qti = $('quoteTimeInfo');
+  if (qti) qti.textContent = NetQuote.quoteTime
+    ? `行情报价时间 ${NetQuote.quoteTime}（${NetQuote.sinaDeadUntil > Date.now() ? '腾讯备源' : '新浪主源'}，缓存15秒）`
+    : '行情未获取';
   const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   /* 账户累计总盈亏 = 持仓市值 − 累计买入净额 + 累计卖出净额（无需初始额度，费用已含在净额中） */
   let buyNetAll = 0, sellNetAll = 0;
@@ -1480,12 +1610,15 @@ async function autoWatchOnBuy(code, name) {
 let watchTab = (() => { try { return localStorage.getItem('sj_watchTab') || '默认'; } catch (e) { return '默认'; } })();   // 当前分组 Tab（记住上次所在分组）
 /* v3.8.22 自选表表头排序状态：dir 1=降序(第一次点击) / -1=升序 / 0=未排序 */
 let watchSort = { key: null, dir: 0 };
-function updateWatchHead() {
-  document.querySelectorAll('#watchTable th.sortable').forEach(th => {
-    th.classList.toggle('sorted-desc', watchSort.key === th.dataset.sort && watchSort.dir === 1);
-    th.classList.toggle('sorted-asc', watchSort.key === th.dataset.sort && watchSort.dir === -1);
+/* v3.8.23 持仓表同款三态排序（自选功能复制试点） */
+let holdSort = { key: null, dir: 0 };
+function updateSortHead(tableSel, state) {
+  document.querySelectorAll(tableSel + ' th.sortable').forEach(th => {
+    th.classList.toggle('sorted-desc', state.key === th.dataset.sort && state.dir === 1);
+    th.classList.toggle('sorted-asc', state.key === th.dataset.sort && state.dir === -1);
   });
 }
+function updateWatchHead() { updateSortHead('#watchTable', watchSort); }
 function renderWatch() {
   const groups = [...new Set(['默认', ...S.watchlist.map(w => w.group_name || '默认')])];
   const tabGroups = groups.includes(watchTab) ? groups : [...groups, watchTab].filter(Boolean);
@@ -1624,12 +1757,23 @@ async function saveFeeEditor() {
 function renderMe() {
   renderFeeEditor();
   renderLogs();
+  renderNetLogUI();
   if (S.mode === 'cloud' && S.user && S.user.role === 'admin') {
     $('userMgmtCard').hidden = false;
     loadUsers();
   } else {
     $('userMgmtCard').hidden = true;
   }
+}
+/* ---------- v3.8.23 网络日志摘要 ---------- */
+function renderNetLogUI() {
+  const el = $('netLogSummary');
+  if (!el) return;
+  if (!NetLog.buf.length) { el.textContent = '暂无网络日志（打开行情/交易页后会自动记录）'; return; }
+  const fails = NetLog.buf.filter(e => !e.ok).length;
+  const lastFail = NetLog.buf.find(e => !e.ok);
+  el.innerHTML = `共 ${NetLog.buf.length} 条（内存，最新在前）· 失败 ${fails} 条`
+    + (lastFail ? `<br>最近失败：${esc(lastFail.t.slice(11, 19))} ${esc(lastFail.kind)} ${esc(lastFail.name)} — ${esc(lastFail.detail)}` : '· 最近无失败');
 }
 /* ---------- 费率编辑 ---------- */
 function renderLogs() {
@@ -2123,6 +2267,27 @@ function bindEvents() {
     else watchSort = { key: null, dir: 0 };
     renderWatch();
   });
+  /* v3.8.23 持仓表头同款排序（自选功能复制试点） */
+  $('holdTable').querySelector('thead').addEventListener('click', e => {
+    const th = e.target.closest('th.sortable');
+    if (!th) return;
+    const k = th.dataset.sort;
+    if (holdSort.key !== k) holdSort = { key: k, dir: 1 };
+    else if (holdSort.dir === 1) holdSort = { key: k, dir: -1 };
+    else holdSort = { key: null, dir: 0 };
+    renderHoldings();
+  });
+  /* v3.8.23 网络日志：下载 / 清空 */
+  $('netLogDlBtn').addEventListener('click', () => {
+    const blob = new Blob([NetLog.text()], { type: 'text/plain;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'stock-journal-netlog-' + nowLocalInput().slice(0, 10) + '.log';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    toast('日志文件已下载');
+  });
+  $('netLogClearBtn').addEventListener('click', () => { NetLog.clear(); renderNetLogUI(); toast('网络日志已清空'); });
   /* 删除当前分组：组内股票移回「默认」 */
   $('delGroupBtn').addEventListener('click', () => {
     if (!watchTab || watchTab === '默认') return;
@@ -2371,13 +2536,20 @@ function secidOf(code) {
 async function fetchKlineEast(code, klt, lmt) {
   const url = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=' + secidOf(code)
     + '&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56&klt=' + klt + '&fqt=1&end=20500101&lmt=' + lmt;
-  const res = await fetch(url);
-  const j = await res.json();
-  const bars = ((j.data && j.data.klines) || []).map(s => {
-    const a = s.split(',');
-    return { d: a[0], o: +a[1], c: +a[2], h: +a[3], l: +a[4], v: +a[5] || 0 };
-  });
-  return { name: (j.data && j.data.name) || code, bars };
+  const t0 = Date.now();
+  try {
+    const res = await fetch(url);
+    const j = await res.json();
+    const bars = ((j.data && j.data.klines) || []).map(s => {
+      const a = s.split(',');
+      return { d: a[0], o: +a[1], c: +a[2], h: +a[3], l: +a[4], v: +a[5] || 0 };
+    });
+    NetLog.push('kline', '东财 push2his', bars.length > 0, Date.now() - t0, `${code} klt=${klt} ${bars.length}根`);
+    return { name: (j.data && j.data.name) || code, bars };
+  } catch (e) {
+    NetLog.push('kline', '东财 push2his', false, Date.now() - t0, `${code} klt=${klt} ${e.message || e}`);
+    throw e;
+  }
 }
 /* 腾讯日 / 周 K：3 个等价端点轮询（fqkline 路径在高频下可能被 WAF 拦截 501） */
 const KL_URLS = [
@@ -2389,23 +2561,29 @@ async function fetchKlineTxRaw(code, period, lmt) {
   const sym = inferMarket(code) === 'bj' ? 'bj' + code : inferMarket(code) + code;
   let sawBlock = false, last = { name: code, bars: [] };
   for (const mk of KL_URLS) {
+    const t0 = Date.now();
     try {
       const res = await fetch(mk(sym, period, lmt));
-      if (!res.ok) { sawBlock = true; continue; }
+      if (!res.ok) { sawBlock = true; NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} HTTP ${res.status}，换端点`); continue; }
       const txt = await res.text();
-      if (!txt || txt.charCodeAt(0) === 60) { sawBlock = true; continue; }
+      if (!txt || txt.charCodeAt(0) === 60) { sawBlock = true; NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} 返回HTML(疑似WAF)，换端点`); continue; }
       const j = JSON.parse(txt);
       const d = (j.data && j.data[sym]) || {};
       const arr = d[period] || d['qfq' + period] || [];
       const name = (d.qt && d.qt.data && d.qt.data[1]) || last.name;
       if (arr.length) {
+        NetLog.push('kline', '腾讯K线', true, Date.now() - t0, `${sym} ${period} ${arr.length}根`);
         return {
           name: name, sawBlock: sawBlock,
           bars: arr.map(function (k) { return { d: k[0], o: +k[1], c: +k[2], h: +k[3], l: +k[4], v: +k[5] || 0 }; }),
         };
       }
+      NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} 空数据，换端点`);
       last = { name: name, bars: [] };
-    } catch (e) { /* 换下一个端点 */ }
+    } catch (e) {
+      sawBlock = true;
+      NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} ${e.message || e}，换端点`);
+    }
   }
   return { name: last.name, bars: last.bars, sawBlock: sawBlock };
 }
