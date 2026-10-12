@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.28';
+const APP_VER = '3.8.29';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1322,13 +1322,10 @@ function renderHoldings() {
       <td class="num ${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? (dayPnl >= 0 ? '+' : '') + fmt2(dayPnl) : NA}</td>
       <td class="num ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : NA}</td>
       <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : (r.cleared ? '0.00%' : NA)}</td>
-      <td><div class="row-actions">
-        <button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button>
-      </div></td>
     </tr>`;
   }).join('');
 
-  /* 手机端合并列表格：市值(含股票信息) / 盈亏 / 持仓可用 / 成本现价 / 当日盈亏 / 仓位 / 明细 */
+  /* 手机端合并列表格：市值(含股票信息) / 盈亏 / 持仓可用 / 成本现价 / 当日盈亏 / 仓位 */
   $('holdTableM').querySelector('tbody').innerHTML = rows.map(r => {
     const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
     const sgn = v => (v >= 0 ? '+' : '');
@@ -1339,55 +1336,8 @@ function renderHoldings() {
       <td class="num"><div class="two-line"><span>${costPrice != null ? fmtP(costPrice) : '—'}</span><span class="sub">${price != null ? fmt2(price) : '未获取'}</span></div></td>
       <td class="num"><div class="two-line"><b class="${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? sgn(dayPnl) + fmt2(dayPnl) : NA}</b><span class="sub ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : ''}</span></div></td>
       <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : (r.cleared ? '0.00%' : NA)}</td>
-      <td><button class="icon-btn show-detail" data-code="${esc(h.code)}">明细</button></td>
     </tr>`;
   }).join('');
-}
-
-function showHoldDetail(code) {
-  const all = computeHoldings();
-  const h = all.find(x => x.code === code);
-  if (!h) return;
-  const q = quoteMap().get(code);
-  const price = q ? Number(q.price) : null;
-  const costPrice = h.qty ? h.costValue / h.qty : 0;
-  const diluted = h.qty ? h.dilutedValue / h.qty : 0;
-  $('holdDetail').hidden = false;
-  $('holdDetailTitle').textContent = `${h.name || h.code} · 买卖记录`;
-  /* v3.8.28 明细卡精简：6卡 → 4卡（持仓/现价合并、两种成本合并），盈亏各带一行小结 */
-  const floatPnl = price != null && h.qty ? h.qty * (price - costPrice) : null;
-  const totalPnl = (h.realized || 0) + (floatPnl != null ? floatPnl : 0);
-  $('holdDetailStats').innerHTML = `
-    <div class="sum-card"><div class="s-label">持仓 / 现价</div>
-      <div class="s-value">${h.qty ? h.qty + ' 股' : '已清仓'}</div>
-      <div class="s-sub">${price != null ? '现价 ' + fmt2(price) : '现价未获取'}</div></div>
-    <div class="sum-card"><div class="s-label">成本（加权 / 摊薄）</div>
-      <div class="s-value">${h.qty ? fmtP(costPrice) : '—'}<span class="s-sep"> / </span>${h.qty ? fmtP(diluted) : '—'}</div>
-      <div class="s-sub">${h.qty ? '摊薄已含已实现盈亏' : '盈亏已全部落地'}</div></div>
-    <div class="sum-card"><div class="s-label">累计已实现</div>
-      <div class="s-value ${pnlCls(h.realized)}">${h.realized >= 0 ? '+' : ''}${fmt2(h.realized)}</div>
-      <div class="s-sub">历史卖出落袋</div></div>
-    <div class="sum-card"><div class="s-label">浮动盈亏 / 总盈亏</div>
-      <div class="s-value ${pnlCls(floatPnl != null ? floatPnl : 0)}">${floatPnl != null ? (floatPnl >= 0 ? '+' : '') + fmt2(floatPnl) : '—'}</div>
-      <div class="s-sub">已实现+浮动 <b class="${pnlCls(totalPnl)}">${totalPnl >= 0 ? '+' : ''}${fmt2(totalPnl)}</b></div></div>`;
-  const sorted = [...h.timeline].filter(ev => ev.t.source !== 'init').sort((a, b) => new Date(b.t.transaction_time) - new Date(a.t.transaction_time));
-  $('holdTimeline').innerHTML = sorted.length ? sorted.map(ev => {
-    const t = ev.t;
-    return `<div class="tl-item">
-      <div class="tl-time">${fmtTime(t.transaction_time, true)}</div>
-      <div class="tl-body">
-        <div class="tl-main">
-          <span class="tag ${t.transaction_type}">${t.transaction_type === 'buy' ? '买入' : '卖出'}</span>
-          <span class="tl-sub"> ${t.quantity} 股 @${fmtP(t.price)} · 费用 ${fmt2((t.fee && t.fee.total) || 0)}</span>
-        </div>
-        <div class="tl-num">
-          <div class="t-val">¥${fmt2(t.gross_amount)}</div>
-          ${ev.realized != null ? `<div class="m-sub ${pnlCls(ev.realized)}">已实现 ${ev.realized >= 0 ? '+' : ''}${fmt2(ev.realized)}</div>` : `<div class="m-sub">成本价 → ${fmtP(ev.avg)}</div>`}
-        </div>
-      </div>
-    </div>`;
-  }).join('') : '<div class="empty" style="padding:14px">初始化持仓，暂无买卖记录</div>';
-  $('holdDetail').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 }
 
 /* ---------- 操作（交易） ---------- */
@@ -1417,9 +1367,31 @@ function stockDetailRow(g) {
   const floatNow = h && h.qty > 0 && q && q.price != null ? h.qty * q.price - h.costValue : 0;
   const holdingNote = h && h.qty > 0 ? `期末仍持有 ${h.qty} 股，浮动 ${floatNow >= 0 ? '+' : ''}${fmt2(floatNow)}` : '该股已清仓，盈亏全部落地';
   const total = realizedSum + floatNow;
+  /* v3.8.29 展开区顶部加持仓明细卡同款 4 卡（全历史口径，与持仓页明细卡数字一致可互验） */
+  const has = !!h;
+  const costW = has && h.qty ? h.costValue / h.qty : 0;
+  const costD = has && h.qty ? h.dilutedValue / h.qty : 0;
+  const price = q && q.price != null ? Number(q.price) : null;
+  const cards = `
+    <div class="sum-cards sm sd-cards">
+      <div class="sum-card"><div class="s-label">持仓 / 现价</div>
+        <div class="s-value">${has && h.qty ? h.qty + ' 股' : '已清仓'}</div>
+        <div class="s-sub">${price != null ? '现价 ' + fmt2(price) : '现价未获取'}</div></div>
+      <div class="sum-card"><div class="s-label">成本（加权 / 摊薄）</div>
+        <div class="s-value">${has && h.qty ? fmtP(costW) : '—'}<span class="s-sep"> / </span>${has && h.qty ? fmtP(costD) : '—'}</div>
+        <div class="s-sub">${has && h.qty ? '摊薄已含已实现盈亏' : '盈亏已全部落地'}</div></div>
+      <div class="sum-card"><div class="s-label">累计已实现（全历史）</div>
+        <div class="s-value ${pnlCls(has ? h.realized : 0)}">${has ? (h.realized >= 0 ? '+' : '') + fmt2(h.realized) : '—'}</div>
+        <div class="s-sub">筛选期间 <b>${realizedSum >= 0 ? '+' : ''}${fmt2(realizedSum)}</b></div></div>
+      <div class="sum-card"><div class="s-label">浮动盈亏 / 总盈亏</div>
+        <div class="s-value ${pnlCls(floatNow)}">${floatNow >= 0 ? '+' : ''}${fmt2(floatNow)}</div>
+        <div class="s-sub">已实现+浮动 <b class="${pnlCls(total)}">${total >= 0 ? '+' : ''}${fmt2(total)}</b></div></div>
+    </div>`;
   return `<tr class="stock-detail-row"><td colspan="7">
     <div class="sd-title">${esc(g.name)}（${esc(g.code)}）筛选期间共 ${list.length} 笔 · ${holdingNote}</div>
-    <table class="sd-tbl">
+    ${cards}
+    ${list.length ? `<table class="sd-tbl">` : '<div class="empty" style="padding:10px">筛选期间无操作记录（持仓/盈亏见上方卡片）</div>'}
+    ${list.length ? `
       <thead><tr><th>时间</th><th>方向</th><th class="num">价格</th><th class="num">数量</th><th class="num">成交金额</th><th class="num">费用</th><th class="num">已实现盈亏</th></tr></thead>
       <tbody>
         ${items.map(it => `<tr>
@@ -1432,7 +1404,7 @@ function stockDetailRow(g) {
           <td class="num ${it.pnl != null ? pnlCls(it.pnl) : ''}">${it.pnl != null ? (it.pnl >= 0 ? '+' : '') + fmt2(it.pnl) : '—'}</td>
         </tr>`).join('')}
       </tbody>
-    </table>
+    </table>` : ''}
     <div class="sd-sum">
       <span>期间已实现合计 <b class="${pnlCls(realizedSum)}">${realizedSum >= 0 ? '+' : ''}${fmt2(realizedSum)}</b></span>
       ${h && h.qty > 0 ? `<span>期末持仓浮动 <b class="${pnlCls(floatNow)}">${floatNow >= 0 ? '+' : ''}${fmt2(floatNow)}</b></span>` : ''}
@@ -1487,6 +1459,11 @@ function renderTrades() {
       g.trades.push(t);
     }
     lastStockAgg = m;
+    /* v3.8.29 当前仍持仓但筛选期间无交易的股票也纳入（初始持仓等），点开可看浮动/总盈亏 */
+    for (const h of computeHoldings()) {
+      if (m.has(h.code)) continue;
+      m.set(h.code, { code: h.code, name: h.name || h.code, qty: 0, amt: 0, fee: 0, buys: 0, sells: 0, cnt: 0, buyQty: 0, buyAmt: 0, sellQty: 0, sellAmt: 0, trades: [] });
+    }
     const list = [...m.values()].sort((a, b) => b.amt - a.amt);
     $('tradeTable').querySelector('tbody').innerHTML = list.map(g => `
       <tr class="stockagg" data-code="${esc(g.code)}" title="点击展开每笔明细与期间盈亏">
@@ -2246,17 +2223,10 @@ function bindEvents() {
   }
   $('holdAuto').addEventListener('change', setHoldAuto);
   setHoldAuto();
-  $('holdDetailClose').addEventListener('click', () => { $('holdDetail').hidden = true; });
+  /* v3.8.29 持仓明细弹层已移除（与操作页按股票统计重复），仅保留改价 */
   $('holdTable').querySelector('tbody').addEventListener('click', e => {
     const sp = e.target.closest('.set-price');
     if (sp) { startPriceEdit(sp.closest('tr'), sp.dataset.code, sp.dataset.name); return; }
-    const sd = e.target.closest('.show-detail');
-    if (sd) showHoldDetail(sd.dataset.code);
-  });
-  /* 手机端合并列表格：明细按钮 */
-  $('holdTableM').querySelector('tbody').addEventListener('click', e => {
-    const sd = e.target.closest('.show-detail');
-    if (sd) showHoldDetail(sd.dataset.code);
   });
   function startPriceEdit(tr, code, name) {
     const cell = tr.querySelector('.price-cell');

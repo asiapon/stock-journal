@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.28">
+<link rel="stylesheet" href="style.css?v=3.8.29">
 </head>
 <body>
 
@@ -159,26 +159,18 @@
             <thead><tr>
               <th>股票</th><th class="num sortable" data-sort="mv">市值</th><th class="num sortable" data-sort="float">盈亏</th><th class="num sortable" data-sort="floatPct">盈亏%</th>
               <th class="num sortable" data-sort="qty" title="可用 = 持仓 − 当日买入（T+1）">持仓/可用</th><th class="num sortable" data-sort="cost">成本价</th><th class="num sortable" data-sort="price">现价</th>
-              <th class="num sortable" data-sort="dayPnl">当日盈亏</th><th class="num sortable" data-sort="dayPct">当日盈亏%</th><th class="num sortable" data-sort="pos">仓位</th><th></th>
+              <th class="num sortable" data-sort="dayPnl">当日盈亏</th><th class="num sortable" data-sort="dayPct">当日盈亏%</th><th class="num sortable" data-sort="pos">仓位</th>
             </tr></thead>
             <tbody></tbody>
           </table>
           <table class="tbl" id="holdTableM">
             <thead><tr>
-              <th>市值</th><th class="num">盈亏</th><th class="num" title="可用 = 持仓 − 当日买入（T+1）">持仓/可用</th><th class="num">成本/现价</th><th class="num">当日盈亏</th><th class="num">仓位</th><th></th>
+              <th>市值</th><th class="num">盈亏</th><th class="num" title="可用 = 持仓 − 当日买入（T+1）">持仓/可用</th><th class="num">成本/现价</th><th class="num">当日盈亏</th><th class="num">仓位</th>
             </tr></thead>
             <tbody></tbody>
           </table>
         </div>
         <div id="holdEmpty" class="empty" hidden>暂无持仓，<a href="javascript:void(0)" id="holdEmptyRec" style="color:var(--blue)">去记一笔</a></div>
-      </div>
-      <div class="card" id="holdDetail" hidden>
-        <div class="card-title-row">
-          <span class="card-title" id="holdDetailTitle">买卖记录</span>
-          <button class="btn ghost sm" id="holdDetailClose" type="button">收起</button>
-        </div>
-        <div class="sum-cards sm" id="holdDetailStats"></div>
-        <div class="timeline" id="holdTimeline"></div>
       </div>
     </section>
 
@@ -662,7 +654,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.28"></script>
-<script src="analysis-extra.js?v=3.8.28"></script>
+<script src="app.js?v=3.8.29"></script>
+<script src="analysis-extra.js?v=3.8.29"></script>
 </body>
 </html>
