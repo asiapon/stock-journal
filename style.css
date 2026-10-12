@@ -1224,21 +1224,20 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 @media (max-width: 720px) {
   .idx-bar-lg .idx-chip { padding: 6px 10px; }
 }
-/* ---------- v3.8.38 胶囊等宽网格（大盘指数 / 持仓快照统计共用）：PC 一行、手机两行 ---------- */
+/* ---------- v3.8.38 胶囊等宽网格（大盘指数 / 持仓信息统计共用）----------
+   v3.8.46 改 auto-fit 自适应列数：容器宽就多列、窄就少列。
+   原来固定 repeat(3,1fr) 在 721~1000px 的窗口下每列只有 ~215px，
+   装不下「浮动盈亏 +123456.78 +12.34%」这类长数值，会把整条撑破 */
 .idx-bar-eq {
-  display: grid; grid-template-columns: repeat(3, 1fr);
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 10px; align-items: stretch; margin: 4px 0 10px;
 }
-.idx-bar-eq .idx-chip { justify-content: center; flex-wrap: wrap; overflow-wrap: anywhere; }
+.idx-bar-eq .idx-chip { justify-content: center; flex-wrap: nowrap; white-space: nowrap; }
 .idx-bar-eq .hold-warn { grid-column: 1 / -1; justify-self: center; }
 @media (max-width: 720px) {
-  .idx-bar-eq { grid-template-columns: repeat(2, 1fr); gap: 8px; }
-  /* 窄屏两列时胶囊内放不下「标签 数值 比例」一行：把标签单独占一行，
-     数值与比例落到第二行 —— 三只胶囊统一两行，视觉节奏一致 */
-  .idx-bar-eq .idx-chip { padding: 6px 8px; gap: 5px; row-gap: 2px; align-content: center; }
-  .idx-bar-eq .idx-chip .i-name { flex: 0 0 100%; text-align: center; font-size: 12px; }
-  .idx-bar-eq .idx-chip .i-val { font-size: 12px; }
-  .idx-bar-eq .idx-chip .i-pct { font-size: 12px; }
+  /* v3.8.46 手机档固定「每行一个胶囊」：整行宽度充裕（约 326px），标签与数值恒定同一行，
+     6 位金额 + 百分比也放得下；原先「2 列半宽」只有约 160px，数字一长就得折行 */
+  .idx-bar-eq { grid-template-columns: 1fr; gap: 8px; }
 }
 
 /* ---------- v3.8.28 明细卡精简：成本双值分隔 ---------- */

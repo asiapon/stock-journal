@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.45';
+const APP_VER = '3.8.46';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -1182,20 +1182,9 @@ function todayRealizedPnl() {
   return s;
 }
 function renderToday() {
-  // 近期操作
-  const rt = S.trades.filter(t => t.source !== 'init').slice(0, 5);
-  $('recentTrades').innerHTML = rt.length ? rt.map(t => {
-    const amt = t.gross_amount;
-    return `<div class="mini-item">
-      <div class="mini-main">
-        <div class="mini-title"><span class="tag ${t.transaction_type}">${t.transaction_type === 'buy' ? '买入' : '卖出'}</span>${esc(t.stock_name || t.stock_code)}</div>
-        <div class="mini-sub">${fmtTime(t.transaction_time, true)} · ${t.quantity}股 @${fmtP(t.price)}</div>
-      </div>
-      <div class="mini-right"><div class="m-val">¥${fmt2(amt)}</div></div>
-    </div>`;
-  }).join('') : '<div class="empty">还没有操作记录，试试「快捷记一笔」</div>';
-
-  // 演示数据提示
+  /* v3.8.46 总览页收敛为「大盘指数 / 持仓信息 / 自选列表」三个数据卡，
+     原「快捷记一笔」「近期操作」两张卡已下线（记一笔入口在持仓信息卡与交易记录页，
+     近期操作去交易记录页看）。这里只剩演示数据提示。 */
   const sh = $('seedHint');
   if (sh) sh.hidden = S.trades.length > 0;
 }
@@ -1836,8 +1825,9 @@ function setWatchFormOpen(m, open) {
   form.classList.toggle('open', !!open);
   const btn = m.toggle ? document.getElementById(m.toggle) : null;
   if (btn) {
-    /* v3.8.42 纯文字链接（与「手动录入 ▸」同款 .link-btn）；展开时箭头翻转、文字转淡，主动作交给行内「添加/保存」 */
-    btn.textContent = open ? '收起 ▴' : '＋ 添加自选 ▸';
+    /* v3.8.42 纯文字链接（与「手动录入 ▸」同款 .link-btn）；展开时文字转淡，主动作交给行内「添加/保存」
+       v3.8.46 去掉尾部「▸」箭头——它是纯文字链接，箭头多余且会跟右侧边界打架 */
+    btn.textContent = open ? '收起' : '＋ 添加自选';
     btn.classList.toggle('is-open', !!open);
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
@@ -2181,13 +2171,11 @@ function bindEvents() {
     else if (e.key === 'Escape') { e.preventDefault(); closeConfirm(); }
   });
 
-  /* 今日 / 交易页：AI 解析入口 + 待确认列表 */
-  $('quickParseBtn').addEventListener('click', () => aiParseEntry('quickNl', 'quickHint'));
-  $('quickNl').addEventListener('keydown', e => { if (e.key === 'Enter') aiParseEntry('quickNl', 'quickHint'); });
+  /* 交易页：AI 解析入口 + 待确认列表（v3.8.46 总览页的 quickNl 入口已随卡片下线） */
   $('tradeParseBtn').addEventListener('click', () => aiParseEntry('tradeNl', 'tradeHint'));
-  ['quickHint', 'tradeHint'].forEach(hid => $(hid).addEventListener('click', e => {
+  ['tradeHint'].forEach(hid => $(hid).addEventListener('click', e => {
     const openM = e.target.closest('.p-open-manual');
-    if (openM) { setManualOpen(true); if (hid !== 'tradeHint') { openRecModal(true); setManualOpen(true); $('tradeNl').value = ''; } return; }
+    if (openM) { setManualOpen(true); return; }
     const saveAllB = e.target.closest('.p-saveall-btn');
     if (saveAllB) { saveAllPending(saveAllB, saveAllB.dataset.close === '1'); return; }
     const saveB = e.target.closest('.p-save-btn');
@@ -2259,7 +2247,6 @@ function bindEvents() {
       btn.textContent = `已保存 ${ok}/${targets.length}，其余请点「改」确认`;
     }
   }
-  $('openFormBtn').addEventListener('click', () => { switchView('trades'); openRecModal(); });
   /* 记一笔弹窗：开关与关闭 */
   $('recModalBtn').addEventListener('click', () => { resetTradeForm(); openRecModal(); });
   $('recModalClose').addEventListener('click', closeRecModal);
@@ -2306,10 +2293,6 @@ function bindEvents() {
   });
 
   /* NL 示例词条：点击填入输入框 */
-  $('quickChips').addEventListener('click', e => {
-    const c = e.target.closest('.chip');
-    if (c) { $('quickNl').value = c.dataset.nl; $('quickNl').focus(); }
-  });
   $('tradeChips').addEventListener('click', e => {
     const c = e.target.closest('.chip');
     if (c) { $('tradeNl').value = c.dataset.nl; $('tradeNl').focus(); }

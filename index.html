@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.45">
+<link rel="stylesheet" href="style.css?v=3.8.46">
 </head>
 <body>
 
@@ -110,11 +110,11 @@
         <div class="hint" id="tvQuoteTime">—</div>
       </div>
 
-      <!-- ② 持仓快照：统计数据 + 持仓列表 -->
+      <!-- ② 持仓信息：统计数据 + 持仓列表 -->
       <div class="card">
         <div class="card-title-row">
-          <span class="card-title">持仓快照</span>
-          <button class="btn primary sm" id="holdRecBtn" type="button">＋ 记一笔</button>
+          <span class="card-title">持仓信息</span>
+          <button class="btn ghost sm" id="holdRecBtn" type="button">＋ 记一笔</button>
         </div>
         <div class="idx-bar idx-bar-lg idx-bar-eq" id="tvHoldSummary"></div>
         <div class="table-scroll">
@@ -141,7 +141,7 @@
         <div class="card-title-row">
           <span class="card-title">自选列表</span>
           <div class="ctr-actions">
-            <button class="link-btn" id="tvWatchAddBtn" type="button" aria-expanded="false" aria-controls="tvWatchForm">＋ 添加自选 ▸</button>
+            <button class="link-btn" id="tvWatchAddBtn" type="button" aria-expanded="false" aria-controls="tvWatchForm">＋ 添加自选</button>
           </div>
         </div>
         <form id="tvWatchForm" class="watch-form">
@@ -168,33 +168,6 @@
           </table>
         </div>
         <div id="tvWatchEmpty" class="empty" hidden>暂无自选股</div>
-      </div>
-
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-title-row">
-            <span class="card-title">快捷记一笔</span>
-            <span class="hint">AI 解析自然语言，如「昨天14点半 39.5 买了 2000 股中兴通讯」</span>
-          </div>
-          <div class="quick-input-row">
-            <input type="text" id="quickNl" placeholder="例：40 块卖了 5 手中兴通讯">
-            <button class="btn primary" id="quickParseBtn" type="button">AI 解析</button>
-          </div>
-          <div class="chips" id="quickChips">
-            <span class="chip" data-nl="买了1000股中兴通讯单价39.5">买了1000股中兴通讯单价39.5</span>
-            <span class="chip" data-nl="40块卖了5手中兴通讯">40块卖了5手中兴通讯</span>
-            <span class="chip" data-nl="昨天12.3买入2000股三峡能源，今天13块止盈一半">昨天买入·今日止盈一半</span>
-          </div>
-          <div id="quickHint" class="quick-hint" hidden></div>
-          <button class="btn ghost block" id="openFormBtn" type="button">手动填写完整表单</button>
-        </div>
-        <div class="card">
-          <div class="card-title-row">
-            <span class="card-title">近期操作</span>
-            <button class="btn ghost sm" data-goto="trades" type="button">全部记录</button>
-          </div>
-          <div id="recentTrades" class="mini-list"></div>
-        </div>
       </div>
     </section>
 
@@ -637,7 +610,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.45"></script>
-<script src="analysis-extra.js?v=3.8.45"></script>
+<script src="app.js?v=3.8.46"></script>
+<script src="analysis-extra.js?v=3.8.46"></script>
 </body>
 </html>
