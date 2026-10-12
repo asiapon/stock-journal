@@ -756,6 +756,8 @@ tr.stockagg:hover td { background: #F5F8FC; }
 /* 标题行右侧按钮组：删除分组(ghost) + 添加自选(primary) 并排靠右 */
 .ctr-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .ctr-actions .btn { margin-left: 0; }
+/* v3.8.40 折叠开关用轻量 ghost（同「手动填写完整表单」）；展开态文字转淡，让位给行内主动作 */
+.ctr-actions .btn.is-open { color: var(--ink-3); border-color: var(--line); }
 /* 添加行默认收起，点「＋ 添加自选」/ 行内「编辑」时展开 */
 .watch-form { display: none; }
 .watch-form.open { display: block; animation: wfIn .2s ease; }

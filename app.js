@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.39';
+const APP_VER = '3.8.40';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1809,10 +1809,9 @@ function setWatchFormOpen(m, open) {
   form.classList.toggle('open', !!open);
   const btn = m.toggle ? document.getElementById(m.toggle) : null;
   if (btn) {
+    /* v3.8.40 轻量 ghost 按钮（与「手动填写完整表单」同款）；展开时文字转淡，主动作交给行内「添加/保存」 */
     btn.textContent = open ? '收起' : '＋ 添加自选';
-    /* 展开时主动作交给行内「添加/保存」，标题按钮退为次要样式 */
-    btn.classList.toggle('primary', !open);
-    btn.classList.toggle('ghost', !!open);
+    btn.classList.toggle('is-open', !!open);
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
   if (!open) return;
