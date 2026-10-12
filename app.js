@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.36';
+const APP_VER = '3.8.37';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1180,17 +1180,14 @@ const WB_COLORS = ['#3468D6', '#D93A2B', '#0E9463', '#B7791F', '#7C5CBF', '#2E9A
 
 /* ============================================================
    v3.8.34 持仓 / 自选模块的「挂载点」配置
-   总览页与专页共用同一份渲染逻辑与事件绑定，只是 DOM 挂载点不同。
-   —— 后续若下线「持仓页 / 自选页」，删掉其 HTML 区块与对应条目即可，
-      渲染与交互代码无需改动。
+   渲染逻辑与 DOM 挂载点解耦，只是 DOM 挂载点不同。
+   —— v3.8.37 持仓页 / 自选页已下线，仅保留总览页挂载点；
+      若日后需要再开专页，加回一条 HTML 区块 + 这里一条即可。
    ============================================================ */
 const HOLD_MOUNTS = [
-  { pc: 'holdTable', mobile: 'holdTableM', summary: 'holdSummary', empty: 'holdEmpty', recBtn: 'holdEmptyRec' },
   { pc: 'tvHoldTable', mobile: 'tvHoldTableM', summary: 'tvHoldSummary', empty: 'tvHoldEmpty', recBtn: 'tvHoldEmptyRec', ext: true },
 ];
 const WATCH_MOUNTS = [
-  { root: 'view-watch', form: 'watchForm', input: 'wfInput', sug: 'wfSug', note: 'wfNoteQuick', group: 'wfGroupQuick',
-    submit: 'wfSubmit', cancel: 'wfCancel', tabs: 'watchTabs', table: 'watchTable', empty: 'watchEmpty', delGroup: 'delGroupBtn' },
   { root: 'view-today', form: 'tvWatchForm', input: 'tvWfInput', sug: 'tvWfSug', note: 'tvWfNoteQuick', group: 'tvWfGroupQuick',
     submit: 'tvWfSubmit', cancel: 'tvWfCancel', tabs: 'tvWatchTabs', table: 'tvWatchTable', empty: 'tvWatchEmpty', delGroup: 'tvDelGroupBtn' },
 ];
@@ -1272,12 +1269,13 @@ function renderHoldings() {
       });
     }
   }
-  updateSortHead(['#holdTable', '#tvHoldTable'], holdSort);
+  updateSortHead('#tvHoldTable', holdSort);
   /* 报价时间提示（持仓页 + 总览页同步） */
   const qtiTxt = NetQuote.quoteTime
     ? `行情报价时间 ${NetQuote.quoteTime}（${NetQuote.eastDeadUntil > Date.now() ? '腾讯备源' : '东财主源'}，缓存15秒）`
     : '行情未获取';
-  ['quoteTimeInfo', 'tvQuoteTime'].forEach(id => {
+  /* v3.8.37 持仓页下线：报价时间/指数条只有总览页一处挂载点 */
+  ['tvQuoteTime'].forEach(id => {
     const el = document.getElementById(id); if (el) el.textContent = qtiTxt;
   });
   /* v3.8.26 指数条：上证指数 / 深证成指 / 创业板指（红涨绿跌） */
@@ -1288,7 +1286,7 @@ function renderHoldings() {
     const sign = q.pct >= 0 ? '+' : '';
     return `<span class="idx-chip ${cls}"><span class="i-name">${esc(q.name || ix.name)}</span><span class="i-val">${fmt2(q.price)}</span><span class="i-pct">${sign}${q.pct.toFixed(2)}%</span></span>`;
   }).join('');
-  ['idxBar', 'tvIdxBar'].forEach(id => {
+  ['tvIdxBar'].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
     el.hidden = !idxItems; el.innerHTML = idxItems;
   });
@@ -1715,7 +1713,7 @@ function updateSortHead(tableSel, state) {
     th.classList.toggle('sorted-asc', state.key === th.dataset.sort && state.dir === -1);
   });
 }
-function updateWatchHead() { updateSortHead(['#watchTable', '#tvWatchTable'], watchSort); }
+function updateWatchHead() { updateSortHead('#tvWatchTable', watchSort); }
 /* 自选数据模型：分组 Tab + 行数据（含排序），与挂载点无关 */
 function watchModel() {
   const groups = [...new Set(['默认', ...S.watchlist.map(w => w.group_name || '默认')])];
@@ -2401,9 +2399,9 @@ function bindEvents() {
   });
 
   /* ---------- 持仓：刷新 / 自动刷新 / 表头排序 / 改价 ---------- */
-  /* v3.8.34 行情刷新入口归拢到总览页 + 持仓页，两处按钮/下拉镜像同一状态 */
+  /* v3.8.37 持仓页下线：行情刷新入口只剩总览页一处 */
   const refreshQuotesAll = async () => { await loadAll(); await refreshQuotes(true); };
-  ['refreshHoldBtn', 'tvRefreshBtn'].forEach(id => {
+  ['tvRefreshBtn'].forEach(id => {
     const b = document.getElementById(id);
     if (b) b.addEventListener('click', async () => { await refreshQuotesAll(); toast('已刷新行情'); });
   });
@@ -2413,22 +2411,22 @@ function bindEvents() {
     const rb = m.recBtn ? document.getElementById(m.recBtn) : null;
     if (rb) rb.addEventListener('click', () => openRecModal());
   }
-  /* 自动刷新：总览页与持仓页的下拉镜像同一计时器 */
+  /* 自动刷新：总览页行情条的下拉 */
   let holdTimer = null;
   function setHoldAuto(sec, from) {
     if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
     sec = parseInt(sec, 10) || 0;
-    ['holdAuto', 'tvAuto'].forEach(id => {
+    ['tvAuto'].forEach(id => {
       const s = document.getElementById(id);
       if (s && s !== from) s.value = String(sec);
     });
     if (sec > 0) holdTimer = setInterval(() => { refreshQuotes(true).catch(() => { /* */ }); }, sec * 1000);
   }
-  ['holdAuto', 'tvAuto'].forEach(id => {
+  ['tvAuto'].forEach(id => {
     const s = document.getElementById(id);
     if (s) s.addEventListener('change', () => setHoldAuto(s.value, s));
   });
-  setHoldAuto($('holdAuto').value);
+  setHoldAuto(($('tvAuto') || {}).value || '0');
   /* 点现价手填改价（总览页与持仓页挂载点共用） */
   function startPriceEdit(tr, code, name) {
     const cell = tr.querySelector('.price-cell');
@@ -2677,6 +2675,8 @@ function fillFormFromParsed(res) {
   updateFeePreview();
 }
 function switchView(name) {
+  /* v3.8.37 持仓页 / 自选页已下线：旧会话残留的 sj_view 或历史入口统一回落到总览 */
+  if (!$('view-' + name)) name = 'today';
   document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
   $('view-' + name).classList.add('active');
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === name));
