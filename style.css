@@ -752,6 +752,17 @@ tr.stockagg:hover td { background: #F5F8FC; }
 /* 操作按钮组：贴到行尾最右；编辑态「取消」在左、「保存」在最右 */
 .add-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
 
+/* ---------- v3.8.39 自选「添加区」默认折叠 ---------- */
+/* 标题行右侧按钮组：删除分组(ghost) + 添加自选(primary) 并排靠右 */
+.ctr-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.ctr-actions .btn { margin-left: 0; }
+/* 添加行默认收起，点「＋ 添加自选」/ 行内「编辑」时展开 */
+.watch-form { display: none; }
+.watch-form.open { display: block; animation: wfIn .2s ease; }
+@keyframes wfIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
+/* 收起时表单不再占据标题行下方的间距，紧接分组 Tab */
+.watch-form.open .add-row { margin-bottom: 12px; }
+
 /* ---------- v2.7.6 编辑自选时股票锁定 ---------- */
 #watchForm .add-row input.ro, #tvWatchForm .add-row input.ro { background: rgba(23, 30, 38, .04); color: var(--ink-2); cursor: not-allowed; }
 

@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.38';
+const APP_VER = '3.8.39';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1189,7 +1189,8 @@ const HOLD_MOUNTS = [
 ];
 const WATCH_MOUNTS = [
   { root: 'view-today', form: 'tvWatchForm', input: 'tvWfInput', sug: 'tvWfSug', note: 'tvWfNoteQuick', group: 'tvWfGroupQuick',
-    submit: 'tvWfSubmit', cancel: 'tvWfCancel', tabs: 'tvWatchTabs', table: 'tvWatchTable', empty: 'tvWatchEmpty', delGroup: 'tvDelGroupBtn' },
+    submit: 'tvWfSubmit', cancel: 'tvWfCancel', tabs: 'tvWatchTabs', table: 'tvWatchTable', empty: 'tvWatchEmpty', delGroup: 'tvDelGroupBtn',
+    toggle: 'tvWatchAddBtn' },   /* v3.8.39 添加区折叠开关（标题行按钮） */
 ];
 function renderHoldings() {
   const all = computeHoldings();
@@ -1776,7 +1777,7 @@ function paintWatch(m, M) {
   }).join('');
   if (empty) {
     empty.hidden = M.listLen > 0;
-    empty.textContent = watchTab ? `分组「${watchTab}」暂无自选，在上方添加会自动归入此分组` : '暂无自选股';
+    empty.textContent = watchTab ? `分组「${watchTab}」暂无自选，点右上角「＋ 添加自选」会自动归入此分组` : '暂无自选股，点右上角「＋ 添加自选」开始添加';
   }
   /* 当前在具体分组 Tab（「默认」除外）时显示「删除该分组」 */
   const dgb = el(m.delGroup);
@@ -1795,8 +1796,34 @@ function syncGroupList() {
   const dl = $('groupList');
   if (dl) dl.innerHTML = groups.map(g => `<option value="${esc(g)}">`).join('');
 }
+/* ============================================================
+   v3.8.39 自选添加区「折叠 / 展开」
+   默认收起，减少卡片噪音；以下三种情况自动展开：
+     · 点标题行「＋ 添加自选」/「收起」切换
+     · 点某行的「编辑」按钮（自动展开并回填）
+   收起即复位（等同取消），避免留下半截输入。
+   ============================================================ */
+function setWatchFormOpen(m, open) {
+  const form = document.getElementById(m.form);
+  if (!form) return;
+  form.classList.toggle('open', !!open);
+  const btn = m.toggle ? document.getElementById(m.toggle) : null;
+  if (btn) {
+    btn.textContent = open ? '收起' : '＋ 添加自选';
+    /* 展开时主动作交给行内「添加/保存」，标题按钮退为次要样式 */
+    btn.classList.toggle('primary', !open);
+    btn.classList.toggle('ghost', !!open);
+    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  }
+  if (!open) return;
+  /* 展开后把光标送到该去的框：新增态进股票框，编辑态（股票锁定）进备注框 */
+  const inp = document.getElementById(m.input);
+  const note = document.getElementById(m.note);
+  const target = (inp && inp.readOnly && note) ? note : inp;
+  if (target) setTimeout(() => { try { target.focus(); } catch (err) { /* */ } }, 40);
+}
 function fillWatchForm(w, m) {
-  resetWatchForm();                          // 先清空所有挂载点，避免两个表单同时停在编辑态
+  resetWatchForm(false);                     // 先清空所有挂载点（暂不折叠），避免两个表单同时停在编辑态
   S.editingWatchId = w.id;
   const inp = document.getElementById(m.input);
   if (!inp) return;
@@ -1809,10 +1836,11 @@ function fillWatchForm(w, m) {
   const nt = document.getElementById(m.note); if (nt) nt.value = w.note || '';
   const sub = document.getElementById(m.submit); if (sub) sub.textContent = '保存';   /* v3.8.35 编辑态：保存 */
   const cc = document.getElementById(m.cancel); if (cc) cc.hidden = false;
+  setWatchFormOpen(m, true);                 // v3.8.39 编辑：自动展开并回填
 }
-function resetWatchForm() {
+function resetWatchForm(collapse = true) {
   S.editingWatchId = null;
-  /* v3.8.34 所有挂载点一并复位（总览页 / 自选页） */
+  /* v3.8.34 所有挂载点一并复位 */
   for (const m of WATCH_MOUNTS) {
     const form = document.getElementById(m.form); if (form) form.reset();
     const inp = document.getElementById(m.input);
@@ -1826,6 +1854,7 @@ function resetWatchForm() {
     const nt = document.getElementById(m.note); if (nt) nt.value = '';
     const sub = document.getElementById(m.submit); if (sub) sub.textContent = '添加';   /* v3.8.35 新增态：添加 */
     const cc = document.getElementById(m.cancel); if (cc) cc.hidden = true;
+    if (collapse) setWatchFormOpen(m, false);  // v3.8.39 收起即复位
   }
 }
 /* ============================================================
@@ -1897,7 +1926,15 @@ function bindWatchCard(m) {
     } catch (err) { toast(err.message || '保存失败', 'warn'); }
   });
   const cancelBtn = el(m.cancel);
-  if (cancelBtn) cancelBtn.addEventListener('click', resetWatchForm);
+  if (cancelBtn) cancelBtn.addEventListener('click', () => resetWatchForm());
+  /* v3.8.39 标题行折叠开关：展开 → 清空进入新增态并聚焦；收起 → 复位 */
+  const toggleBtn = m.toggle ? el(m.toggle) : null;
+  if (toggleBtn) toggleBtn.addEventListener('click', () => {
+    const form = el(m.form);
+    const isOpen = !!(form && form.classList.contains('open'));
+    if (isOpen) resetWatchForm();
+    else { resetWatchForm(false); setWatchFormOpen(m, true); }
+  });
   /* 分组 Tab：切换 / 新建；切 Tab 后添加自动归入当前分组 */
   const tabs = el(m.tabs);
   if (tabs) tabs.addEventListener('click', e => {
