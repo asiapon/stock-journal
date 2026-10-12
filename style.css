@@ -728,14 +728,13 @@ tr.stockagg:hover td { background: #F5F8FC; }
   padding: 3px 6px; border-radius: 999px;
 }
 .wtab.on i { background: #fff; color: var(--blue); }
-/* v3.8.44 分组行「动作按钮」与分组 Tab 分层：
-   Tab 是「内容」（白底 + 边框胶囊），动作按钮是「操作」（无边框、纯图标、颜色更淡）。
-   两个按钮同宽同高、图标居中，并与 Tab 之间留出额外间距，避免被读成「又一个分组」。
+/* v3.8.45 分组行「动作按钮」= 图标 + 短词：
+   既保留 v3.8.44 的视觉分层（无边框、透明底、色淡于 Tab，动作 ≠ 内容），
+   又把语义直接写出来（folderPlus「新建分组」/ trash「删除分组」），不必靠图形去猜。
    hover 语义：新建 → 蓝（建设性），删除 → 红（破坏性）。 */
 .wtab-act {
   border-color: transparent; background: transparent;
-  padding: 6px; min-width: 34px; justify-content: center;
-  color: var(--ink-2, #66707C);
+  padding: 6px 8px; color: var(--ink-2, #66707C);
 }
 .wtab-act svg { width: 16px; height: 16px; display: block; }
 .wtab-add { margin-left: 4px; }

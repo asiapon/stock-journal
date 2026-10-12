@@ -68,10 +68,10 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.44';
+const APP_VER = '3.8.45';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
-   folderPlus = 新建分组，trash = 删除当前分组。图形自带语义，替代原先的 ＋ / － 符号。 */
+   folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
 const ICO = {
   folderPlus: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M3.5 7.5A1.5 1.5 0 0 1 5 6h3.2l1.6 2h9.2A1.5 1.5 0 0 1 20.5 9.5v8A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5z"/><path d="M12 11v5.5M9.25 13.75h5.5"/></svg>',
   trash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 7h15M9.5 7V5.5a1.5 1.5 0 0 1 1.5-1.5h2a1.5 1.5 0 0 1 1.5 1.5V7M6.9 7l.8 11.4A1.6 1.6 0 0 0 9.3 20h5.4a1.6 1.6 0 0 0 1.6-1.6L17.1 7"/></svg>',
@@ -1775,13 +1775,13 @@ function watchModel() {
 function paintWatch(m, M) {
   const el = id => document.getElementById(id);
   const tabs = el(m.tabs);
-  /* v3.8.44 分组行结构：左侧是「内容」（分组 Tab），右侧是两个「动作」按钮
-     （folderPlus 新建分组 / trash 删除当前分组），动作按钮在样式上与 Tab 分层。
+  /* v3.8.45 分组行结构：左侧是「内容」（分组 Tab），右侧是两个「动作」按钮
+     = 图标 + 短词（folderPlus「新建分组」/ trash「删除分组」），样式上与 Tab 分层。
      删除按钮仅在具体分组（非「默认」）时出现。 */
   const canDelGroup = !!(watchTab && watchTab !== '默认');
   if (tabs) tabs.innerHTML = M.tabGroups.map(g => `<button class="wtab${watchTab === g ? ' on' : ''}" data-g="${esc(g)}">${esc(g)}<i>${S.watchlist.filter(w => (w.group_name || '默认') === g).length}</i></button>`).join('')
-    + `<button class="wtab wtab-act wtab-add" data-g="+" title="新建分组" aria-label="新建分组">${ICO.folderPlus}</button>`
-    + (m.delGroup ? `<button class="wtab wtab-act wtab-del" id="${m.delGroup}" type="button" aria-label="删除当前分组" title="删除当前分组，组内自选移回「默认」"${canDelGroup ? '' : ' hidden'}>${ICO.trash}</button>` : '');
+    + `<button class="wtab wtab-act wtab-add" data-g="+" title="新建分组" aria-label="新建分组">${ICO.folderPlus}<span>新建分组</span></button>`
+    + (m.delGroup ? `<button class="wtab wtab-act wtab-del" id="${m.delGroup}" type="button" aria-label="删除当前分组" title="删除当前分组，组内自选移回「默认」"${canDelGroup ? '' : ' hidden'}>${ICO.trash}<span>删除分组</span></button>` : '');
   const table = el(m.table);
   if (!table) return;                       // 该挂载点不存在（例如页面已下线）
   const empty = el(m.empty);
