@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.32">
+<link rel="stylesheet" href="style.css?v=3.8.33">
 </head>
 <body>
 
@@ -219,7 +219,11 @@
     <!-- ============ 自选 ============ -->
     <section id="view-watch" class="view">
       <div class="card">
-        <div class="card-title">添加自选</div>
+        <div class="card-title-row">
+          <span class="card-title">自选列表</span>
+          <span class="hint">在上方输入代码 / 名称即可添加，支持分组</span>
+          <button class="btn ghost sm" id="delGroupBtn" type="button" style="visibility:hidden">删除该分组</button>
+        </div>
         <form id="watchForm">
           <div class="add-row sug-anchor">
             <input type="text" id="wfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt">
@@ -231,13 +235,6 @@
           </div>
           <datalist id="groupList"></datalist>
         </form>
-      </div>
-      <div class="card">
-        <div class="card-title-row">
-          <span class="card-title">自选列表</span>
-          <button class="btn ghost sm" id="delGroupBtn" type="button" style="visibility:hidden">删除该分组</button>
-          <span class="hint"></span>
-        </div>
         <div class="wtabs" id="watchTabs"></div>
         <div class="table-scroll">
           <table class="tbl" id="watchTable">
@@ -654,7 +651,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.32"></script>
-<script src="analysis-extra.js?v=3.8.32"></script>
+<script src="app.js?v=3.8.33"></script>
+<script src="analysis-extra.js?v=3.8.33"></script>
 </body>
 </html>
