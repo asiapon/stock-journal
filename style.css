@@ -404,6 +404,15 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .modal-title { font-size: 16px; font-weight: 600; margin-bottom: 8px; }
 .modal-desc { color: var(--ink-2); font-size: 13.5px; margin-bottom: 18px; word-break: break-all; }
 .modal-actions { display: flex; gap: 10px; justify-content: flex-end; }
+/* v3.8.43 输入型弹窗的输入框（新建分组 / 重置密码等）
+   高度/字号/内边距沿用 v2.8.1 全局输入框规则；边框/底色/圆角/焦点态与 .add-row input 逐项对齐 */
+.dlg-input {
+  display: block; width: 100%; margin: 0 0 18px;
+  border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  background: #FBFCFD; outline: none;
+  transition: border-color .15s, box-shadow .15s;
+}
+.dlg-input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 
 /* ---------- Toast ---------- */
 #toast {

@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.42">
+<link rel="stylesheet" href="style.css?v=3.8.43">
 </head>
 <body>
 
@@ -622,6 +622,8 @@
     <div class="modal">
       <div class="modal-title" id="confirmTitle">确认</div>
       <div class="modal-desc" id="confirmDesc"></div>
+      <!-- v3.8.43 输入型弹窗（如「新建分组」）：与确认弹窗同一套骨架，仅多这一行输入框 -->
+      <input type="text" id="confirmInput" class="dlg-input" autocomplete="off" hidden>
       <div class="modal-actions">
         <button class="btn ghost" id="confirmCancel" type="button">取消</button>
         <button class="btn danger" id="confirmOk" type="button">确认</button>
@@ -635,7 +637,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.42"></script>
-<script src="analysis-extra.js?v=3.8.42"></script>
+<script src="app.js?v=3.8.43"></script>
+<script src="analysis-extra.js?v=3.8.43"></script>
 </body>
 </html>

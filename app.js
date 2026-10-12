@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.42';
+const APP_VER = '3.8.43';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -217,16 +217,34 @@ function bindSuggest(inputId, boxId, onPick) {
   inp.addEventListener('blur', () => setTimeout(close, 120));
 }
 
-/* 确认模态 */
+/* 确认模态（v3.8.43 起同一套骨架兼做「输入模态」，仅多一行输入框） */
 let confirmCb = null;
+let confirmInputCb = null;
 function confirmDlg(title, desc, onOk, okText) {
   $('confirmTitle').textContent = title;
-  $('confirmDesc').textContent = desc;
-  $('confirmOk').textContent = okText || '确认';
-  confirmCb = onOk;
+  const d = $('confirmDesc'); d.textContent = desc; d.hidden = false;
+  const inp = $('confirmInput'); inp.hidden = true; inp.value = '';
+  const ok = $('confirmOk'); ok.textContent = okText || '确认'; ok.className = 'btn danger';
+  confirmCb = onOk; confirmInputCb = null;
   $('confirmModal').hidden = false;
 }
-function closeConfirm() { $('confirmModal').hidden = true; confirmCb = null; }
+/* v3.8.43 输入模态：与 confirmDlg 完全同款，多一行输入框；onOk 收到去掉首尾空格的文本 */
+function promptDlg(title, desc, onOk, opt) {
+  opt = opt || {};
+  $('confirmTitle').textContent = title;
+  const d = $('confirmDesc'); d.textContent = desc || ''; d.hidden = !desc;
+  const inp = $('confirmInput');
+  inp.hidden = false; inp.value = opt.value || ''; inp.placeholder = opt.placeholder || '';
+  const ok = $('confirmOk'); ok.textContent = opt.okText || '确定'; ok.className = 'btn primary';
+  confirmInputCb = onOk; confirmCb = null;
+  $('confirmModal').hidden = false;
+  setTimeout(() => { try { inp.focus(); inp.select(); } catch (e) { /* */ } }, 30);
+}
+function closeConfirm() {
+  $('confirmModal').hidden = true;
+  const inp = $('confirmInput'); inp.hidden = true; inp.value = '';
+  confirmCb = null; confirmInputCb = null;
+}
 
 /* ============================================================
    费用引擎（口径与 trade-manager 一致，‰，三市独立）
@@ -1941,11 +1959,15 @@ function bindWatchCard(m) {
     if (b.classList.contains('wtab-del')) { delWatchGroup(); return; }
     const g = b.dataset.g;
     if (g === '+') {
-      const name = (prompt('新分组名称：') || '').trim();
-      if (!name) return;
-      watchTab = name;
-      renderWatch();
-      const gqEl = el(m.group); if (gqEl) gqEl.value = name;
+      /* v3.8.43 新建分组改用与「删除该分组」同款的自定义弹窗（原为浏览器原生 prompt） */
+      promptDlg('新建分组', '输入新分组名称，确认后自动切到该分组。', name => {
+        name = (name || '').trim();
+        if (!name) return;
+        watchTab = name;
+        try { localStorage.setItem('sj_watchTab', watchTab); } catch (err) { /* */ }
+        renderWatch();
+        const gqEl = el(m.group); if (gqEl) gqEl.value = name;
+      }, { okText: '新建', placeholder: '如：白酒 / 新能源' });
       return;
     }
     watchTab = g;
@@ -2136,9 +2158,19 @@ function bindEvents() {
   document.querySelectorAll('[data-goto]').forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.goto)));
   $('logoutBtn').addEventListener('click', () => doLogout(false));
 
-  /* 模态 */
+  /* 模态：确认框与输入框共用同一个「确定」按钮（v3.8.43） */
   $('confirmCancel').addEventListener('click', closeConfirm);
-  $('confirmOk').addEventListener('click', () => { const cb = confirmCb; closeConfirm(); if (cb) cb(); });
+  $('confirmOk').addEventListener('click', () => {
+    const cb = confirmInputCb || confirmCb;
+    const val = confirmInputCb ? $('confirmInput').value.trim() : null;
+    closeConfirm();
+    if (cb) cb(val);
+  });
+  /* 输入框内：回车=确定，Esc=取消 */
+  $('confirmInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); $('confirmOk').click(); }
+    else if (e.key === 'Escape') { e.preventDefault(); closeConfirm(); }
+  });
 
   /* 今日 / 交易页：AI 解析入口 + 待确认列表 */
   $('quickParseBtn').addEventListener('click', () => aiParseEntry('quickNl', 'quickHint'));
@@ -2659,13 +2691,15 @@ function bindEvents() {
     const delBtn = e.target.closest('.del-user');
     if (resetBtn) {
       const u = resetBtn.dataset.u;
-      const newP = prompt(`为「${u}」设置新密码（至少 6 位）：`);
-      if (!newP) return;
-      try {
-        const r = await rpc('app_reset_pwd', { p_token: S.token, p_username: u, p_new: newP });
-        if (!r.ok) { toast(r.msg || '重置失败', 'warn'); return; }
-        toast('已重置，该用户下次登录需改密');
-      } catch (err) { toast(err.message || '重置失败', 'warn'); }
+      /* v3.8.43 同样改用自定义输入弹窗（原为浏览器原生 prompt） */
+      promptDlg('重置密码', `为「${u}」设置新密码，至少 6 位。`, async newP => {
+        if (!newP) return;
+        try {
+          const r = await rpc('app_reset_pwd', { p_token: S.token, p_username: u, p_new: newP });
+          if (!r.ok) { toast(r.msg || '重置失败', 'warn'); return; }
+          toast('已重置，该用户下次登录需改密');
+        } catch (err) { toast(err.message || '重置失败', 'warn'); }
+      }, { okText: '重置', placeholder: '至少 6 位' });
       return;
     }
     if (delBtn) {
