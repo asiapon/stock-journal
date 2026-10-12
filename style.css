@@ -720,8 +720,8 @@ tr.stockagg:hover td { background: #F5F8FC; }
 }
 .wtab.on i { background: #fff; color: var(--blue); }
 .wtab-add { padding: 6px 10px; font-weight: 600; }
-/* v3.8.41 「删除该分组」紧随「＋ 新建分组」之后：同款胶囊外形，文字更淡、hover 保持中性（表明它是动作而非分组 Tab） */
-.wtab-del { color: var(--ink-3, #98A1AC); }
+/* v3.8.42 分组行「＋ / －」成对：删除与新建同款胶囊外形、同宽，仅符号；颜色更淡、hover 保持中性（表明它是动作而非分组 Tab） */
+.wtab-del { padding: 6px 10px; font-weight: 600; color: var(--ink-3, #98A1AC); }
 .wtab-del:hover { color: var(--ink-2); border-color: var(--line); }
 
 /* ---------- v2.7.1 添加自选分组框 + 手机端两行布局 ---------- */
@@ -759,8 +759,9 @@ tr.stockagg:hover td { background: #F5F8FC; }
 /* 标题行右侧按钮组：删除分组(ghost) + 添加自选(primary) 并排靠右 */
 .ctr-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .ctr-actions .btn { margin-left: 0; }
-/* v3.8.40 折叠开关用轻量 ghost（同「手动填写完整表单」）；展开态文字转淡，让位给行内主动作 */
-.ctr-actions .btn.is-open { color: var(--ink-3); border-color: var(--line); }
+/* v3.8.42 折叠开关改用 .link-btn（同「手动录入 ▸」的纯文字链接）；展开态箭头翻转、文字转淡，让位给行内主动作 */
+.ctr-actions .link-btn { margin-top: 0; padding: 2px 0; font-size: 12.5px; }
+.ctr-actions .link-btn.is-open { color: var(--ink-3); }
 /* 添加行默认收起，点「＋ 添加自选」/ 行内「编辑」时展开 */
 .watch-form { display: none; }
 .watch-form.open { display: block; animation: wfIn .2s ease; }

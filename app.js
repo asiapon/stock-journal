@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.41';
+const APP_VER = '3.8.42';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1754,7 +1754,7 @@ function paintWatch(m, M) {
   const canDelGroup = !!(watchTab && watchTab !== '默认');
   if (tabs) tabs.innerHTML = M.tabGroups.map(g => `<button class="wtab${watchTab === g ? ' on' : ''}" data-g="${esc(g)}">${esc(g)}<i>${S.watchlist.filter(w => (w.group_name || '默认') === g).length}</i></button>`).join('')
     + `<button class="wtab wtab-add" data-g="+" title="新建分组">＋</button>`
-    + (m.delGroup ? `<button class="wtab wtab-del" id="${m.delGroup}" type="button" title="删除当前分组，组内自选移回「默认」"${canDelGroup ? '' : ' hidden'}>删除该分组</button>` : '');
+    + (m.delGroup ? `<button class="wtab wtab-del" id="${m.delGroup}" type="button" aria-label="删除当前分组" title="删除当前分组，组内自选移回「默认」"${canDelGroup ? '' : ' hidden'}>－</button>` : '');
   const table = el(m.table);
   if (!table) return;                       // 该挂载点不存在（例如页面已下线）
   const empty = el(m.empty);
@@ -1809,8 +1809,8 @@ function setWatchFormOpen(m, open) {
   form.classList.toggle('open', !!open);
   const btn = m.toggle ? document.getElementById(m.toggle) : null;
   if (btn) {
-    /* v3.8.40 轻量 ghost 按钮（与「手动填写完整表单」同款）；展开时文字转淡，主动作交给行内「添加/保存」 */
-    btn.textContent = open ? '收起' : '＋ 添加自选';
+    /* v3.8.42 纯文字链接（与「手动录入 ▸」同款 .link-btn）；展开时箭头翻转、文字转淡，主动作交给行内「添加/保存」 */
+    btn.textContent = open ? '收起 ▴' : '＋ 添加自选 ▸';
     btn.classList.toggle('is-open', !!open);
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
