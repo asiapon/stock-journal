@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.25';
+const APP_VER = '3.8.26';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -346,6 +346,13 @@ const NetQuote = {
   ttl: 15 * 1000,            // v3.8.23 缓存 60s → 15s
   eastFailStreak: 0,
   eastDeadUntil: 0,          // 东财连续失败 3 次熔断 10 分钟（期间直接走腾讯）
+  idx: new Map(),            // v3.8.26 指数快照：sym(sh000001) -> { name, price, pct }
+  idxTime: 0,
+  INDEXES: [                 // 三大指数：随行情刷新一并拉取
+    { sym: 'sh000001', name: '上证指数', secid: '1.000001' },
+    { sym: 'sz399001', name: '深证成指', secid: '0.399001' },
+    { sym: 'sz399006', name: '创业板指', secid: '0.399006' },
+  ],
   prefix(market, code) {
     if (market === 'bj' || market === 'bse') return 'bj' + code;
     if (market === 'sz') return 'sz' + code;
@@ -413,6 +420,49 @@ const NetQuote = {
       return null;
     }
   },
+  /* v3.8.26 指数快照：东财 ulist 主源（f12代码+f13市场避免与个股代码撞号）→ 腾讯备选 */
+  async fetchIdx() {
+    const t0 = Date.now();
+    const tryEast = async () => {
+      const secids = this.INDEXES.map(i => i.secid).join(',');
+      const url = 'https://push2.eastmoney.com/api/qt/ulist.np/get?secids=' + secids
+        + '&fields=f2,f3,f12,f13,f14&fltt=2';
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('HTTP ' + res.status);
+      const j = await res.json();
+      const out = new Map();
+      for (const it of ((j.data && j.data.diff) || [])) {
+        const price = parseFloat(it.f2), code = it.f12 && String(it.f12);
+        if (!code || !(price > 0)) continue;
+        const sym = (it.f13 === 1 ? 'sh' : 'sz') + code;
+        out.set(sym, { name: it.f14 || code, price, pct: parseFloat(it.f3) });
+      }
+      return out;
+    };
+    const tryTx = async () => {
+      const res = await fetch('https://qt.gtimg.cn/q=' + this.INDEXES.map(i => i.sym).join(','));
+      const buf = await res.arrayBuffer();
+      const text = new TextDecoder('gbk').decode(buf);
+      const out = new Map();
+      for (const m of text.matchAll(/v_(sh|sz)(\d{6})="([^"]*)"/g)) {
+        const p = m[3].split('~');
+        const price = parseFloat(p[3]);
+        if (price > 0) out.set(m[1] + m[2], { name: p[1], price, pct: parseFloat(p[32]) });
+      }
+      return out;
+    };
+    let out = null;
+    if (Date.now() >= this.eastDeadUntil) {
+      try { out = await tryEast(); NetLog.push('quote', '东财 指数快照', out.size > 0, Date.now() - t0, `${out.size}/${this.INDEXES.length} 个`); }
+      catch (e) { NetLog.push('quote', '东财 指数快照', false, Date.now() - t0, e.message || String(e)); }
+    }
+    if (!out || !out.size) {
+      const t1 = Date.now();
+      try { out = await tryTx(); NetLog.push('quote', '腾讯 指数快照', out.size > 0, Date.now() - t1, `${out.size}/${this.INDEXES.length} 个`); }
+      catch (e) { NetLog.push('quote', '腾讯 指数快照', false, Date.now() - t1, e.message || String(e)); }
+    }
+    if (out && out.size) { this.idx = out; this.idxTime = Date.now(); }
+  },
   async refresh(force = false) {
     const { codes, mk } = this.allCodes();
     if (!codes.length) return this.map;
@@ -451,6 +501,7 @@ const NetQuote = {
         this.map = merged;
         this.fetchedAt = Date.now();
         if (qt) this.quoteTime = qt;
+        await this.fetchIdx();   // v3.8.26 指数随行情一并刷新
       }
       this.pending = null;
       return merged;
@@ -1225,6 +1276,19 @@ function renderHoldings() {
   if (qti) qti.textContent = NetQuote.quoteTime
     ? `行情报价时间 ${NetQuote.quoteTime}（${NetQuote.eastDeadUntil > Date.now() ? '腾讯备源' : '东财主源'}，缓存15秒）`
     : '行情未获取';
+  /* v3.8.26 指数条：上证指数 / 深证成指 / 创业板指（红涨绿跌） */
+  const ib = $('idxBar');
+  if (ib) {
+    const items = NetQuote.INDEXES.map(ix => {
+      const q = NetQuote.idx.get(ix.sym);
+      if (!q || !(q.price > 0)) return '';
+      const cls = q.pct >= 0 ? 'up' : 'down';
+      const sign = q.pct >= 0 ? '+' : '';
+      return `<span class="idx-chip ${cls}"><span class="i-name">${esc(q.name || ix.name)}</span><span class="i-val">${fmt2(q.price)}</span><span class="i-pct">${sign}${q.pct.toFixed(2)}%</span></span>`;
+    }).join('');
+    ib.hidden = !items;
+    ib.innerHTML = items;
+  }
   const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   /* 账户累计总盈亏 = 持仓市值 − 累计买入净额 + 累计卖出净额（无需初始额度，费用已含在净额中） */
   let buyNetAll = 0, sellNetAll = 0;

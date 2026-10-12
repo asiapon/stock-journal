@@ -1155,3 +1155,17 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 #watchTable th.sortable, #holdTable th.sortable::after { content: '⇅'; margin-left: 3px; font-size: 10px; opacity: .35; }
 #watchTable th.sortable, #holdTable th.sortable.sorted-desc::after { content: '▼'; opacity: 1; color: var(--blue); }
 #watchTable th.sortable, #holdTable th.sortable.sorted-asc::after { content: '▲'; opacity: 1; color: var(--blue); }
+
+/* ---------- v3.8.26 持仓页指数条（红涨绿跌） ---------- */
+.idx-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
+.idx-chip {
+  display: inline-flex; align-items: baseline; gap: 6px;
+  padding: 4px 10px; border-radius: 8px;
+  background: var(--card, #fff); border: 1px solid var(--line, #e5e8ec);
+  font-size: 12px; line-height: 1.4;
+}
+.idx-chip .i-name { color: var(--ink-3, #98A1AC); }
+.idx-chip .i-val { font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
+.idx-chip .i-pct { font-variant-numeric: tabular-nums; }
+.idx-chip.up .i-val, .idx-chip.up .i-pct { color: var(--up); }
+.idx-chip.down .i-val, .idx-chip.down .i-pct { color: var(--down); }
