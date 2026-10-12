@@ -611,24 +611,24 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .tl-time, .tl-sub, .tl-num .t-val, .tl-num .m-sub { font-size: 12.5px; }
 
 /* ---------- v3.1.2 持仓/可用两行（PC+手机） ---------- */
-#holdTable .two-line { display: flex; flex-direction: column; line-height: 1.35; }
-#holdTable .two-line .sub { font-size: 11px; color: var(--ink-3); }
+#holdTable .two-line, #tvHoldTable .two-line { display: flex; flex-direction: column; line-height: 1.35; }
+#holdTable .two-line .sub, #tvHoldTable .two-line .sub { font-size: 11px; color: var(--ink-3); }
 
 /* ---------- v3.1.1 持仓手机端合并列表格 ---------- */
-#holdTableM { display: none; min-width: 0; }
-#holdTableM .two-line b { font-weight: 500; }
+#holdTableM, #tvHoldTableM { display: none; min-width: 0; }
+#holdTableM .two-line b, #tvHoldTableM .two-line b { font-weight: 500; }
 @media (max-width: 639px) {
-  #holdTable { display: none; }           /* 手机端隐藏全列表格 */
-  #holdTableM { display: table; }
-  #holdTableM th, #holdTableM td { padding: 8px 5px; font-size: 12px; font-weight: 500; font-family: inherit; }
-  #holdTableM .two-line { display: flex; flex-direction: column; line-height: 1.4; }
-  #holdTableM .two-line b { font-weight: 500; }
-  #holdTableM .two-line .sub { font-size: 12px; font-weight: 500; color: var(--ink-3); }
-  #holdTableM .stock-cell { min-width: 0; }
-  #holdTableM .sc-name { font-size: 12px; font-weight: 500; }
-  #holdTableM .sc-code { font-size: 12px; font-weight: 500; }
-  #holdTableM .sc-mv { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
-  #holdTableM .icon-btn { font-size: 12px; font-weight: 500; }
+  #holdTable, #tvHoldTable { display: none; }           /* 手机端隐藏全列表格 */
+  #holdTableM, #tvHoldTableM { display: table; }
+  #holdTableM th, #tvHoldTableM th, #holdTableM td, #tvHoldTableM td { padding: 8px 5px; font-size: 12px; font-weight: 500; font-family: inherit; }
+  #holdTableM .two-line, #tvHoldTableM .two-line { display: flex; flex-direction: column; line-height: 1.4; }
+  #holdTableM .two-line b, #tvHoldTableM .two-line b { font-weight: 500; }
+  #holdTableM .two-line .sub, #tvHoldTableM .two-line .sub { font-size: 12px; font-weight: 500; color: var(--ink-3); }
+  #holdTableM .stock-cell, #tvHoldTableM .stock-cell { min-width: 0; }
+  #holdTableM .sc-name, #tvHoldTableM .sc-name { font-size: 12px; font-weight: 500; }
+  #holdTableM .sc-code, #tvHoldTableM .sc-code { font-size: 12px; font-weight: 500; }
+  #holdTableM .sc-mv, #tvHoldTableM .sc-mv { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
+  #holdTableM .icon-btn, #tvHoldTableM .icon-btn { font-size: 12px; font-weight: 500; }
 }
 
 /* ---------- v3.2.1 交易记录检索增强 ---------- */
@@ -737,9 +737,9 @@ tr.stockagg:hover td { background: #F5F8FC; }
   .tbl .sc-code { font-size: 10.5px; }
   .tbl th, .tbl td { padding: 8px 6px; }
   /* v3.8.17 手机端持仓：名称/代码/市值三行 */
-  #holdTableM .stock-cell { max-width: 120px; }
-  #holdTableM .sc-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  #holdTableM .sc-mv { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
+  #holdTableM .stock-cell, #tvHoldTableM .stock-cell { max-width: 120px; }
+  #holdTableM .sc-name, #tvHoldTableM .sc-name { font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #holdTableM .sc-mv, #tvHoldTableM .sc-mv { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
 }
 
 /* ---------- v2.7.4 添加/编辑自选合一 ---------- */
@@ -821,19 +821,19 @@ select { padding-right: 6px; background: var(--card); color: var(--ink); }
 #tfTypeTabs .wtab { flex: 1; justify-content: center; padding: 4px 0; }
 
 /* ---------- v3.1.3 表头字号（v3.6.3 起 td 及第二行小字统一由 v3.1.8 段控制 13px） ---------- */
-#holdTable th, #holdTableM th, #tradeTable th, #watchTable th { font-size: 12px; }
+#holdTable th, #tvHoldTable th, #holdTableM th, #tvHoldTableM th, #tradeTable th, #watchTable th, #tvWatchTable th { font-size: 12px; }
 
 /* ---------- v3.1.8 表格字号完全统一（含第二行小字） ---------- */
 /* 表内所有内容一律 13px，第二行仅用灰色区分主次 */
-#holdTable td, #holdTableM td, #tradeTable td, #watchTable td,
-#holdTable .sc-code, #holdTableM .sc-code, #tradeTable .sc-code, #watchTable .sc-code,
-#holdTable .two-line .sub, #holdTableM .two-line .sub,
+#holdTable td, #tvHoldTable td, #holdTableM td, #tvHoldTableM td, #tradeTable td, #watchTable td, #tvWatchTable td,
+#holdTable .sc-code, #tvHoldTable .sc-code, #holdTableM .sc-code, #tvHoldTableM .sc-code, #tradeTable .sc-code, #watchTable .sc-code, #tvWatchTable .sc-code,
+#holdTable .two-line .sub, #tvHoldTable .two-line .sub, #holdTableM .two-line .sub, #tvHoldTableM .two-line .sub,
 #tradeTable .tm-cell .tm-sub, #watchTable .tm-cell .tm-sub,
 #watchTable .adate { font-size: 13px; }
 @media (max-width: 639px) {
-  #holdTable td, #holdTableM td, #tradeTable td, #watchTable td,
-  #holdTable .sc-code, #holdTableM .sc-code, #tradeTable .sc-code, #watchTable .sc-code,
-  #holdTable .two-line .sub, #holdTableM .two-line .sub,
+  #holdTable td, #tvHoldTable td, #holdTableM td, #tvHoldTableM td, #tradeTable td, #watchTable td, #tvWatchTable td,
+  #holdTable .sc-code, #tvHoldTable .sc-code, #holdTableM .sc-code, #tvHoldTableM .sc-code, #tradeTable .sc-code, #watchTable .sc-code, #tvWatchTable .sc-code,
+  #holdTable .two-line .sub, #tvHoldTable .two-line .sub, #holdTableM .two-line .sub, #tvHoldTableM .two-line .sub,
   #tradeTable .tm-cell .tm-sub, #watchTable .tm-cell .tm-sub,
   #watchTable .adate { font-size: 13px; }
 }
@@ -1150,11 +1150,11 @@ select:hover { border-color: var(--blue); }
 select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 
 /* ---------- v3.8.22 自选表表头排序（三态：降序/升序/取消） ---------- */
-#watchTable th.sortable, #holdTable th.sortable { cursor: pointer; user-select: none; }
-#watchTable th.sortable, #holdTable th.sortable:hover { color: var(--blue); }
-#watchTable th.sortable, #holdTable th.sortable::after { content: '⇅'; margin-left: 3px; font-size: 10px; opacity: .35; }
-#watchTable th.sortable, #holdTable th.sortable.sorted-desc::after { content: '▼'; opacity: 1; color: var(--blue); }
-#watchTable th.sortable, #holdTable th.sortable.sorted-asc::after { content: '▲'; opacity: 1; color: var(--blue); }
+#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable, #tvHoldTable th.sortable { cursor: pointer; user-select: none; }
+#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable:hover, #tvHoldTable th.sortable:hover { color: var(--blue); }
+#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable::after, #tvHoldTable th.sortable::after { content: '⇅'; margin-left: 3px; font-size: 10px; opacity: .35; }
+#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable.sorted-desc::after, #tvHoldTable th.sortable.sorted-desc::after { content: '▼'; opacity: 1; color: var(--blue); }
+#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable.sorted-asc::after, #tvHoldTable th.sortable.sorted-asc::after { content: '▲'; opacity: 1; color: var(--blue); }
 
 /* ---------- v3.8.26 持仓页指数条（红涨绿跌） ---------- */
 .idx-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }
@@ -1169,6 +1169,20 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 .idx-chip .i-pct { font-variant-numeric: tabular-nums; }
 .idx-chip.up .i-val, .idx-chip.up .i-pct { color: var(--up); }
 .idx-chip.down .i-val, .idx-chip.down .i-pct { color: var(--down); }
+/* ---------- v3.8.34 总览页「大盘指数」：放大成主视觉条 ---------- */
+.idx-bar-lg { gap: 10px; margin: 4px 0 8px; }
+.idx-bar-lg .idx-chip { padding: 8px 14px; border-radius: 10px; font-size: 13px; gap: 8px; }
+.idx-bar-lg .idx-chip .i-name { font-size: 12px; }
+.idx-bar-lg .idx-chip .i-val { font-size: 16px; font-weight: 600; color: var(--ink); }
+.idx-bar-lg .idx-chip .i-pct { font-size: 12.5px; font-weight: 600; }
+/* 总览页「持仓快照」统计卡：三卡一行 */
+#tvHoldSummary { grid-template-columns: repeat(3, 1fr); }
+#tvHoldSummary .s-sub b { font-weight: 600; }
+@media (max-width: 720px) {
+  #tvHoldSummary { grid-template-columns: repeat(2, 1fr); }
+  .idx-bar-lg .idx-chip { padding: 6px 10px; }
+  .idx-bar-lg .idx-chip .i-val { font-size: 14px; }
+}
 
 /* ---------- v3.8.28 明细卡精简：成本双值分隔 ---------- */
 #holdDetailStats .s-sep { color: var(--ink-3, #98A1AC); font-weight: 400; font-size: .8em; }

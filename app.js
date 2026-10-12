@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.33';
+const APP_VER = '3.8.34';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1145,49 +1145,18 @@ function renderAll() {
 }
 
 /* ---------- 今日 ---------- */
-function renderToday() {
-  const holds = computeHoldings().filter(h => h.qty > 0);
-  const qm = quoteMap();
-  let totalMV = 0, totalFloat = 0, totalCost = 0, missing = 0;
-  for (const h of holds) {
-    const q = qm.get(h.code);
-    const price = q ? Number(q.price) : null;
-    const dilCost = h.dilutedValue;                  // 摊薄口径：已实现盈亏滚入，剩余持仓成本
-    if (price != null) { totalMV += h.qty * price; totalFloat += h.qty * price - dilCost; totalCost += dilCost; }
-    else missing++;
-  }
-  // 今日已实现（来自各持仓 timeline 的卖出事件）
+/* 今日已实现盈亏：来自各持仓 timeline 的卖出事件（总览「持仓快照」与持仓页共用） */
+function todayRealizedPnl() {
   const todayStr = new Date().toDateString();
-  let todayPnl = 0;
+  let s = 0;
   for (const h of computeHoldings()) {
     for (const ev of h.timeline) {
-      if (ev.realized != null && new Date(ev.t.transaction_time).toDateString() === todayStr) todayPnl += ev.realized;
+      if (ev.realized != null && new Date(ev.t.transaction_time).toDateString() === todayStr) s += ev.realized;
     }
   }
-  const floatPct = totalCost ? totalFloat / totalCost : 0;
-  $('sumCards').innerHTML = `
-    <div class="sum-card"><div class="s-label">总市值</div><div class="s-value">¥${fmt2(totalMV)}</div>${missing ? `<div class="s-sub">${missing} 只现价未获取，未计入</div>` : ''}</div>
-    <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div><div class="s-sub">${fmtPct(floatPct)}</div></div>
-    <div class="sum-card"><div class="s-label">今日已实现</div><div class="s-value ${pnlCls(todayPnl)}">${todayPnl >= 0 ? '+' : ''}${fmt2(todayPnl)}</div></div>
-    <div class="sum-card"><div class="s-label">持仓只数</div><div class="s-value">${holds.length}</div><div class="s-sub">在途 ${holds.length} 只</div></div>`;
-
-  // 自选关注：星标优先 + 有涨跌幅的
-  const ws = [...S.watchlist].sort((a, b) => (b.starred ? 1 : 0) - (a.starred ? 1 : 0)).slice(0, 6);
-  $('todayWatch').innerHTML = ws.length ? ws.map(w => {
-    const q = quoteMap().get(w.stock_code);
-    const chg = q && q.pct != null && !isNaN(q.pct) ? q.pct / 100 : null;
-    return `<div class="mini-item">
-      <div class="mini-main">
-        <div class="mini-title">${w.starred ? '<span class="tag star">关注</span>' : ''}${esc(w.stock_name || w.stock_code)}</div>
-        <div class="mini-sub">${esc(w.stock_code)}${w.note ? ' · ' + esc(w.note) : ''}</div>
-      </div>
-      <div class="mini-right">
-        <div class="m-val">${q ? fmt2(q.price) : '—'}</div>
-        ${chg != null ? `<div class="m-sub ${pnlCls(chg)}">${fmtPct(chg)}</div>` : ''}
-      </div>
-    </div>`;
-  }).join('') : '<div class="empty">暂无自选，去「自选」页添加</div>';
-
+  return s;
+}
+function renderToday() {
   // 近期操作
   const rt = S.trades.filter(t => t.source !== 'init').slice(0, 5);
   $('recentTrades').innerHTML = rt.length ? rt.map(t => {
@@ -1199,14 +1168,32 @@ function renderToday() {
       </div>
       <div class="mini-right"><div class="m-val">¥${fmt2(amt)}</div></div>
     </div>`;
-  }).join('') : '<div class="empty">还没有操作记录，试试右上角「快捷记一笔」</div>';
+  }).join('') : '<div class="empty">还没有操作记录，试试「快捷记一笔」</div>';
 
   // 演示数据提示
-  $('seedHint').hidden = S.trades.length > 0;
+  const sh = $('seedHint');
+  if (sh) sh.hidden = S.trades.length > 0;
 }
 
 /* ---------- 持仓 ---------- */
 const WB_COLORS = ['#3468D6', '#D93A2B', '#0E9463', '#B7791F', '#7C5CBF', '#2E9AA8', '#C2557A', '#6B7280'];
+
+/* ============================================================
+   v3.8.34 持仓 / 自选模块的「挂载点」配置
+   总览页与专页共用同一份渲染逻辑与事件绑定，只是 DOM 挂载点不同。
+   —— 后续若下线「持仓页 / 自选页」，删掉其 HTML 区块与对应条目即可，
+      渲染与交互代码无需改动。
+   ============================================================ */
+const HOLD_MOUNTS = [
+  { pc: 'holdTable', mobile: 'holdTableM', summary: 'holdSummary', empty: 'holdEmpty', recBtn: 'holdEmptyRec' },
+  { pc: 'tvHoldTable', mobile: 'tvHoldTableM', summary: 'tvHoldSummary', empty: 'tvHoldEmpty', recBtn: 'tvHoldEmptyRec', ext: true },
+];
+const WATCH_MOUNTS = [
+  { root: 'view-watch', form: 'watchForm', input: 'wfInput', sug: 'wfSug', note: 'wfNoteQuick', group: 'wfGroupQuick',
+    submit: 'wfSubmit', cancel: 'wfCancel', tabs: 'watchTabs', table: 'watchTable', empty: 'watchEmpty', delGroup: 'delGroupBtn' },
+  { root: 'view-today', form: 'tvWatchForm', input: 'tvWfInput', sug: 'tvWfSug', note: 'tvWfNoteQuick', group: 'tvWfGroupQuick',
+    submit: 'tvWfSubmit', cancel: 'tvWfCancel', tabs: 'tvWatchTabs', table: 'tvWatchTable', empty: 'tvWatchEmpty', delGroup: 'tvDelGroupBtn' },
+];
 function renderHoldings() {
   const all = computeHoldings();
   const qm = quoteMap();
@@ -1285,25 +1272,26 @@ function renderHoldings() {
       });
     }
   }
-  updateSortHead('#holdTable', holdSort);
-  /* 报价时间提示 */
-  const qti = $('quoteTimeInfo');
-  if (qti) qti.textContent = NetQuote.quoteTime
+  updateSortHead(['#holdTable', '#tvHoldTable'], holdSort);
+  /* 报价时间提示（持仓页 + 总览页同步） */
+  const qtiTxt = NetQuote.quoteTime
     ? `行情报价时间 ${NetQuote.quoteTime}（${NetQuote.eastDeadUntil > Date.now() ? '腾讯备源' : '东财主源'}，缓存15秒）`
     : '行情未获取';
+  ['quoteTimeInfo', 'tvQuoteTime'].forEach(id => {
+    const el = document.getElementById(id); if (el) el.textContent = qtiTxt;
+  });
   /* v3.8.26 指数条：上证指数 / 深证成指 / 创业板指（红涨绿跌） */
-  const ib = $('idxBar');
-  if (ib) {
-    const items = NetQuote.INDEXES.map(ix => {
-      const q = NetQuote.idx.get(ix.sym);
-      if (!q || !(q.price > 0)) return '';
-      const cls = q.pct >= 0 ? 'up' : 'down';
-      const sign = q.pct >= 0 ? '+' : '';
-      return `<span class="idx-chip ${cls}"><span class="i-name">${esc(q.name || ix.name)}</span><span class="i-val">${fmt2(q.price)}</span><span class="i-pct">${sign}${q.pct.toFixed(2)}%</span></span>`;
-    }).join('');
-    ib.hidden = !items;
-    ib.innerHTML = items;
-  }
+  const idxItems = NetQuote.INDEXES.map(ix => {
+    const q = NetQuote.idx.get(ix.sym);
+    if (!q || !(q.price > 0)) return '';
+    const cls = q.pct >= 0 ? 'up' : 'down';
+    const sign = q.pct >= 0 ? '+' : '';
+    return `<span class="idx-chip ${cls}"><span class="i-name">${esc(q.name || ix.name)}</span><span class="i-val">${fmt2(q.price)}</span><span class="i-pct">${sign}${q.pct.toFixed(2)}%</span></span>`;
+  }).join('');
+  ['idxBar', 'tvIdxBar'].forEach(id => {
+    const el = document.getElementById(id); if (!el) return;
+    el.hidden = !idxItems; el.innerHTML = idxItems;
+  });
   const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   /* 账户累计总盈亏 = 持仓市值 − 累计买入净额 + 累计卖出净额（无需初始额度，费用已含在净额中） */
   let buyNetAll = 0, sellNetAll = 0;
@@ -1313,18 +1301,29 @@ function renderHoldings() {
     else sellNetAll += t.net_amount != null ? Number(t.net_amount) : t.gross_amount - f;
   }
   const cumPnl = totalMV - buyNetAll + sellNetAll;
-  const hs = $('holdSummary');
-  if (hs) hs.innerHTML = rows.length ? `
+  /* v3.8.34 总览页「持仓快照」需要今日已实现与行情缺口，这里一并算好 */
+  const missingQty = rows.filter(r => !r.cleared && r.price == null).length;
+  const todayPnlSum = todayRealizedPnl();
+  const sumHtmlOf = (m) => rows.length ? (m.ext ? `
+    <div class="sum-card"><div class="s-label">总市值 / 总盈亏</div>
+      <div class="s-value">¥${fmt2(totalMV)}</div>
+      <div class="s-sub">累计 <b class="${pnlCls(cumPnl)}">${cumPnl >= 0 ? '+' : ''}${fmt2(cumPnl)}</b></div></div>
+    <div class="sum-card"><div class="s-label">浮动盈亏 / 当日盈亏</div>
+      <div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div>
+      <div class="s-sub">当日 <b class="${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</b></div></div>
+    <div class="sum-card"><div class="s-label">今日已实现 / 持仓只数</div>
+      <div class="s-value ${pnlCls(todayPnlSum)}">${todayPnlSum >= 0 ? '+' : ''}${fmt2(todayPnlSum)}</div>
+      <div class="s-sub">${holds.length} 只持仓${missingQty ? ` · ${missingQty} 只现价未获取` : ''}</div></div>`
+  : `
     <div class="sum-card"><div class="s-label">总市值/总盈亏</div>
       <div class="s-value">${fmt2(totalMV)}</div>
       <div class="s-sub"><b class="${pnlCls(cumPnl)}">${cumPnl >= 0 ? '+' : ''}${fmt2(cumPnl)}</b></div></div>
     <div class="sum-card"><div class="s-label">浮动盈亏/当日盈亏</div>
       <div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div>
-      <div class="s-sub"><b class="${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</b></div></div>` : '';
-  $('holdEmpty').hidden = holds.length > 0;
+      <div class="s-sub"><b class="${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</b></div></div>`) : '';
 
-  /* PC 全列表格：股票/市值/盈亏/盈亏%/持仓可用/成本价/现价/当日盈亏/当日盈亏%/仓位/明细 */
-  $('holdTable').querySelector('tbody').innerHTML = rows.map(r => {
+  /* PC 全列表格：股票/市值/盈亏/盈亏%/持仓可用/成本价/现价/当日盈亏/当日盈亏%/仓位 */
+  const pcHtml = rows.map(r => {
     const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
     return `<tr data-code="${esc(h.code)}">
       <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}${r.cleared ? ' <span class="tag cleared">已清仓</span>' : ''}</span><span class="sc-code">${esc(h.code)}</span></div></td>
@@ -1341,7 +1340,7 @@ function renderHoldings() {
   }).join('');
 
   /* 手机端合并列表格：市值(含股票信息) / 盈亏 / 持仓可用 / 成本现价 / 当日盈亏 / 仓位 */
-  $('holdTableM').querySelector('tbody').innerHTML = rows.map(r => {
+  const mobileHtml = rows.map(r => {
     const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
     const sgn = v => (v >= 0 ? '+' : '');
     return `<tr data-code="${esc(h.code)}">
@@ -1353,6 +1352,18 @@ function renderHoldings() {
       <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : (r.cleared ? '0.00%' : NA)}</td>
     </tr>`;
   }).join('');
+
+  /* v3.8.34 总览页与持仓页共用同一份渲染结果（挂载点见 HOLD_MOUNTS，删页只需去掉对应条目） */
+  for (const m of HOLD_MOUNTS) {
+    const pcEl = document.getElementById(m.pc);
+    if (pcEl) pcEl.querySelector('tbody').innerHTML = pcHtml;
+    const mbEl = document.getElementById(m.mobile);
+    if (mbEl) mbEl.querySelector('tbody').innerHTML = mobileHtml;
+    const sumEl = document.getElementById(m.summary);
+    if (sumEl) sumEl.innerHTML = sumHtmlOf(m);
+    const emptyEl = document.getElementById(m.empty);
+    if (emptyEl) emptyEl.hidden = holds.length > 0;
+  }
 }
 
 /* ---------- 操作（交易） ---------- */
@@ -1695,23 +1706,20 @@ let watchSort = { key: null, dir: 0 };
 /* v3.8.23 持仓表同款三态排序（自选功能复制试点） */
 let holdSort = { key: null, dir: 0 };
 function updateSortHead(tableSel, state) {
-  document.querySelectorAll(tableSel + ' th.sortable').forEach(th => {
+  /* v3.8.34 支持一次更新多处同源表格（持仓页/总览页共用一份数据） */
+  const sels = Array.isArray(tableSel) ? tableSel : [tableSel];
+  for (const sel of sels) document.querySelectorAll(sel + ' th.sortable').forEach(th => {
     th.classList.toggle('sorted-desc', state.key === th.dataset.sort && state.dir === 1);
     th.classList.toggle('sorted-asc', state.key === th.dataset.sort && state.dir === -1);
   });
 }
-function updateWatchHead() { updateSortHead('#watchTable', watchSort); }
-function renderWatch() {
+function updateWatchHead() { updateSortHead(['#watchTable', '#tvWatchTable'], watchSort); }
+/* 自选数据模型：分组 Tab + 行数据（含排序），与挂载点无关 */
+function watchModel() {
   const groups = [...new Set(['默认', ...S.watchlist.map(w => w.group_name || '默认')])];
   const tabGroups = groups.includes(watchTab) ? groups : [...groups, watchTab].filter(Boolean);
-  /* 分组 Tab：各分组（默认不可删） + 新建（＋） */
-  const tabs = $('watchTabs');
-  tabs.innerHTML = tabGroups.map(g => `<button class="wtab${watchTab === g ? ' on' : ''}" data-g="${esc(g)}">${esc(g)}<i>${S.watchlist.filter(w => (w.group_name || '默认') === g).length}</i></button>`).join('')
-    + `<button class="wtab wtab-add" data-g="+" title="新建分组">＋</button>`;
   const list = S.watchlist.filter(w => !watchTab || (w.group_name || '默认') === watchTab);
-  $('watchEmpty').hidden = list.length > 0;
   const qm = quoteMap();
-  const FAIL = '<span class="na-tag">获取失败</span>';
   const backfilled = new Set();   // 本轮渲染中已触发锚点回填的自选 id
   /* v3.8.22 先算每行的展示数据，再按表头排序状态排序 */
   const items = list.map(w => {
@@ -1750,8 +1758,19 @@ function renderWatch() {
       });
     }
   }
-  updateWatchHead();
-  $('watchTable').querySelector('tbody').innerHTML = items.map(({ w, q, price, chg, anchor, gain, addDate }) => {
+  return { tabGroups, items, listLen: list.length };
+}
+/* v3.8.34 把自选列表画到某个挂载点（总览页 / 自选页共用同一份模型） */
+function paintWatch(m, M) {
+  const el = id => document.getElementById(id);
+  const tabs = el(m.tabs);
+  if (tabs) tabs.innerHTML = M.tabGroups.map(g => `<button class="wtab${watchTab === g ? ' on' : ''}" data-g="${esc(g)}">${esc(g)}<i>${S.watchlist.filter(w => (w.group_name || '默认') === g).length}</i></button>`).join('')
+    + `<button class="wtab wtab-add" data-g="+" title="新建分组">＋</button>`;
+  const table = el(m.table);
+  if (!table) return;                       // 该挂载点不存在（例如页面已下线）
+  const empty = el(m.empty);
+  const FAIL = '<span class="na-tag">获取失败</span>';
+  table.querySelector('tbody').innerHTML = M.items.map(({ w, q, price, chg, anchor, gain, addDate }) => {
     return `<tr data-id="${w.id}">
       <td><div class="stock-cell"><span class="sc-name">${esc(w.stock_name || '')}</span><span class="sc-code">${esc(w.stock_code)}</span></div></td>
       <td class="num">${price != null ? fmt2(price) : FAIL}</td>
@@ -1770,12 +1789,20 @@ function renderWatch() {
       </div></td>
     </tr>`;
   }).join('');
+  if (empty) {
+    empty.hidden = M.listLen > 0;
+    empty.textContent = watchTab ? `分组「${watchTab}」暂无自选，在上方添加会自动归入此分组` : '暂无自选股';
+  }
+  /* 当前在具体分组 Tab（「默认」除外）时显示「删除该分组」 */
+  const dgb = el(m.delGroup);
+  if (dgb) dgb.style.visibility = (watchTab && watchTab !== '默认') ? 'visible' : 'hidden';
+}
+function renderWatch() {
+  const M = watchModel();
+  for (const m of WATCH_MOUNTS) paintWatch(m, M);
   // 分组 datalist 由 syncGroupList() 统一维护
   syncGroupList();
-  $('watchEmpty').textContent = watchTab ? `分组「${watchTab}」暂无自选，在上方添加会自动归入此分组` : '暂无自选股';
-  /* 当前在具体分组 Tab（「默认」除外）时显示「删除该分组」 */
-  const dgb = $('delGroupBtn');
-  if (dgb) dgb.style.visibility = (watchTab && watchTab !== '默认') ? 'visible' : 'hidden';
+  updateWatchHead();
 }
 /* 分组下拉数据源：所有已用分组 + 默认（数据加载完即同步，供添加/高级选项联想） */
 function syncGroupList() {
@@ -1783,30 +1810,181 @@ function syncGroupList() {
   const dl = $('groupList');
   if (dl) dl.innerHTML = groups.map(g => `<option value="${esc(g)}">`).join('');
 }
-function fillWatchForm(w) {
+function fillWatchForm(w, m) {
+  resetWatchForm();                          // 先清空所有挂载点，避免两个表单同时停在编辑态
   S.editingWatchId = w.id;
-  const inp = $('wfInput');
+  const inp = document.getElementById(m.input);
+  if (!inp) return;
   inp.value = `${w.stock_code} ${w.stock_name || ''}`;
   delete inp.dataset.picked;
   inp.readOnly = true;                       // 编辑时票不可改，只能改分组/理由
   inp.placeholder = '编辑中：股票不可修改';
   inp.classList.add('ro');
-  $('wfGroupQuick').value = w.group_name || '默认';
-  $('wfNoteQuick').value = w.note || '';
-  $('wfSubmit').textContent = '保存修改';
-  $('wfCancel').hidden = false;
+  const gq = document.getElementById(m.group); if (gq) gq.value = w.group_name || '默认';
+  const nt = document.getElementById(m.note); if (nt) nt.value = w.note || '';
+  const sub = document.getElementById(m.submit); if (sub) sub.textContent = '保存修改';
+  const cc = document.getElementById(m.cancel); if (cc) cc.hidden = false;
 }
 function resetWatchForm() {
   S.editingWatchId = null;
-  $('watchForm').reset();
-  const inp = $('wfInput'); inp.value = ''; delete inp.dataset.picked;
-  inp.readOnly = false;
-  inp.placeholder = '代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt';
-  inp.classList.remove('ro');
-  $('wfGroupQuick').value = '';
-  $('wfNoteQuick').value = '';
-  $('wfSubmit').textContent = '保存';
-  $('wfCancel').hidden = true;
+  /* v3.8.34 所有挂载点一并复位（总览页 / 自选页） */
+  for (const m of WATCH_MOUNTS) {
+    const form = document.getElementById(m.form); if (form) form.reset();
+    const inp = document.getElementById(m.input);
+    if (inp) {
+      inp.value = ''; delete inp.dataset.picked;
+      inp.readOnly = false;
+      inp.placeholder = '代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt';
+      inp.classList.remove('ro');
+    }
+    const gq = document.getElementById(m.group); if (gq) gq.value = '';
+    const nt = document.getElementById(m.note); if (nt) nt.value = '';
+    const sub = document.getElementById(m.submit); if (sub) sub.textContent = '保存';
+    const cc = document.getElementById(m.cancel); if (cc) cc.hidden = true;
+  }
+}
+/* ============================================================
+   v3.8.34 为一个「自选卡片」挂载点绑定全部交互
+   —— 总览页 / 自选页共用同一实现，后续下线某个页面只需移除挂载点
+   ============================================================ */
+function bindWatchCard(m) {
+  const el = id => document.getElementById(id);
+  const input = el(m.input);
+  if (!input) return false;                    // 该挂载点不存在（页面已下线）
+  bindSuggest(m.input, m.sug, h => {
+    input.value = `${h.code} ${h.name}`;
+    input.dataset.picked = h.code;
+    const nt = el(m.note); if (nt) nt.focus();   // 选完股票，光标进备注/理由框
+  });
+  /* 分组下拉不筛选：聚焦时临时清空以展示全部分组，未选择则恢复原值 */
+  const gq = el(m.group);
+  if (gq) {
+    let gqPrev = '';
+    gq.addEventListener('focus', () => { gqPrev = gq.value; gq.dataset.clearing = '1'; gq.value = ''; });
+    gq.addEventListener('blur', () => {
+      if (gq.dataset.clearing && !gq.value.trim()) gq.value = gqPrev;
+      delete gq.dataset.clearing;
+    });
+  }
+  /* 提交：编辑（票已定，只改理由/分组，可手动改）或新增 */
+  el(m.form).addEventListener('submit', async e => {
+    e.preventDefault();
+    const noteEl = el(m.note), groupEl = el(m.group);
+    const note = noteEl ? noteEl.value.trim() : '';
+    const group = (groupEl ? groupEl.value.trim() : '') || watchTab || '默认';
+    if (S.editingWatchId) {
+      const w = S.watchlist.find(x => x.id == S.editingWatchId);
+      if (!w) { resetWatchForm(); return; }
+      try {
+        await store.update('watchlist', w.id, { group_name: group, note });
+        await store.log('watch', `修改自选 ${w.stock_name || w.stock_code}（理由/分组）`);
+        toast('已保存');
+        resetWatchForm();
+        watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (err) { /* */ }
+        await loadAll(); renderWatch(); renderToday();
+      } catch (err) { toast(err.message || '保存失败', 'warn'); }
+      return;
+    }
+    /* 添加：联想命中 / 「代码 名称」/ 纯代码 / 名称拼音 */
+    const picked = input.dataset.picked;
+    const txt = input.value.trim();
+    let hit = null;
+    if (picked && txt.startsWith(picked)) hit = { code: picked, name: txt.slice(picked.length).trim() };
+    else hit = StockDict.resolve(txt);
+    if (!hit || !hit.code) { toast('未识别股票，请输入代码或名称', 'warn'); return; }
+    if (!hit.name) hit.name = hit.code;
+    /* 添加时记一个现价锚点（供「自选收益」计算）；网络行情没有则留空 */
+    let anchor = NetQuote.get(hit.code);
+    if (!anchor) { try { await refreshQuotes(true); } catch (err) { /* */ } anchor = NetQuote.get(hit.code); }
+    const row = {
+      stock_code: hit.code,
+      stock_name: hit.name,
+      group_name: group,
+      note, cur_price: anchor ? anchor.price : null, prev_close: null
+    };
+    try {
+      await store.insert('watchlist', row);
+      await store.log('watch', `添加自选 ${row.stock_name}（${row.stock_code}）`);
+      toast(`已添加自选 ${row.stock_name}`);
+      resetWatchForm();
+      watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (err) { /* */ }
+      await loadAll(); renderWatch(); renderToday();
+    } catch (err) { toast(err.message || '保存失败', 'warn'); }
+  });
+  const cancelBtn = el(m.cancel);
+  if (cancelBtn) cancelBtn.addEventListener('click', resetWatchForm);
+  /* 分组 Tab：切换 / 新建；切 Tab 后添加自动归入当前分组 */
+  const tabs = el(m.tabs);
+  if (tabs) tabs.addEventListener('click', e => {
+    const b = e.target.closest('.wtab'); if (!b) return;
+    const g = b.dataset.g;
+    if (g === '+') {
+      const name = (prompt('新分组名称：') || '').trim();
+      if (!name) return;
+      watchTab = name;
+      renderWatch();
+      const gqEl = el(m.group); if (gqEl) gqEl.value = name;
+      return;
+    }
+    watchTab = g;
+    try { localStorage.setItem('sj_watchTab', watchTab); } catch (err) { /* */ }
+    renderWatch();
+    const gqEl = el(m.group); if (gqEl) gqEl.value = g || '';   // 当前分组即默认归组，可手动改
+  });
+  const table = el(m.table);
+  /* v3.8.22 表头排序：点一下降序 → 再点升序 → 再点取消 */
+  table.querySelector('thead').addEventListener('click', e => {
+    const th = e.target.closest('th.sortable'); if (!th) return;
+    const k = th.dataset.sort;
+    if (watchSort.key !== k) watchSort = { key: k, dir: 1 };
+    else if (watchSort.dir === 1) watchSort = { key: k, dir: -1 };
+    else watchSort = { key: null, dir: 0 };
+    renderWatch();
+  });
+  /* 行操作：编辑（回填到本卡表单） / 删除 */
+  table.querySelector('tbody').addEventListener('click', async e => {
+    const editBtn = e.target.closest('.edit-watch');
+    const delBtn = e.target.closest('.del-watch');
+    if (editBtn) {
+      const w = S.watchlist.find(x => x.id == editBtn.dataset.id);
+      if (w) {
+        fillWatchForm(w, m);
+        const fm = el(m.form); if (fm) fm.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }
+      return;
+    }
+    if (delBtn) {
+      const w = S.watchlist.find(x => x.id == delBtn.dataset.id);
+      confirmDlg('删除自选', `确认从自选中删除 ${w.stock_name || w.stock_code}？`, async () => {
+        try {
+          await store.remove('watchlist', w.id);
+          await store.log('delete', `删除自选 ${w.stock_name || w.stock_code}`);
+          await loadAll(); renderWatch(); renderToday();
+          toast('已删除');
+        } catch (err) { toast(err.message || '删除失败', 'warn'); }
+      });
+    }
+  });
+  /* 删除当前分组：组内股票移回「默认」 */
+  const dgb = el(m.delGroup);
+  if (dgb) dgb.addEventListener('click', () => {
+    if (!watchTab || watchTab === '默认') return;
+    const n = S.watchlist.filter(w => (w.group_name || '默认') === watchTab).length;
+    confirmDlg('删除分组', `确认删除分组「${watchTab}」？${n ? `组内 ${n} 只自选将移回「默认」分组` : '该分组当前为空'}。`, async () => {
+      try {
+        for (const w of S.watchlist.filter(w => (w.group_name || '默认') === watchTab)) {
+          await store.update('watchlist', w.id, { group_name: '默认' });
+        }
+        await store.log('update', `删除分组「${watchTab}」（${n} 只移回默认）`);
+        watchTab = '默认';
+        try { localStorage.setItem('sj_watchTab', watchTab); } catch (err) { /* */ }
+        resetWatchForm();
+        await loadAll(); renderWatch(); renderToday();
+        toast('分组已删除');
+      } catch (err) { toast(err.message || '删除失败', 'warn'); }
+    }, '删除');
+  });
+  return true;
 }
 
 /* ---------- 我的 ---------- */
@@ -2220,24 +2398,36 @@ function bindEvents() {
     }
   });
 
-  /* 持仓：刷新 / 改价 / 明细 */
-  $('refreshHoldBtn').addEventListener('click', async () => { await loadAll(); await refreshQuotes(true); toast('已刷新行情'); });
+  /* ---------- 持仓：刷新 / 自动刷新 / 表头排序 / 改价 ---------- */
+  /* v3.8.34 行情刷新入口归拢到总览页 + 持仓页，两处按钮/下拉镜像同一状态 */
+  const refreshQuotesAll = async () => { await loadAll(); await refreshQuotes(true); };
+  ['refreshHoldBtn', 'tvRefreshBtn'].forEach(id => {
+    const b = document.getElementById(id);
+    if (b) b.addEventListener('click', async () => { await refreshQuotesAll(); toast('已刷新行情'); });
+  });
   $('holdRecBtn').addEventListener('click', () => openRecModal());
-  $('holdEmptyRec') && $('holdEmptyRec').addEventListener('click', () => openRecModal());
-  /* 持仓页自动刷新行情 */
+  /* 空态「去记一笔」：每个持仓挂载点各绑一份 */
+  for (const m of HOLD_MOUNTS) {
+    const rb = m.recBtn ? document.getElementById(m.recBtn) : null;
+    if (rb) rb.addEventListener('click', () => openRecModal());
+  }
+  /* 自动刷新：总览页与持仓页的下拉镜像同一计时器 */
   let holdTimer = null;
-  function setHoldAuto() {
+  function setHoldAuto(sec, from) {
     if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
-    const sec = parseInt($('holdAuto').value, 10) || 0;
+    sec = parseInt(sec, 10) || 0;
+    ['holdAuto', 'tvAuto'].forEach(id => {
+      const s = document.getElementById(id);
+      if (s && s !== from) s.value = String(sec);
+    });
     if (sec > 0) holdTimer = setInterval(() => { refreshQuotes(true).catch(() => { /* */ }); }, sec * 1000);
   }
-  $('holdAuto').addEventListener('change', setHoldAuto);
-  setHoldAuto();
-  /* v3.8.29 持仓明细弹层已移除（与操作页按股票统计重复），仅保留改价 */
-  $('holdTable').querySelector('tbody').addEventListener('click', e => {
-    const sp = e.target.closest('.set-price');
-    if (sp) { startPriceEdit(sp.closest('tr'), sp.dataset.code, sp.dataset.name); return; }
+  ['holdAuto', 'tvAuto'].forEach(id => {
+    const s = document.getElementById(id);
+    if (s) s.addEventListener('change', () => setHoldAuto(s.value, s));
   });
+  setHoldAuto($('holdAuto').value);
+  /* 点现价手填改价（总览页与持仓页挂载点共用） */
   function startPriceEdit(tr, code, name) {
     const cell = tr.querySelector('.price-cell');
     if (!cell || cell.querySelector('input')) return;
@@ -2259,106 +2449,29 @@ function bindEvents() {
     inp.addEventListener('keydown', e => { if (e.key === 'Enter') inp.blur(); if (e.key === 'Escape') renderHoldings(); });
     inp.addEventListener('blur', commit);
   }
-
-  /* 自选：添加 / 编辑 同一表单（输入联想 + 理由 + 分组 + 保存） */
-  bindSuggest('wfInput', 'wfSug', h => {
-    $('wfInput').value = `${h.code} ${h.name}`;
-    $('wfInput').dataset.picked = h.code;
-    $('wfNoteQuick').focus();   // 选完股票，光标进备注/理由框
-  });
-  /* 分组下拉不筛选：聚焦时临时清空以展示全部分组，未选择则恢复原值 */
-  {
-    const gq = $('wfGroupQuick');
-    let gqPrev = '';
-    gq.addEventListener('focus', () => { gqPrev = gq.value; gq.dataset.clearing = '1'; gq.value = ''; });
-    gq.addEventListener('blur', () => {
-      if (gq.dataset.clearing && !gq.value.trim()) gq.value = gqPrev;
-      delete gq.dataset.clearing;
+  /* 持仓表：表头三态排序 + 点价改价（HOLD_MOUNTS 内每个挂载点都绑一份） */
+  for (const m of HOLD_MOUNTS) {
+    const tb = document.getElementById(m.pc);
+    if (!tb) continue;
+    const thead = tb.querySelector('thead');
+    if (thead) thead.addEventListener('click', e => {
+      const th = e.target.closest('th.sortable'); if (!th) return;
+      const k = th.dataset.sort;
+      if (holdSort.key !== k) holdSort = { key: k, dir: 1 };
+      else if (holdSort.dir === 1) holdSort = { key: k, dir: -1 };
+      else holdSort = { key: null, dir: 0 };
+      renderHoldings();
+    });
+    const tbody = tb.querySelector('tbody');
+    if (tbody) tbody.addEventListener('click', e => {
+      const sp = e.target.closest('.set-price');
+      if (sp) { startPriceEdit(sp.closest('tr'), sp.dataset.code, sp.dataset.name); return; }
     });
   }
-  $('watchForm').addEventListener('submit', async e => {
-    e.preventDefault();
-    const note = $('wfNoteQuick').value.trim();
-    const group = $('wfGroupQuick').value.trim() || watchTab || '默认';
-    /* 编辑：列表点「编辑」后，票已定，只更新理由/分组 */
-    if (S.editingWatchId) {
-      const w = S.watchlist.find(x => x.id == S.editingWatchId);
-      if (!w) { resetWatchForm(); return; }
-      try {
-        await store.update('watchlist', w.id, { group_name: group, note });
-        await store.log('watch', `修改自选 ${w.stock_name || w.stock_code}（理由/分组）`);
-        toast('已保存');
-        resetWatchForm();
-        watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (e) { /* */ }
-        await loadAll(); renderWatch(); renderToday();
-      } catch (err) { toast(err.message || '保存失败', 'warn'); }
-      return;
-    }
-    /* 添加：联想命中 / 「代码 名称」/ 纯代码 / 名称拼音 */
-    const inp = $('wfInput');
-    const picked = inp.dataset.picked;
-    const txt = inp.value.trim();
-    let hit = null;
-    if (picked && txt.startsWith(picked)) hit = { code: picked, name: txt.slice(picked.length).trim() };
-    else hit = StockDict.resolve(txt);
-    if (!hit || !hit.code) { toast('未识别股票，请输入代码或名称', 'warn'); return; }
-    if (!hit.name) hit.name = hit.code;
-    /* 添加时记一个现价锚点（供「自选收益」计算）；网络行情没有则留空 */
-    let anchor = NetQuote.get(hit.code);
-    if (!anchor) { try { await refreshQuotes(true); } catch (e) { /* */ } anchor = NetQuote.get(hit.code); }
-    const row = {
-      stock_code: hit.code,
-      stock_name: hit.name,
-      group_name: group,
-      note, cur_price: anchor ? anchor.price : null, prev_close: null
-    };
-    try {
-      await store.insert('watchlist', row);
-      await store.log('watch', `添加自选 ${row.stock_name}（${row.stock_code}）`);
-      toast(`已添加自选 ${row.stock_name}`);
-      resetWatchForm();
-      watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (e) { /* */ }
-      await loadAll(); renderWatch(); renderToday();
-    } catch (err) { toast(err.message || '保存失败', 'warn'); }
-  });
-  $('wfCancel').addEventListener('click', resetWatchForm);
-  /* 分组 Tab：切换 / 新建；切 Tab 后添加自动归入当前分组 */
-  $('watchTabs').addEventListener('click', e => {
-    const b = e.target.closest('.wtab'); if (!b) return;
-    const g = b.dataset.g;
-    if (g === '+') {
-      const name = (prompt('新分组名称：') || '').trim();
-      if (!name) return;
-      watchTab = name;
-      renderWatch();
-      $('wfGroupQuick').value = name;
-      return;
-    }
-    watchTab = g;
-    try { localStorage.setItem('sj_watchTab', watchTab); } catch (e) { /* */ }
-    renderWatch();
-    $('wfGroupQuick').value = g || '';   // 当前分组即默认归组，可手动改
-  });
-  /* v3.8.22 表头排序：点一下降序 → 再点升序 → 再点取消 */
-  $('watchTable').querySelector('thead').addEventListener('click', e => {
-    const th = e.target.closest('th.sortable');
-    if (!th) return;
-    const k = th.dataset.sort;
-    if (watchSort.key !== k) watchSort = { key: k, dir: 1 };
-    else if (watchSort.dir === 1) watchSort = { key: k, dir: -1 };
-    else watchSort = { key: null, dir: 0 };
-    renderWatch();
-  });
-  /* v3.8.23 持仓表头同款排序（自选功能复制试点） */
-  $('holdTable').querySelector('thead').addEventListener('click', e => {
-    const th = e.target.closest('th.sortable');
-    if (!th) return;
-    const k = th.dataset.sort;
-    if (holdSort.key !== k) holdSort = { key: k, dir: 1 };
-    else if (holdSort.dir === 1) holdSort = { key: k, dir: -1 };
-    else holdSort = { key: null, dir: 0 };
-    renderHoldings();
-  });
+
+  /* ---------- 自选：添加 / 编辑 / 分组 / 排序（WATCH_MOUNTS 内每个挂载点都绑一份） ---------- */
+  for (const m of WATCH_MOUNTS) bindWatchCard(m);
+
   /* v3.8.23 网络日志：下载 / 清空 */
   $('netLogDlBtn').addEventListener('click', () => {
     const blob = new Blob([NetLog.text()], { type: 'text/plain;charset=utf-8' });
@@ -2370,44 +2483,6 @@ function bindEvents() {
     toast('日志文件已下载');
   });
   $('netLogClearBtn').addEventListener('click', () => { NetLog.clear(); renderNetLogUI(); toast('网络日志已清空'); });
-  /* 删除当前分组：组内股票移回「默认」 */
-  $('delGroupBtn').addEventListener('click', () => {
-    if (!watchTab || watchTab === '默认') return;
-    const n = S.watchlist.filter(w => (w.group_name || '默认') === watchTab).length;
-    confirmDlg('删除分组', `确认删除分组「${watchTab}」？${n ? `组内 ${n} 只自选将移回「默认」分组` : '该分组当前为空'}。`, async () => {
-      try {
-        for (const w of S.watchlist.filter(w => (w.group_name || '默认') === watchTab)) {
-          await store.update('watchlist', w.id, { group_name: '默认' });
-        }
-        await store.log('update', `删除分组「${watchTab}」（${n} 只移回默认）`);
-        watchTab = '默认';
-        try { localStorage.setItem('sj_watchTab', watchTab); } catch (e) { /* */ }
-        $('wfGroupQuick').value = '';
-        await loadAll(); renderWatch(); renderToday();
-        toast('分组已删除');
-      } catch (err) { toast(err.message || '删除失败', 'warn'); }
-    }, '删除');
-  });
-  $('watchTable').querySelector('tbody').addEventListener('click', async e => {
-    const editBtn = e.target.closest('.edit-watch');
-    const delBtn = e.target.closest('.del-watch');
-    if (editBtn) {
-      const w = S.watchlist.find(x => x.id == editBtn.dataset.id);
-      if (w) { fillWatchForm(w); $('watchForm').scrollIntoView({ behavior: 'smooth', block: 'center' }); }
-      return;
-    }
-    if (delBtn) {
-      const w = S.watchlist.find(x => x.id == delBtn.dataset.id);
-      confirmDlg('删除自选', `确认从自选中删除 ${w.stock_name || w.stock_code}？`, async () => {
-        try {
-          await store.remove('watchlist', w.id);
-          await store.log('delete', `删除自选 ${w.stock_name || w.stock_code}`);
-          await loadAll(); renderWatch(); renderToday();
-          toast('已删除');
-        } catch (err) { toast(err.message || '删除失败', 'warn'); }
-      });
-    }
-  });
 
   /* 我的：费率 */
   $('feeSaveBtn').addEventListener('click', saveFeeEditor);

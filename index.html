@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.33">
+<link rel="stylesheet" href="style.css?v=3.8.34">
 </head>
 <body>
 
@@ -95,11 +95,80 @@
   <main class="main">
     <!-- ============ 今日 ============ -->
     <section id="view-today" class="view active">
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-title">持仓快照</div>
-          <div class="sum-cards" id="sumCards"></div>
+      <!-- ① 大盘指数：行情数据源入口（自动刷新 / 刷新 / 报价时间） -->
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">大盘指数</span>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+            <select id="tvAuto" title="自动刷新行情">
+              <option value="0" selected>关闭自动刷新</option>
+              <option value="10">10秒</option>
+              <option value="30">30秒</option>
+            </select>
+            <button class="btn ghost sm" id="tvRefreshBtn" type="button">刷新行情</button>
+          </div>
         </div>
+        <div class="idx-bar idx-bar-lg" id="tvIdxBar" hidden></div>
+        <div class="hint" id="tvQuoteTime">—</div>
+      </div>
+
+      <!-- ② 持仓快照：统计数据 + 持仓列表 -->
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">持仓快照</span>
+          <button class="btn ghost sm" data-goto="holdings" type="button">持仓页</button>
+        </div>
+        <div class="sum-cards sm" id="tvHoldSummary"></div>
+        <div class="table-scroll">
+          <table class="tbl" id="tvHoldTable">
+            <thead><tr>
+              <th>股票</th><th class="num sortable" data-sort="mv">市值</th><th class="num sortable" data-sort="float">盈亏</th><th class="num sortable" data-sort="floatPct">盈亏%</th>
+              <th class="num sortable" data-sort="qty" title="可用 = 持仓 − 当日买入（T+1）">持仓/可用</th><th class="num sortable" data-sort="cost">成本价</th><th class="num sortable" data-sort="price">现价</th>
+              <th class="num sortable" data-sort="dayPnl">当日盈亏</th><th class="num sortable" data-sort="dayPct">当日盈亏%</th><th class="num sortable" data-sort="pos">仓位</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+          <table class="tbl" id="tvHoldTableM">
+            <thead><tr>
+              <th>市值</th><th class="num">盈亏</th><th class="num" title="可用 = 持仓 − 当日买入（T+1）">持仓/可用</th><th class="num">成本/现价</th><th class="num">当日盈亏</th><th class="num">仓位</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="tvHoldEmpty" class="empty" hidden>暂无持仓，<a href="javascript:void(0)" id="tvHoldEmptyRec" style="color:var(--blue)">去记一笔</a></div>
+      </div>
+
+      <!-- ③ 自选列表 -->
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">自选列表</span>
+          <button class="btn ghost sm" id="tvDelGroupBtn" type="button" style="visibility:hidden">删除该分组</button>
+        </div>
+        <form id="tvWatchForm">
+          <div class="add-row sug-anchor">
+            <input type="text" id="tvWfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt">
+            <div id="tvWfSug" class="sug-box" hidden></div>
+            <input type="text" id="tvWfNoteQuick" autocomplete="off" placeholder="备注 / 加入理由（选填）">
+            <input type="text" id="tvWfGroupQuick" class="wg-quick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名">
+            <button type="submit" class="btn primary sm" id="tvWfSubmit">保存</button>
+            <button type="button" class="btn ghost sm" id="tvWfCancel" hidden>取消</button>
+          </div>
+        </form>
+        <div class="wtabs" id="tvWatchTabs"></div>
+        <div class="table-scroll">
+          <table class="tbl" id="tvWatchTable">
+            <thead><tr>
+              <th>股票</th><th class="num sortable" data-sort="price">最新</th><th class="num sortable" data-sort="chg">涨幅</th>
+              <th class="num sortable" data-sort="open">今开</th><th class="num sortable" data-sort="high">最高</th><th class="num sortable" data-sort="low">最低</th><th class="num sortable" data-sort="prevClose">昨收</th>
+              <th class="num sortable" data-sort="date">自选日</th><th class="num sortable" data-sort="anchor">自选价</th><th class="num sortable" data-sort="gain">自选收益</th><th>备注 / 理由</th><th class="num">操作</th>
+            </tr></thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div id="tvWatchEmpty" class="empty" hidden>暂无自选股</div>
+      </div>
+
+      <div class="grid-2">
         <div class="card">
           <div class="card-title-row">
             <span class="card-title">快捷记一笔</span>
@@ -116,15 +185,6 @@
           </div>
           <div id="quickHint" class="quick-hint" hidden></div>
           <button class="btn ghost block" id="openFormBtn" type="button">手动填写完整表单</button>
-        </div>
-      </div>
-      <div class="grid-2">
-        <div class="card">
-          <div class="card-title-row">
-            <span class="card-title">自选关注</span>
-            <button class="btn ghost sm" data-goto="watch" type="button">全部自选</button>
-          </div>
-          <div id="todayWatch" class="mini-list"></div>
         </div>
         <div class="card">
           <div class="card-title-row">
@@ -233,7 +293,6 @@
             <button type="submit" class="btn primary sm" id="wfSubmit">保存</button>
             <button type="button" class="btn ghost sm" id="wfCancel" hidden>取消</button>
           </div>
-          <datalist id="groupList"></datalist>
         </form>
         <div class="wtabs" id="watchTabs"></div>
         <div class="table-scroll">
@@ -648,10 +707,12 @@
   </div>
   <!-- Toast -->
   <div id="toast"></div>
+  <!-- v3.8.34 分组名数据源：全局共享（总览页与自选页的分组输入框都引用它） -->
+  <datalist id="groupList"></datalist>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.33"></script>
-<script src="analysis-extra.js?v=3.8.33"></script>
+<script src="app.js?v=3.8.34"></script>
+<script src="analysis-extra.js?v=3.8.34"></script>
 </body>
 </html>
