@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.27';
+const APP_VER = '3.8.28';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1354,13 +1354,22 @@ function showHoldDetail(code) {
   const diluted = h.qty ? h.dilutedValue / h.qty : 0;
   $('holdDetail').hidden = false;
   $('holdDetailTitle').textContent = `${h.name || h.code} · 买卖记录`;
+  /* v3.8.28 明细卡精简：6卡 → 4卡（持仓/现价合并、两种成本合并），盈亏各带一行小结 */
+  const floatPnl = price != null && h.qty ? h.qty * (price - costPrice) : null;
+  const totalPnl = (h.realized || 0) + (floatPnl != null ? floatPnl : 0);
   $('holdDetailStats').innerHTML = `
-    <div class="sum-card"><div class="s-label">当前持仓</div><div class="s-value">${h.qty ? h.qty + ' 股' : '已清仓'}</div></div>
-    <div class="sum-card"><div class="s-label">加权成本价</div><div class="s-value">${h.qty ? fmtP(costPrice) : '—'}</div></div>
-    <div class="sum-card"><div class="s-label">摊薄成本价</div><div class="s-value">${h.qty ? fmtP(diluted) : '—'}</div><div class="s-sub">盈亏滚入口径</div></div>
-    <div class="sum-card"><div class="s-label">累计已实现</div><div class="s-value ${pnlCls(h.realized)}">${h.realized >= 0 ? '+' : ''}${fmt2(h.realized)}</div></div>
-    <div class="sum-card"><div class="s-label">浮动盈亏</div><div class="s-value ${pnlCls(price != null ? h.qty * (price - costPrice) : 0)}">${price != null && h.qty ? (h.qty * (price - costPrice) >= 0 ? '+' : '') + fmt2(h.qty * (price - costPrice)) : '—'}</div></div>
-    <div class="sum-card"><div class="s-label">现价</div><div class="s-value">${price != null ? fmt2(price) : '未获取'}</div></div>`;
+    <div class="sum-card"><div class="s-label">持仓 / 现价</div>
+      <div class="s-value">${h.qty ? h.qty + ' 股' : '已清仓'}</div>
+      <div class="s-sub">${price != null ? '现价 ' + fmt2(price) : '现价未获取'}</div></div>
+    <div class="sum-card"><div class="s-label">成本（加权 / 摊薄）</div>
+      <div class="s-value">${h.qty ? fmtP(costPrice) : '—'}<span class="s-sep"> / </span>${h.qty ? fmtP(diluted) : '—'}</div>
+      <div class="s-sub">${h.qty ? '摊薄已含已实现盈亏' : '盈亏已全部落地'}</div></div>
+    <div class="sum-card"><div class="s-label">累计已实现</div>
+      <div class="s-value ${pnlCls(h.realized)}">${h.realized >= 0 ? '+' : ''}${fmt2(h.realized)}</div>
+      <div class="s-sub">历史卖出落袋</div></div>
+    <div class="sum-card"><div class="s-label">浮动盈亏 / 总盈亏</div>
+      <div class="s-value ${pnlCls(floatPnl != null ? floatPnl : 0)}">${floatPnl != null ? (floatPnl >= 0 ? '+' : '') + fmt2(floatPnl) : '—'}</div>
+      <div class="s-sub">已实现+浮动 <b class="${pnlCls(totalPnl)}">${totalPnl >= 0 ? '+' : ''}${fmt2(totalPnl)}</b></div></div>`;
   const sorted = [...h.timeline].filter(ev => ev.t.source !== 'init').sort((a, b) => new Date(b.t.transaction_time) - new Date(a.t.transaction_time));
   $('holdTimeline').innerHTML = sorted.length ? sorted.map(ev => {
     const t = ev.t;

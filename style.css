@@ -1169,3 +1169,6 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 .idx-chip .i-pct { font-variant-numeric: tabular-nums; }
 .idx-chip.up .i-val, .idx-chip.up .i-pct { color: var(--up); }
 .idx-chip.down .i-val, .idx-chip.down .i-pct { color: var(--down); }
+
+/* ---------- v3.8.28 明细卡精简：成本双值分隔 ---------- */
+#holdDetailStats .s-sep { color: var(--ink-3, #98A1AC); font-weight: 400; font-size: .8em; }
