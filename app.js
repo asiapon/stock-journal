@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.24';
+const APP_VER = '3.8.25';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -88,13 +88,15 @@ const StockDict = {
       if (seed && at && Date.now() - at < TTL) { seeded = this.apply(seed) >= 1000; }
     } catch (e) { /* */ }
     if (!seeded) {
+      const t0 = Date.now();
       try {
         const res = await fetch('stock-dict.json?v=' + APP_VER, { cache: 'no-cache' });
         const raw = await res.text();
         if (this.apply(raw) >= 1000) {
+          NetLog.push('dict', '股票字典 stock-dict.json', true, Date.now() - t0, '种子载入');
           try { localStorage.setItem(SEED_KEY, raw); localStorage.setItem(AT_KEY, String(Date.now())); } catch (e) { /* 配额满 */ }
         }
-      } catch (e) { /* 拉取失败：仅用已学到的条目 */ }
+      } catch (e) { NetLog.push('dict', '股票字典 stock-dict.json', false, Date.now() - t0, e.message || String(e)); /* 拉取失败：仅用已学到的条目 */ }
     }
     this.ready = true;
     this.learnFromState();
@@ -715,35 +717,43 @@ async function customLlmStream(m, messages, opts) {
   let url = m.baseUrl.replace(/\/+$/, '');
   if (!/\/chat\/completions$/.test(url)) url += '/chat/completions';
   const onDelta = (opts && opts.onDelta) || null;
-  const res = await fetch(url, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + m.apiKey },
-    body: JSON.stringify({ model: m.model, messages, stream: true })
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => '');
-    throw new Error('自定义模型请求失败 HTTP ' + res.status + (t ? '：' + t.slice(0, 200) : ''));
-  }
-  const reader = res.body.getReader(), dec = new TextDecoder();
-  let buf = '', text = '';
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    buf += dec.decode(value, { stream: true });
-    const lines = buf.split('\n'); buf = lines.pop();
-    for (const line of lines) {
-      const s = line.trim();
-      if (!s.startsWith('data:')) continue;
-      const data = s.slice(5).trim();
-      if (!data || data === '[DONE]') continue;
-      try {
-        const j = JSON.parse(data);
-        const d = j.choices && j.choices[0] && j.choices[0].delta;
-        if (d && d.content) { text += d.content; if (onDelta) try { onDelta(d.content); } catch (e) { /* */ } }
-      } catch (e) { /* 忽略无法解析的行 */ }
+  const t0 = Date.now();
+  let text = '';
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + m.apiKey },
+      body: JSON.stringify({ model: m.model, messages, stream: true })
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      throw new Error('自定义模型请求失败 HTTP ' + res.status + (t ? '：' + t.slice(0, 200) : ''));
     }
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        const s = line.trim();
+        if (!s.startsWith('data:')) continue;
+        const data = s.slice(5).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const j = JSON.parse(data);
+          const d = j.choices && j.choices[0] && j.choices[0].delta;
+          if (d && d.content) { text += d.content; if (onDelta) try { onDelta(d.content); } catch (e) { /* */ } }
+        } catch (e) { /* 忽略无法解析的行 */ }
+      }
+    }
+    NetLog.push('llm', '自定义模型 ' + m.model, true, Date.now() - t0, `${text.length} 字`);
+    return text;
+  } catch (e) {
+    NetLog.push('llm', '自定义模型 ' + m.model, false, Date.now() - t0, e.message || String(e));
+    throw e;
   }
-  return text;
 }
 async function llmComplete(messages, opts) {
   const m = ModelMgr.cur;
@@ -751,13 +761,20 @@ async function llmComplete(messages, opts) {
   if (m.custom) return customLlmStream(m, messages, opts);
   if (!cloudLlm) throw new Error('云端模型服务不可用');
   const llm = cloudLlm.llm || cloudLlm;   // SDK 命名空间：cloud.llm.chat
+  const t0 = Date.now();
   let text = '';
-  const params = { model: m.id, messages, stream: true };
-  for await (const chunk of llm.chat.completions.create(params)) {
-    const d = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
-    if (d && d.content) { text += d.content; if (opts && opts.onDelta) try { opts.onDelta(d.content); } catch (e) { /* */ } }
+  try {
+    const params = { model: m.id, messages, stream: true };
+    for await (const chunk of llm.chat.completions.create(params)) {
+      const d = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+      if (d && d.content) { text += d.content; if (opts && opts.onDelta) try { opts.onDelta(d.content); } catch (e) { /* */ } }
+    }
+    NetLog.push('llm', '云端模型 ' + m.id, true, Date.now() - t0, `${text.length} 字`);
+    return text;
+  } catch (e) {
+    NetLog.push('llm', '云端模型 ' + m.id, false, Date.now() - t0, e.message || String(e));
+    throw e;
   }
-  return text;
 }
 
 /* ============================================================
@@ -1776,7 +1793,14 @@ function renderNetLogUI() {
   if (!NetLog.buf.length) { el.textContent = '暂无网络日志（打开行情/交易页后会自动记录）'; return; }
   const fails = NetLog.buf.filter(e => !e.ok).length;
   const lastFail = NetLog.buf.find(e => !e.ok);
-  el.innerHTML = `共 ${NetLog.buf.length} 条（内存，最新在前）· 失败 ${fails} 条`
+  /* 按类别统计：行情/云端RPC/K线/字典/模型 */
+  const kinds = ['quote', 'rpc', 'kline', 'dict', 'llm'];
+  const KN = { quote: '行情', rpc: '云端', kline: 'K线', dict: '字典', llm: 'AI模型' };
+  const parts = kinds.map(k => {
+    const arr = NetLog.buf.filter(e => e.kind === k);
+    return arr.length ? `${KN[k]} ${arr.filter(e => e.ok).length}/${arr.length}` : null;
+  }).filter(Boolean).join(' · ');
+  el.innerHTML = `共 ${NetLog.buf.length} 条（成功/总数：${parts || '—'}）· 失败 ${fails} 条`
     + (lastFail ? `<br>最近失败：${esc(lastFail.t.slice(11, 19))} ${esc(lastFail.kind)} ${esc(lastFail.name)} — ${esc(lastFail.detail)}` : '· 最近无失败');
 }
 /* ---------- 费率编辑 ---------- */

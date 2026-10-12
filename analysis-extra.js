@@ -228,16 +228,23 @@ function boardDictAge() {
   return at ? Date.now() - at : Infinity;
 }
 async function fetchBoardDictFile() {
-  const res = await fetch(BOARD_DICT_FILE + '?v=' + Date.now(), { cache: 'no-cache' });
-  if (!res.ok) throw new Error('board-dict.json HTTP ' + res.status);
-  const raw = await res.text();
-  const n = applyBoardDict(raw);
-  if (!n) throw new Error('board-dict.json 解析出的板块过少');
+  const t0 = Date.now();
   try {
+    const res = await fetch(BOARD_DICT_FILE + '?v=' + Date.now(), { cache: 'no-cache' });
+    if (!res.ok) throw new Error('board-dict.json HTTP ' + res.status);
+    const raw = await res.text();
+    const n = applyBoardDict(raw);
+    if (!n) throw new Error('board-dict.json 解析出的板块过少');
+    NetLog.push('dict', '板块字典 board-dict.json', true, Date.now() - t0, `${n} 个板块`);
+    try {
     localStorage.setItem(BOARD_DICT_KEY, raw);
     localStorage.setItem(BOARD_DICT_AT_KEY, String(Date.now()));
   } catch (e) { /* 配额满：内存已生效 */ }
   return { boards: n };
+  } catch (e) {
+    NetLog.push('dict', '板块字典 board-dict.json', false, Date.now() - t0, e.message || String(e));
+    throw e;
+  }
 }
 async function ensureBoardDict(force) {
   if (!force && state.boardDict.length && boardDictAge() < BOARD_DICT_TTL) return { skipped: true, boards: state.boardDict.length };
@@ -921,18 +928,27 @@ function renderBtOptions() {
  * 投资组合风险分析（集中度 / 波动率 / Beta / 相关性 / VaR / 压力测试）
  * ============================================================ */
 async function fetchIndexKline() { // 上证指数日 K（对齐 Beta / 相关性基准）
+  const t0 = Date.now();
   try {
     const url = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=1.000001'
       + '&fields1=f1,f2,f3&fields2=f51,f52,f53&klt=101&fqt=0&end=20500101&lmt=260';
     const res = await fetch(url);
     const j = await res.json();
     const bars = ((j.data && j.data.klines) || []).map(s => { const a = s.split(','); return { d: a[0], c: +a[2] }; });
-    if (bars.length > 60) return bars;
-  } catch (e) { /* 降级 */ }
-  const res2 = await fetch('https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000001,day,,,260,');
-  const j2 = await res2.json();
-  const d2 = (j2.data && j2.data.sh000001) || {};
-  return (d2.day || []).map(k => ({ d: k[0], c: +k[2] }));
+    if (bars.length > 60) { NetLog.push('kline', '东财 上证指数日K', true, Date.now() - t0, `${bars.length}根`); return bars; }
+  } catch (e) { /* 降级 */ NetLog.push('kline', '东财 上证指数日K', false, Date.now() - t0, e.message || String(e)); }
+  const t1 = Date.now();
+  try {
+    const res2 = await fetch('https://web.ifzq.gtimg.cn/appstock/app/fqkline/get?param=sh000001,day,,,260,');
+    const j2 = await res2.json();
+    const d2 = (j2.data && j2.data.sh000001) || {};
+    const bars2 = (d2.day || []).map(k => ({ d: k[0], c: +k[2] }));
+    NetLog.push('kline', '腾讯 上证指数日K(降级)', bars2.length > 0, Date.now() - t1, `${bars2.length}根`);
+    return bars2;
+  } catch (e) {
+    NetLog.push('kline', '腾讯 上证指数日K(降级)', false, Date.now() - t1, e.message || String(e));
+    throw e;
+  }
 }
 // 统计工具
 const mean = a => a.reduce((s, x) => s + x, 0) / (a.length || 1);
