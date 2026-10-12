@@ -742,21 +742,26 @@ tr.stockagg:hover td { background: #F5F8FC; }
   #holdTableM .sc-mv, #tvHoldTableM .sc-mv { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
 }
 
-/* ---------- v2.7.4 添加/编辑自选合一 ---------- */
-#watchForm .add-row #wfNoteQuick { flex: 1 1 200px; min-width: 0; }
-#watchForm .add-row #wfInput { flex: 1 1 240px; min-width: 0; }
-#watchForm .add-row .wg-quick { flex: 0 0 130px; }
+/* ---------- v2.7.4 添加/编辑自选合一 · v3.8.35 列宽比例 + 操作按钮靠右 ---------- */
+/* 桌面端：股票 30% / 备注 30% / 分组 20%，剩余约 20% 留给右侧操作按钮组 */
+@media (min-width: 640px) {
+  #watchForm .add-row #wfInput,      #tvWatchForm .add-row #tvWfInput       { flex: 0 1 30%; min-width: 0; }
+  #watchForm .add-row #wfNoteQuick,  #tvWatchForm .add-row #tvWfNoteQuick   { flex: 0 1 30%; min-width: 0; }
+  #watchForm .add-row .wg-quick,     #tvWatchForm .add-row .wg-quick        { flex: 0 1 20%; min-width: 0; }
+}
+/* 操作按钮组：贴到行尾最右；编辑态「取消」在左、「保存」在最右 */
+.add-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
 
 /* ---------- v2.7.6 编辑自选时股票锁定 ---------- */
-#watchForm .add-row input.ro { background: rgba(23, 30, 38, .04); color: var(--ink-2); cursor: not-allowed; }
+#watchForm .add-row input.ro, #tvWatchForm .add-row input.ro { background: rgba(23, 30, 38, .04); color: var(--ink-2); cursor: not-allowed; }
 
 /* ---------- v2.8.0 添加自选行高度与分组Tab一致(32px) ---------- */
-#watchForm .add-row { align-items: center; }
-#watchForm .add-row input {
+#watchForm .add-row, #tvWatchForm .add-row { align-items: center; }
+#watchForm .add-row input, #tvWatchForm .add-row input {
   height: 32px; padding: 0 12px; font-size: 13px; line-height: 1.4;
   box-sizing: border-box;
 }
-#watchForm .add-row .btn.sm { height: 32px; padding: 0 14px; font-size: 13px; box-sizing: border-box; }
+#watchForm .add-row .btn.sm, #tvWatchForm .add-row .btn.sm { height: 32px; padding: 0 14px; font-size: 13px; box-sizing: border-box; }
 
 /* ---------- v2.8.1 全局统一输入框/下拉/按钮高度32px、字号13px ---------- */
 input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),

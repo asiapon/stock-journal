@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.34">
+<link rel="stylesheet" href="style.css?v=3.8.35">
 </head>
 <body>
 
@@ -150,8 +150,10 @@
             <div id="tvWfSug" class="sug-box" hidden></div>
             <input type="text" id="tvWfNoteQuick" autocomplete="off" placeholder="备注 / 加入理由（选填）">
             <input type="text" id="tvWfGroupQuick" class="wg-quick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名">
-            <button type="submit" class="btn primary sm" id="tvWfSubmit">保存</button>
-            <button type="button" class="btn ghost sm" id="tvWfCancel" hidden>取消</button>
+            <div class="add-actions">
+              <button type="button" class="btn ghost sm" id="tvWfCancel" hidden>取消</button>
+              <button type="submit" class="btn primary sm" id="tvWfSubmit">添加</button>
+            </div>
           </div>
         </form>
         <div class="wtabs" id="tvWatchTabs"></div>
@@ -290,8 +292,10 @@
             <div id="wfSug" class="sug-box" hidden></div>
             <input type="text" id="wfNoteQuick" autocomplete="off" placeholder="备注 / 加入理由（选填）">
             <input type="text" id="wfGroupQuick" class="wg-quick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名">
-            <button type="submit" class="btn primary sm" id="wfSubmit">保存</button>
-            <button type="button" class="btn ghost sm" id="wfCancel" hidden>取消</button>
+            <div class="add-actions">
+              <button type="button" class="btn ghost sm" id="wfCancel" hidden>取消</button>
+              <button type="submit" class="btn primary sm" id="wfSubmit">添加</button>
+            </div>
           </div>
         </form>
         <div class="wtabs" id="watchTabs"></div>
@@ -712,7 +716,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.34"></script>
-<script src="analysis-extra.js?v=3.8.34"></script>
+<script src="app.js?v=3.8.35"></script>
+<script src="analysis-extra.js?v=3.8.35"></script>
 </body>
 </html>

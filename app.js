@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.34';
+const APP_VER = '3.8.35';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1822,7 +1822,7 @@ function fillWatchForm(w, m) {
   inp.classList.add('ro');
   const gq = document.getElementById(m.group); if (gq) gq.value = w.group_name || '默认';
   const nt = document.getElementById(m.note); if (nt) nt.value = w.note || '';
-  const sub = document.getElementById(m.submit); if (sub) sub.textContent = '保存修改';
+  const sub = document.getElementById(m.submit); if (sub) sub.textContent = '保存';   /* v3.8.35 编辑态：保存 */
   const cc = document.getElementById(m.cancel); if (cc) cc.hidden = false;
 }
 function resetWatchForm() {
@@ -1839,7 +1839,7 @@ function resetWatchForm() {
     }
     const gq = document.getElementById(m.group); if (gq) gq.value = '';
     const nt = document.getElementById(m.note); if (nt) nt.value = '';
-    const sub = document.getElementById(m.submit); if (sub) sub.textContent = '保存';
+    const sub = document.getElementById(m.submit); if (sub) sub.textContent = '添加';   /* v3.8.35 新增态：添加 */
     const cc = document.getElementById(m.cancel); if (cc) cc.hidden = true;
   }
 }
