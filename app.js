@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.23';
+const APP_VER = '3.8.24';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -329,7 +329,10 @@ const NetLog = {
 NetLog.load();
 
 /* ============================================================
-   网络行情（v3.8.23 新浪主源 + 腾讯备选，浏览器可直连）
+   网络行情（v3.8.24 东财主源 + 腾讯备选，浏览器可直连）
+   v3.8.24：新浪 hq.sinajs.cn 服务端白名单校验 Referer（必须是新浪系
+   域名），浏览器无法伪造 → 永远 403，弃用；改用东财 push2 实时快照
+   （无 Referer/UA 要求，已实测浏览器可直连、批量、秒级时间戳）。
    map: code -> { price, name, pct, prevClose, open, high, low }
    获取失败的代码不在 map 中；quoteTime 为行情商报价时间
    ============================================================ */
@@ -339,8 +342,8 @@ const NetQuote = {
   quoteTime: '',
   pending: null,
   ttl: 15 * 1000,            // v3.8.23 缓存 60s → 15s
-  sinaFailStreak: 0,
-  sinaDeadUntil: 0,          // 新浪连续失败 3 次熔断 10 分钟（期间直接走腾讯）
+  eastFailStreak: 0,
+  eastDeadUntil: 0,          // 东财连续失败 3 次熔断 10 分钟（期间直接走腾讯）
   prefix(market, code) {
     if (market === 'bj' || market === 'bse') return 'bj' + code;
     if (market === 'sz') return 'sz' + code;
@@ -354,31 +357,32 @@ const NetQuote = {
     S.watchlist.forEach(w => add(w.stock_code, w.market));
     return { codes, mk };
   },
-  /* 新浪行情：hq_str_sh600000="名称,今开,昨收,现价,最高,最低,...,日期,时间,..." */
-  async fetchSina(syms) {
+  /* 东财实时快照（主源）：push2 ulist 批量，JSON 无需转码
+     secid: 沪 1.xxxx / 深·北 0.xxxx；f2现价 f3涨跌% f12代码 f14名称
+     f15最高 f16最低 f17今开 f18昨收；fltt=2 直接返回小数 */
+  async fetchEast(syms) {
     const t0 = Date.now();
     try {
-      const res = await fetch('https://hq.sinajs.cn/list=' + syms.join(','));
+      const secids = syms.map(s => (s.startsWith('sh') ? '1.' : '0.') + s.slice(2)).join(',');
+      const url = 'https://push2.eastmoney.com/api/qt/ulist.np/get?secids=' + secids
+        + '&fields=f2,f3,f12,f14,f15,f16,f17,f18&fltt=2';
+      const res = await fetch(url);
       if (!res.ok) throw new Error('HTTP ' + res.status);
-      const buf = await res.arrayBuffer();
-      const text = new TextDecoder('gbk').decode(buf);
+      const j = await res.json();
       const out = new Map(); let qt = '';
-      const num = v => { const n = parseFloat(v); return isNaN(n) ? null : n; };
-      for (const m of text.matchAll(/hq_str_[a-z]{2}(\d{6})="([^"]*)"/g)) {
-        const p = m[2].split(',');
-        if (p.length < 32) continue;
-        const price = parseFloat(p[3]);
-        if (!(price > 0)) continue;              // 停牌/无数据
-        const prevClose = num(p[2]), open = num(p[1]), high = num(p[4]), low = num(p[5]);
-        out.set(m[1], { price, name: p[0],
-          pct: prevClose > 0 ? (price - prevClose) / prevClose * 100 : null,
-          prevClose, open, high, low });
-        if (p[30] && p[31]) qt = p[30].replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') + ' ' + p[31];
+      const num = v => { const n = parseFloat(v); return (v == null || v === '-' || isNaN(n)) ? null : n; };
+      for (const it of ((j.data && j.data.diff) || [])) {
+        const price = num(it.f2), code = it.f12 && String(it.f12);
+        if (!code || !(price > 0)) continue;     // 停牌/无数据
+        out.set(code, { price, name: it.f14 || code, pct: num(it.f3),
+          prevClose: num(it.f18), open: num(it.f17), high: num(it.f15), low: num(it.f16) });
       }
-      NetLog.push('quote', '新浪 hq.sinajs.cn', out.size > 0, Date.now() - t0, `${out.size}/${syms.length} 只`);
+      /* 东财快照不带时间戳字段，报价时间取本机当前时间（误差≈请求耗时） */
+      if (out.size) qt = new Date().toTimeString().slice(0, 8);
+      NetLog.push('quote', '东财 push2.eastmoney.com', out.size > 0, Date.now() - t0, `${out.size}/${syms.length} 只`);
       return out.size ? { out, qt } : null;
     } catch (e) {
-      NetLog.push('quote', '新浪 hq.sinajs.cn', false, Date.now() - t0, e.message || String(e));
+      NetLog.push('quote', '东财 push2.eastmoney.com', false, Date.now() - t0, e.message || String(e));
       return null;
     }
   },
@@ -419,15 +423,15 @@ const NetQuote = {
         const batch = codes.slice(i, i + 50);
         const syms = batch.map(c => this.prefix(mk[c], c));
         let got = null;
-        /* 主源新浪（连续失败熔断期跳过，直接走腾讯） */
-        if (Date.now() >= this.sinaDeadUntil) {
-          got = await this.fetchSina(syms);
-          if (got) { this.sinaFailStreak = 0; used.push('sina'); }
+        /* 主源东财（连续失败熔断期跳过，直接走腾讯） */
+        if (Date.now() >= this.eastDeadUntil) {
+          got = await this.fetchEast(syms);
+          if (got) { this.eastFailStreak = 0; used.push('east'); }
           else {
-            this.sinaFailStreak++;
-            if (this.sinaFailStreak >= 3) {
-              this.sinaDeadUntil = Date.now() + 10 * 60 * 1000;
-              NetLog.push('quote', '新浪熔断→切腾讯', true, 0, `连续失败 ${this.sinaFailStreak} 次，10 分钟后重试新浪`);
+            this.eastFailStreak++;
+            if (this.eastFailStreak >= 3) {
+              this.eastDeadUntil = Date.now() + 10 * 60 * 1000;
+              NetLog.push('quote', '东财熔断→切腾讯', true, 0, `连续失败 ${this.eastFailStreak} 次，10 分钟后重试东财`);
             }
           }
         }
@@ -1202,7 +1206,7 @@ function renderHoldings() {
   /* 报价时间提示 */
   const qti = $('quoteTimeInfo');
   if (qti) qti.textContent = NetQuote.quoteTime
-    ? `行情报价时间 ${NetQuote.quoteTime}（${NetQuote.sinaDeadUntil > Date.now() ? '腾讯备源' : '新浪主源'}，缓存15秒）`
+    ? `行情报价时间 ${NetQuote.quoteTime}（${NetQuote.eastDeadUntil > Date.now() ? '腾讯备源' : '东财主源'}，缓存15秒）`
     : '行情未获取';
   const totalFloat = rows.reduce((s, r) => s + (r.float != null ? r.float : 0), 0);
   /* 账户累计总盈亏 = 持仓市值 − 累计买入净额 + 累计卖出净额（无需初始额度，费用已含在净额中） */
