@@ -877,6 +877,15 @@ select { padding-right: 6px; background: var(--card); color: var(--ink); }
   #watchTable .adate { font-size: 13px; }
 }
 
+/* ---------- v3.8.49 持仓表字号彻底统一 ----------
+   上一条 v3.1.8「表内一律 13px」只把 .sc-code 抬到了 13px，而手机持仓表里
+   .sc-name / .sc-mv 还停在 12px —— 同一列里名称 12、代码 13，看起来「代码比名称还大」。
+   现在手机档也统一 13px（表头仍保持全站 12px 标准），主次只靠灰色区分。 */
+@media (max-width: 639px) {
+  #holdTableM .sc-name, #tvHoldTableM .sc-name,
+  #holdTableM .sc-mv, #tvHoldTableM .sc-mv { font-size: 13px; }
+}
+
 /* ============================================================
    v3.7.0 分析中心 · 个股诊断（完整迁移自 trade-manager）
    ============================================================ */
@@ -1188,12 +1197,17 @@ select {
 select:hover { border-color: var(--blue); }
 select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 
-/* ---------- v3.8.22 自选表表头排序（三态：降序/升序/取消） ---------- */
-#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable, #tvHoldTable th.sortable { cursor: pointer; user-select: none; }
-#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable:hover, #tvHoldTable th.sortable:hover { color: var(--blue); }
-#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable::after, #tvHoldTable th.sortable::after { content: '⇅'; margin-left: 3px; font-size: 10px; opacity: .35; }
-#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable.sorted-desc::after, #tvHoldTable th.sortable.sorted-desc::after { content: '▼'; opacity: 1; color: var(--blue); }
-#watchTable th.sortable, #tvWatchTable th.sortable, #holdTable th.sortable.sorted-asc::after, #tvHoldTable th.sortable.sorted-asc::after { content: '▲'; opacity: 1; color: var(--blue); }
+/* ---------- v3.8.22 自选表表头排序（三态：降序/升序/取消） ----------
+   v3.8.49 修 bug：原来前两条规则里写的是 `#tvWatchTable th.sortable`（漏了 ::after），
+   于是 font-size:10px / color:blue 直接落在「表头元素本身」上 —— 自选表里可排序的列
+   （最新/涨幅/今开/最高/最低/昨收/自选日/自选价/自选收益）被压成 10px 蓝字，
+   与不可排序的「股票 / 备注 / 操作」12px 灰字不一致；且 ⇅ 箭头根本没渲染出来。
+   现在一律收敛到 ::after 上；同时清掉两个已下线专页（#watchTable / #holdTable）的死选择器。 */
+#tvWatchTable th.sortable, #tvHoldTable th.sortable { cursor: pointer; user-select: none; }
+#tvWatchTable th.sortable:hover, #tvHoldTable th.sortable:hover { color: var(--blue); }
+#tvWatchTable th.sortable::after, #tvHoldTable th.sortable::after { content: '⇅'; margin-left: 3px; font-size: 10px; opacity: .35; }
+#tvWatchTable th.sortable.sorted-desc::after, #tvHoldTable th.sortable.sorted-desc::after { content: '▼'; opacity: 1; color: var(--blue); }
+#tvWatchTable th.sortable.sorted-asc::after, #tvHoldTable th.sortable.sorted-asc::after { content: '▲'; opacity: 1; color: var(--blue); }
 
 /* ---------- v3.8.26 持仓页指数条（红涨绿跌） ---------- */
 .idx-bar { display: flex; flex-wrap: wrap; gap: 8px; margin: 2px 0 8px; }

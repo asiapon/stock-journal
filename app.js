@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.48';
+const APP_VER = '3.8.49';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -505,10 +505,14 @@ const NetQuote = {
   },
   async refresh(force = false) {
     const { codes, mk } = this.allCodes();
-    if (!codes.length) return this.map;
-    const fresh = Date.now() - this.fetchedAt < this.ttl;
     if (this.pending) return this.pending;
-    if (!force && fresh && codes.every(c => this.map.has(c))) return this.map;
+    /* v3.8.49 指数与个股解耦判定：
+       以前 `if (!codes.length) return` 会直接退出，指数只在「有自选/持仓」时顺带拉一次，
+       于是新账号（空账户）登录后大盘指数一条都不显示。现在两条链路各自判新鲜度。 */
+    const qFresh = codes.length > 0 && Date.now() - this.fetchedAt < this.ttl
+      && codes.every(c => this.map.has(c));
+    const iFresh = this.idx.size > 0 && Date.now() - this.idxTime < this.ttl;
+    if (!force && qFresh && iFresh) return this.map;
     this.pending = (async () => {
       const merged = new Map(); let qt = ''; let used = [];
       for (let i = 0; i < codes.length; i += 50) {
@@ -541,8 +545,8 @@ const NetQuote = {
         this.map = merged;
         this.fetchedAt = Date.now();
         if (qt) this.quoteTime = qt;
-        await this.fetchIdx();   // v3.8.26 指数随行情一并刷新
       }
+      if (force || !iFresh) await this.fetchIdx();   // v3.8.26 指数随行情一并刷新 / v3.8.49 空账户也拉
       this.pending = null;
       return merged;
     })();
@@ -2146,16 +2150,34 @@ async function saveFeeEditor() {
   await store.log('settings', '更新费率设置');
   toast('费率已保存');
 }
+/* v3.8.49 设置页「权限收敛」与页签切换
+   普通用户（非管理员）只保留「交易费用」「用户管理（改自己密码）」两项；
+   模型 / 数据管理 / 操作日志 对普通用户不显示、也不呈现空面板。 */
+function switchSetPane(name) {
+  document.querySelectorAll('#setTabs .set-tab').forEach(x => x.classList.toggle('active', x.dataset.set === name));
+  document.querySelectorAll('#view-me .set-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
+}
 function renderMe() {
   renderFeeEditor();
   renderLogs();
   renderNetLogUI();
-  if (S.mode === 'cloud' && S.user && S.user.role === 'admin') {
-    $('userMgmtCard').hidden = false;
-    loadUsers();
-  } else {
-    $('userMgmtCard').hidden = true;
+  const cloud = S.mode === 'cloud' && !!S.user;
+  const admin = !!(cloud && S.user.role === 'admin');
+  const isAdminPane = n => n !== 'cost' && n !== 'user';
+  document.querySelectorAll('#setTabs .set-tab').forEach(t => { t.hidden = isAdminPane(t.dataset.set) && !admin; });
+  if (!admin) document.querySelectorAll('#view-me .set-pane').forEach(p => { if (isAdminPane(p.dataset.pane)) p.hidden = true; });
+  /* 当前停留的页签被隐藏了（普通用户默认落在「模型」）→ 落到第一个可见页签 */
+  const act = document.querySelector('#setTabs .set-tab.active');
+  if (!act || act.hidden) {
+    const first = document.querySelector('#setTabs .set-tab:not([hidden])');
+    if (first) switchSetPane(first.dataset.set);
   }
+  const acct = $('myAcctCard');
+  if (acct) acct.hidden = !cloud;
+  const ah = $('myAcctHint');
+  if (ah) ah.textContent = cloud ? `当前账号 ${S.user.username}${admin ? '（管理员）' : ''}` : '—';
+  $('userMgmtCard').hidden = !admin;
+  if (admin) loadUsers();
 }
 /* ---------- v3.8.23 网络日志摘要 ---------- */
 function renderNetLogUI() {
@@ -2374,9 +2396,8 @@ function bindEvents() {
   /* 应用设置：分类页签切换 */
   $('setTabs').addEventListener('click', e => {
     const b = e.target.closest('.set-tab');
-    if (!b) return;
-    document.querySelectorAll('#setTabs .set-tab').forEach(x => x.classList.toggle('active', x === b));
-    document.querySelectorAll('#view-me .set-pane').forEach(p => { p.hidden = p.dataset.pane !== b.dataset.set; });
+    if (!b || b.hidden) return;
+    switchSetPane(b.dataset.set);
   });
 
   /* NL 示例词条：点击填入输入框 */
@@ -2751,6 +2772,23 @@ function bindEvents() {
     }, '载入');
   });
   $('logReloadBtn').addEventListener('click', async () => { await loadAll(); renderMe(); });
+
+  /* v3.8.49 普通用户自助改密（管理员改他人密码走下面「用户管理」的「重置密码」） */
+  $('myPwdForm').addEventListener('submit', async e => {
+    e.preventDefault();
+    const oldP = $('mpOld').value, n1 = $('mpNew').value, n2 = $('mpNew2').value;
+    if (n1 !== n2) { toast('两次输入的新密码不一致', 'warn'); return; }
+    if (n1.length < 6) { toast('新密码至少 6 位', 'warn'); return; }
+    if (n1 === oldP) { toast('新密码与当前密码相同，无需修改', 'warn'); return; }
+    try {
+      const r = await rpc('app_change_pwd', { p_token: S.token, p_old: oldP, p_new: n1 });
+      if (!r.ok) { toast(r.msg || '修改失败', 'warn'); return; }
+      ['mpOld', 'mpNew', 'mpNew2'].forEach(id => { $(id).value = ''; });
+      if (S.user) { S.user.must_change_pwd = false; try { localStorage.setItem('sj_user', JSON.stringify(S.user)); } catch (err) { /* */ } }
+      await store.log('user', '修改本账号登录密码');
+      toast('密码已修改，下次登录请用新密码');
+    } catch (err) { toast(err.message || '修改失败', 'warn'); }
+  });
 
   /* 用户管理 */
   $('userCreateForm').addEventListener('submit', async e => {

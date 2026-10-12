@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.48">
+<link rel="stylesheet" href="style.css?v=3.8.49">
 </head>
 <body>
 
@@ -114,7 +114,7 @@
       <div class="card">
         <div class="card-title-row">
           <span class="card-title">持仓信息</span>
-          <button class="btn ghost sm" id="holdRecBtn" type="button">＋ 记一笔</button>
+          <div class="ctr-actions"><button class="link-btn" id="holdRecBtn" type="button">＋ 记一笔</button></div>
         </div>
         <div class="idx-bar idx-bar-lg idx-bar-eq" id="tvHoldSummary"></div>
         <div class="table-scroll">
@@ -432,6 +432,25 @@
       </div>
 
       <div class="set-pane" data-pane="user" hidden>
+      <!-- v3.8.49 普通用户自助改密：所有登录用户可见 -->
+      <div class="card" id="myAcctCard" hidden>
+        <div class="card-title-row">
+          <span class="card-title">修改我的密码</span>
+          <span class="hint" id="myAcctHint">—</span>
+        </div>
+        <form id="myPwdForm" class="form-grid">
+          <label class="span2">当前密码
+            <input type="password" id="mpOld" required autocomplete="current-password">
+          </label>
+          <label class="span2">新密码
+            <input type="password" id="mpNew" required minlength="6" autocomplete="new-password">
+          </label>
+          <label class="span2">确认新密码
+            <input type="password" id="mpNew2" required minlength="6" autocomplete="new-password">
+          </label>
+          <div class="form-actions span2"><button type="submit" class="btn primary">修改密码</button></div>
+        </form>
+      </div>
       <div class="card" id="userMgmtCard" hidden>
         <div class="card-title-row">
           <span class="card-title">用户管理</span>
@@ -610,7 +629,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.48"></script>
-<script src="analysis-extra.js?v=3.8.48"></script>
+<script src="app.js?v=3.8.49"></script>
+<script src="analysis-extra.js?v=3.8.49"></script>
 </body>
 </html>
