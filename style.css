@@ -1232,8 +1232,10 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
   display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 10px; align-items: stretch; margin: 4px 0 10px;
 }
-.idx-bar-eq .idx-chip { justify-content: center; flex-wrap: nowrap; white-space: nowrap; }
-.idx-bar-eq .hold-warn { grid-column: 1 / -1; justify-self: center; }
+/* v3.8.48 胶囊内容左对齐：等宽网格下每格宽于内容，居中会让标签位置随数值长度漂移，
+   左对齐后各胶囊的标签起点一致、与卡片内其他文字同一左基线，更好扫读 */
+.idx-bar-eq .idx-chip { justify-content: flex-start; flex-wrap: nowrap; white-space: nowrap; }
+.idx-bar-eq .hold-warn { grid-column: 1 / -1; justify-self: start; }
 @media (max-width: 720px) {
   /* v3.8.46 手机档固定「每行一个胶囊」：整行宽度充裕（约 326px），标签与数值恒定同一行，
      6 位金额 + 百分比也放得下；原先「2 列半宽」只有约 160px，数字一长就得折行 */
