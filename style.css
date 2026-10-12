@@ -1180,11 +1180,13 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 .idx-bar-lg .idx-chip .i-name { font-size: 12px; }
 .idx-bar-lg .idx-chip .i-val { font-size: 16px; font-weight: 600; color: var(--ink); }
 .idx-bar-lg .idx-chip .i-pct { font-size: 12.5px; font-weight: 600; }
-/* 总览页「持仓快照」统计卡：三卡一行 */
-#tvHoldSummary { grid-template-columns: repeat(3, 1fr); }
-#tvHoldSummary .s-sub b { font-weight: 600; }
+/* ---------- v3.8.36 总览页「持仓快照」统计：与大盘指数同款胶囊（4 项） ---------- */
+#tvHoldSummary { margin-bottom: 12px; }
+/* 盈亏数值与比例一并跟随涨跌着色（覆盖 .idx-bar-lg .idx-chip .i-val 的深色） */
+#tvHoldSummary .idx-chip.up .i-val, #tvHoldSummary .idx-chip.up .i-pct { color: var(--up); }
+#tvHoldSummary .idx-chip.down .i-val, #tvHoldSummary .idx-chip.down .i-pct { color: var(--down); }
+#tvHoldSummary .hold-warn { align-self: center; font-size: 11.5px; color: var(--ink-3, #98A1AC); }
 @media (max-width: 720px) {
-  #tvHoldSummary { grid-template-columns: repeat(2, 1fr); }
   .idx-bar-lg .idx-chip { padding: 6px 10px; }
   .idx-bar-lg .idx-chip .i-val { font-size: 14px; }
 }

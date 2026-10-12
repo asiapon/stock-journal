@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.35';
+const APP_VER = '3.8.36';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1301,19 +1301,21 @@ function renderHoldings() {
     else sellNetAll += t.net_amount != null ? Number(t.net_amount) : t.gross_amount - f;
   }
   const cumPnl = totalMV - buyNetAll + sellNetAll;
-  /* v3.8.34 总览页「持仓快照」需要今日已实现与行情缺口，这里一并算好 */
+  /* v3.8.36 总览页「持仓快照」：4 项统计 + 行情缺口提示（当前已实现不再单列，见 todayRealizedPnl） */
   const missingQty = rows.filter(r => !r.cleared && r.price == null).length;
-  const todayPnlSum = todayRealizedPnl();
-  const sumHtmlOf = (m) => rows.length ? (m.ext ? `
-    <div class="sum-card"><div class="s-label">总市值 / 总盈亏</div>
-      <div class="s-value">¥${fmt2(totalMV)}</div>
-      <div class="s-sub">累计 <b class="${pnlCls(cumPnl)}">${cumPnl >= 0 ? '+' : ''}${fmt2(cumPnl)}</b></div></div>
-    <div class="sum-card"><div class="s-label">浮动盈亏 / 当日盈亏</div>
-      <div class="s-value ${pnlCls(totalFloat)}">${totalFloat >= 0 ? '+' : ''}${fmt2(totalFloat)}</div>
-      <div class="s-sub">当日 <b class="${pnlCls(totalDayPnl)}">${totalDayPnl >= 0 ? '+' : ''}${fmt2(totalDayPnl)}</b></div></div>
-    <div class="sum-card"><div class="s-label">今日已实现 / 持仓只数</div>
-      <div class="s-value ${pnlCls(todayPnlSum)}">${todayPnlSum >= 0 ? '+' : ''}${fmt2(todayPnlSum)}</div>
-      <div class="s-sub">${holds.length} 只持仓${missingQty ? ` · ${missingQty} 只现价未获取` : ''}</div></div>`
+  /* v3.8.36 总览页「持仓快照」统计：改用与「大盘指数」同款胶囊（4 项），盈亏随涨跌着色 */
+  const sSgn = v => (v >= 0 ? '+' : '');
+  const sCls = v => (v > 0 ? 'up' : v < 0 ? 'down' : '');
+  const sPct = (v, base) => (base > 0 ? sSgn(v) + (v / base * 100).toFixed(2) + '%' : '');
+  const statChip = (name, val, cls, pct) => `<span class="idx-chip${cls ? ' ' + cls : ''}">`
+    + `<span class="i-name">${name}</span><span class="i-val">${val}</span>`
+    + (pct ? `<span class="i-pct">${pct}</span>` : '') + '</span>';
+  const tvStatsHtml = statChip('总市值', '¥' + fmt2(totalMV), '', '')
+    + statChip('浮动盈亏', sSgn(totalFloat) + fmt2(totalFloat), sCls(totalFloat), sPct(totalFloat, totalMV - totalFloat))
+    + statChip('当日盈亏', sSgn(totalDayPnl) + fmt2(totalDayPnl), sCls(totalDayPnl), sPct(totalDayPnl, totalMV - totalDayPnl))
+    + statChip('累计盈亏', sSgn(cumPnl) + fmt2(cumPnl), sCls(cumPnl), '')
+    + (missingQty ? `<span class="hold-warn">${missingQty} 只现价未获取</span>` : '');
+  const sumHtmlOf = (m) => rows.length ? (m.ext ? tvStatsHtml
   : `
     <div class="sum-card"><div class="s-label">总市值/总盈亏</div>
       <div class="s-value">${fmt2(totalMV)}</div>
