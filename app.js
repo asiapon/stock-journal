@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.30';
+const APP_VER = '3.8.31';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -234,16 +234,20 @@ function closeConfirm() { $('confirmModal').hidden = true; confirmCb = null; }
 const DEFAULT_FEES = {
   sh:  { rate: 0.06, min: 5, stamp: 0.5, transfer: 0.01, handling: 0.034, gov: 0.02 },
   sz:  { rate: 0.06, min: 5, stamp: 0.5, transfer: 0.01, handling: 0.034, gov: 0.02 },
-  bse: { rate: 0.06, min: 5, stamp: 0.5, transfer: 0.01, handling: 0.125, gov: 0 }
+  bse: { rate: 0.06, min: 0, stamp: 0.5, transfer: 0.01, handling: 0.125, gov: 0 }
 };
 function feeCfg(market) {
   const cfg = S.settings.fee || {};
   return Object.assign({}, DEFAULT_FEES[market] || DEFAULT_FEES.sz, cfg[market] || {});
 }
-function calcFees(amount, type, market) {
+/* v3.8.31 场内基金（ETF/LOF）费率：固定佣金万1全包（含规费）、免印花税、最低5元
+   依据广发交割单 1445 笔实测：纳斯达克ETF 49笔全部 = 金额×0.0001（<500元按5元收） */
+const FUND_FEES = { rate: 0.1, min: 5, stamp: 0, transfer: 0, handling: 0, gov: 0 };
+function isFundCode(code) { return !!code && /^(5|1[56])/.test(String(code)); }
+function calcFees(amount, type, market, code) {
   /* 口径与 trade-manager calcAshareCost 一致：
      最低费用 min 针对规费(过户+经手+证管)+佣金 合计，不足时由佣金补足；印花税不参与 */
-  const f = feeCfg(market);
+  const f = isFundCode(code) ? FUND_FEES : feeCfg(market);
   const r4 = x => Math.round(x * 10000) / 10000;
   const stamp = type === 'sell' ? amount * f.stamp / 1000 : 0;
   const transfer = amount * f.transfer / 1000;
@@ -257,7 +261,7 @@ function calcFees(amount, type, market) {
 }
 function buildTradeRow({ type, code, name, market, price, qty, time, note }) {
   const gross = Math.round(price * qty * 10000) / 10000;
-  const fee = calcFees(gross, type, market);
+  const fee = calcFees(gross, type, market, code);
   const net = type === 'buy' ? gross + fee.total : gross - fee.total;
   return {
     transaction_time: new Date(time).toISOString(),
@@ -1648,7 +1652,7 @@ function updateFeePreview() {
   const type = $('tfType').value, market = resolveTfStock().market;
   if (!(price > 0) || !(qty > 0)) { $('feePreview').innerHTML = ''; return; }
   const gross = price * qty;
-  const f = calcFees(gross, type, market);
+  const f = calcFees(gross, type, market, resolveTfStock().code);
   const net = type === 'buy' ? gross + f.total : gross - f.total;
   $('feePreview').innerHTML = `
     <span>成交金额 <b>${fmt2(gross)}</b></span>
@@ -2484,7 +2488,7 @@ function bindEvents() {
       try {
         let n = 0;
         for (const t of S.trades) {
-          const fee = calcFees(t.gross_amount, t.transaction_type, t.market);
+          const fee = calcFees(t.gross_amount, t.transaction_type, t.market, t.stock_code);
           const net = t.transaction_type === 'buy' ? t.gross_amount + fee.total : t.gross_amount - fee.total;
           if (JSON.stringify(t.fee) !== JSON.stringify(fee) || Number(t.net_amount) !== net) {
             await store.update('trades', t.id, { fee, net_amount: net });
