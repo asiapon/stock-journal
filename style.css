@@ -720,6 +720,9 @@ tr.stockagg:hover td { background: #F5F8FC; }
 }
 .wtab.on i { background: #fff; color: var(--blue); }
 .wtab-add { padding: 6px 10px; font-weight: 600; }
+/* v3.8.41 「删除该分组」紧随「＋ 新建分组」之后：同款胶囊外形，文字更淡、hover 保持中性（表明它是动作而非分组 Tab） */
+.wtab-del { color: var(--ink-3, #98A1AC); }
+.wtab-del:hover { color: var(--ink-2); border-color: var(--line); }
 
 /* ---------- v2.7.1 添加自选分组框 + 手机端两行布局 ---------- */
 .wg-quick { flex: 0 0 130px; }
@@ -1190,9 +1193,10 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 /* ---------- v3.8.34 总览页「大盘指数」：放大成主视觉条 ---------- */
 .idx-bar-lg { gap: 10px; margin: 4px 0 8px; }
 .idx-bar-lg .idx-chip { padding: 8px 14px; border-radius: 10px; font-size: 13px; gap: 8px; }
-.idx-bar-lg .idx-chip .i-name { font-size: 12px; }
-.idx-bar-lg .idx-chip .i-val { font-size: 16px; font-weight: 600; color: var(--ink); }
-.idx-bar-lg .idx-chip .i-pct { font-size: 12.5px; font-weight: 600; }
+/* v3.8.41 标签与数值同字号（13px），数值不再放大加粗，保持安静的行情条形 */
+.idx-bar-lg .idx-chip .i-name { font-size: 13px; }
+.idx-bar-lg .idx-chip .i-val { font-size: 13px; font-weight: 500; color: var(--ink); }
+.idx-bar-lg .idx-chip .i-pct { font-size: 13px; font-weight: 500; }
 /* ---------- v3.8.36 总览页「持仓快照」统计：与大盘指数同款胶囊（4 项） ---------- */
 #tvHoldSummary { margin-bottom: 12px; }
 /* 盈亏数值与比例一并跟随涨跌着色（覆盖 .idx-bar-lg .idx-chip .i-val 的深色） */
@@ -1201,7 +1205,6 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 #tvHoldSummary .hold-warn { align-self: center; font-size: 11.5px; color: var(--ink-3, #98A1AC); }
 @media (max-width: 720px) {
   .idx-bar-lg .idx-chip { padding: 6px 10px; }
-  .idx-bar-lg .idx-chip .i-val { font-size: 14px; }
 }
 /* ---------- v3.8.38 胶囊等宽网格（大盘指数 / 持仓快照统计共用）：PC 一行、手机两行 ---------- */
 .idx-bar-eq {
@@ -1215,9 +1218,9 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
   /* 窄屏两列时胶囊内放不下「标签 数值 比例」一行：把标签单独占一行，
      数值与比例落到第二行 —— 三只胶囊统一两行，视觉节奏一致 */
   .idx-bar-eq .idx-chip { padding: 6px 8px; gap: 5px; row-gap: 2px; align-content: center; }
-  .idx-bar-eq .idx-chip .i-name { flex: 0 0 100%; text-align: center; font-size: 11.5px; }
-  .idx-bar-eq .idx-chip .i-val { font-size: 14px; }
-  .idx-bar-eq .idx-chip .i-pct { font-size: 11.5px; }
+  .idx-bar-eq .idx-chip .i-name { flex: 0 0 100%; text-align: center; font-size: 12px; }
+  .idx-bar-eq .idx-chip .i-val { font-size: 12px; }
+  .idx-bar-eq .idx-chip .i-pct { font-size: 12px; }
 }
 
 /* ---------- v3.8.28 明细卡精简：成本双值分隔 ---------- */

@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.40';
+const APP_VER = '3.8.41';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1750,8 +1750,11 @@ function watchModel() {
 function paintWatch(m, M) {
   const el = id => document.getElementById(id);
   const tabs = el(m.tabs);
+  /* v3.8.41 「删除该分组」紧随「＋ 新建分组」之后渲染；仅在具体分组（非「默认」）时出现 */
+  const canDelGroup = !!(watchTab && watchTab !== '默认');
   if (tabs) tabs.innerHTML = M.tabGroups.map(g => `<button class="wtab${watchTab === g ? ' on' : ''}" data-g="${esc(g)}">${esc(g)}<i>${S.watchlist.filter(w => (w.group_name || '默认') === g).length}</i></button>`).join('')
-    + `<button class="wtab wtab-add" data-g="+" title="新建分组">＋</button>`;
+    + `<button class="wtab wtab-add" data-g="+" title="新建分组">＋</button>`
+    + (m.delGroup ? `<button class="wtab wtab-del" id="${m.delGroup}" type="button" title="删除当前分组，组内自选移回「默认」"${canDelGroup ? '' : ' hidden'}>删除该分组</button>` : '');
   const table = el(m.table);
   if (!table) return;                       // 该挂载点不存在（例如页面已下线）
   const empty = el(m.empty);
@@ -1779,9 +1782,6 @@ function paintWatch(m, M) {
     empty.hidden = M.listLen > 0;
     empty.textContent = watchTab ? `分组「${watchTab}」暂无自选，点右上角「＋ 添加自选」会自动归入此分组` : '暂无自选股，点右上角「＋ 添加自选」开始添加';
   }
-  /* 当前在具体分组 Tab（「默认」除外）时显示「删除该分组」 */
-  const dgb = el(m.delGroup);
-  if (dgb) dgb.style.visibility = (watchTab && watchTab !== '默认') ? 'visible' : 'hidden';
 }
 function renderWatch() {
   const M = watchModel();
@@ -1934,10 +1934,11 @@ function bindWatchCard(m) {
     if (isOpen) resetWatchForm();
     else { resetWatchForm(false); setWatchFormOpen(m, true); }
   });
-  /* 分组 Tab：切换 / 新建；切 Tab 后添加自动归入当前分组 */
+  /* v3.8.41 「删除该分组」按钮也渲染在分组 Tab 行内，走同一处事件委托 */
   const tabs = el(m.tabs);
   if (tabs) tabs.addEventListener('click', e => {
     const b = e.target.closest('.wtab'); if (!b) return;
+    if (b.classList.contains('wtab-del')) { delWatchGroup(); return; }
     const g = b.dataset.g;
     if (g === '+') {
       const name = (prompt('新分组名称：') || '').trim();
@@ -1986,26 +1987,28 @@ function bindWatchCard(m) {
       });
     }
   });
-  /* 删除当前分组：组内股票移回「默认」 */
-  const dgb = el(m.delGroup);
-  if (dgb) dgb.addEventListener('click', () => {
-    if (!watchTab || watchTab === '默认') return;
-    const n = S.watchlist.filter(w => (w.group_name || '默认') === watchTab).length;
-    confirmDlg('删除分组', `确认删除分组「${watchTab}」？${n ? `组内 ${n} 只自选将移回「默认」分组` : '该分组当前为空'}。`, async () => {
-      try {
-        for (const w of S.watchlist.filter(w => (w.group_name || '默认') === watchTab)) {
-          await store.update('watchlist', w.id, { group_name: '默认' });
-        }
-        await store.log('update', `删除分组「${watchTab}」（${n} 只移回默认）`);
-        watchTab = '默认';
-        try { localStorage.setItem('sj_watchTab', watchTab); } catch (err) { /* */ }
-        resetWatchForm();
-        await loadAll(); renderWatch(); renderToday();
-        toast('分组已删除');
-      } catch (err) { toast(err.message || '删除失败', 'warn'); }
-    }, '删除');
-  });
   return true;
+}
+
+/* v3.8.41 删除当前分组：组内股票移回「默认」
+   （按钮渲染在分组 Tab 行的「＋ 新建分组」之后，由 bindWatchCard 的事件委托触发） */
+function delWatchGroup() {
+  if (!watchTab || watchTab === '默认') return;
+  const g = watchTab;
+  const n = S.watchlist.filter(w => (w.group_name || '默认') === g).length;
+  confirmDlg('删除分组', `确认删除分组「${g}」？${n ? `组内 ${n} 只自选将移回「默认」分组` : '该分组当前为空'}。`, async () => {
+    try {
+      for (const w of S.watchlist.filter(w => (w.group_name || '默认') === g)) {
+        await store.update('watchlist', w.id, { group_name: '默认' });
+      }
+      await store.log('update', `删除分组「${g}」（${n} 只移回默认）`);
+      watchTab = '默认';
+      try { localStorage.setItem('sj_watchTab', watchTab); } catch (err) { /* */ }
+      resetWatchForm();
+      await loadAll(); renderWatch(); renderToday();
+      toast('分组已删除');
+    } catch (err) { toast(err.message || '删除失败', 'warn'); }
+  }, '删除');
 }
 
 /* ---------- 我的 ---------- */
