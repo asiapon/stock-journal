@@ -67,8 +67,8 @@ function inferMarket(code) {
   if (/^(4|8|9)/.test(code)) return 'bj';
   return 'sz';
 }
-const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.31';
+const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
+const APP_VER = '3.8.32';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -237,27 +237,38 @@ const DEFAULT_FEES = {
   bse: { rate: 0.06, min: 0, stamp: 0.5, transfer: 0.01, handling: 0.125, gov: 0 }
 };
 function feeCfg(market) {
+  /* 键名归一：inferMarket 产出 'bj'，费率表键为 'bse'（v3.8.32 修 —— 此前北交所单会误落到深市费率） */
+  const key = market === 'bj' ? 'bse' : market;
   const cfg = S.settings.fee || {};
-  return Object.assign({}, DEFAULT_FEES[market] || DEFAULT_FEES.sz, cfg[market] || {});
+  return Object.assign({}, DEFAULT_FEES[key] || DEFAULT_FEES.sz, cfg[key] || {});
 }
 /* v3.8.31 场内基金（ETF/LOF）费率：固定佣金万1全包（含规费）、免印花税、最低5元
    依据广发交割单 1445 笔实测：纳斯达克ETF 49笔全部 = 金额×0.0001（<500元按5元收） */
 const FUND_FEES = { rate: 0.1, min: 5, stamp: 0, transfer: 0, handling: 0, gov: 0 };
 function isFundCode(code) { return !!code && /^(5|1[56])/.test(String(code)); }
+/* v3.8.32 口径改为「券商式逐项取整」：每个费用项先四舍五入到分，再汇总计入总费用
+   （依据广发交割单 1445 笔实测：该口径对账吻合率 62.5%，优于原「各项高精度相加后取整」的 57.4%，
+   且分项之和天然等于合计，费用明细不再出现 1 分钱对不上） */
+const r2 = x => Math.round((x + 1e-9) * 100) / 100;
 function calcFees(amount, type, market, code) {
-  /* 口径与 trade-manager calcAshareCost 一致：
-     最低费用 min 针对规费(过户+经手+证管)+佣金 合计，不足时由佣金补足；印花税不参与 */
-  const f = isFundCode(code) ? FUND_FEES : feeCfg(market);
-  const r4 = x => Math.round(x * 10000) / 10000;
-  const stamp = type === 'sell' ? amount * f.stamp / 1000 : 0;
-  const transfer = amount * f.transfer / 1000;
-  const gov = amount * (f.gov || 0) / 1000;
-  const handling = amount * f.handling / 1000;
-  const rawComm = amount * f.rate / 1000;
+  /* 最低费用 min 针对规费(过户+经手+证管)+佣金 合计，不足时由佣金补足；印花税不参与 */
+  const f = (market === 'fund' || isFundCode(code)) ? FUND_FEES : feeCfg(market);
+  const stamp = type === 'sell' ? r2(amount * f.stamp / 1000) : 0;
+  const transfer = r2(amount * f.transfer / 1000);
+  const gov = r2(amount * (f.gov || 0) / 1000);
+  const handling = r2(amount * f.handling / 1000);
+  const rawComm = r2(amount * f.rate / 1000);
   const fixTotal = transfer + gov + handling;
   const minFee = Number(f.min) || 0;
-  const comm = amount > 0 && (fixTotal + rawComm) < minFee ? Math.max(minFee - fixTotal, 0) : rawComm;
-  return { commission: r4(comm), stamp: r4(stamp), transfer: r4(transfer), handling: r4(handling), gov: r4(gov), total: r4(stamp + fixTotal + comm) };
+  const comm = amount > 0 && (fixTotal + rawComm) < minFee ? r2(Math.max(minFee - fixTotal, 0)) : rawComm;
+  return { commission: comm, stamp, transfer, handling, gov, total: r2(stamp + fixTotal + comm) };
+}
+/* 初始持仓记录（费用手动置 0，成本=初始建仓价）：不参与「重算历史费用」，避免成本被改写 */
+function isInitTrade(t) {
+  if (!t) return false;
+  if (/初始化/.test(t.note || '')) return true;
+  const f = t.fee;
+  return !!f && typeof f === 'object' && Object.keys(f).length === 0;
 }
 function buildTradeRow({ type, code, name, market, price, qty, time, note }) {
   const gross = Math.round(price * qty * 10000) / 10000;
@@ -2484,10 +2495,15 @@ function bindEvents() {
     } catch (err) { toast(err.message || '清空失败', 'warn'); }
   });
   $('feeRecalcBtn').addEventListener('click', () => {
-    confirmDlg('重算历史费用', `将按当前费率设置与最新费用口径（最低佣金由佣金补足规费差额）重新计算 ${S.trades.length} 条交易的费用与发生金额，持仓成本/盈亏随之变化。确定执行？`, async () => {
+    const initRows = S.trades.filter(isInitTrade);
+    const normal = S.trades.filter(t => !isInitTrade(t));
+    const tip = initRows.length
+      ? `\n\n· ${initRows.length} 条初始持仓记录（费用 0、成本=建仓价）将跳过，成本保持不变`
+      : '';
+    confirmDlg('重算历史费用', `将按当前费率设置与券商式费用口径（各项先按分取整再汇总；最低佣金由佣金补足规费差额）重新计算 ${normal.length} 条交易的费用与发生金额，持仓成本/盈亏随之变化。${tip}\n\n确定执行？`, async () => {
       try {
         let n = 0;
-        for (const t of S.trades) {
+        for (const t of normal) {
           const fee = calcFees(t.gross_amount, t.transaction_type, t.market, t.stock_code);
           const net = t.transaction_type === 'buy' ? t.gross_amount + fee.total : t.gross_amount - fee.total;
           if (JSON.stringify(t.fee) !== JSON.stringify(fee) || Number(t.net_amount) !== net) {
@@ -2497,7 +2513,7 @@ function bindEvents() {
         }
         await store.log('update', `按当前费率重算历史费用（${n} 条变更）`);
         await loadAll(); renderAll(); refreshQuotes();
-        toast(`已重算：${n} 条费用有变更`);
+        toast(initRows.length ? `已重算：${n} 条变更（跳过 ${initRows.length} 条初始持仓）` : `已重算：${n} 条费用有变更`);
       } catch (err) { toast(err.message || '重算失败', 'warn'); }
     }, '重算');
   });
