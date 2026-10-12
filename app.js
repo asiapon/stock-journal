@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.26';
+const APP_VER = '3.8.27';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1401,10 +1401,11 @@ function stockDetailRow(g) {
   const tlMap = new Map();
   for (const ev of (holdByCode.get(g.code) || { timeline: [] }).timeline) if (ev.realized != null && ev.t) tlMap.set(String(ev.t.id), ev.realized);
   for (const it of items) { it.pnl = tlMap.has(String(it.t.id)) ? tlMap.get(String(it.t.id)) : null; if (it.pnl != null) realizedSum += it.pnl; }
-  /* 期末仍持仓部分：摊薄口径浮动盈亏（已清仓为0） */
+  /* v3.8.27 浮动盈亏改用加权成本口径：与期间已实现互斥，避免摊薄口径重复计入已实现盈利
+     （摊薄口径的浮动已把卖出盈利滚入成本，若再与 realizedSum 相加会重复） */
   const h = holdByCode.get(g.code);
   const q = quoteMap().get(g.code);
-  const floatNow = h && h.qty > 0 && q && q.price != null ? h.qty * q.price - h.dilutedValue : 0;
+  const floatNow = h && h.qty > 0 && q && q.price != null ? h.qty * q.price - h.costValue : 0;
   const holdingNote = h && h.qty > 0 ? `期末仍持有 ${h.qty} 股，浮动 ${floatNow >= 0 ? '+' : ''}${fmt2(floatNow)}` : '该股已清仓，盈亏全部落地';
   const total = realizedSum + floatNow;
   return `<tr class="stock-detail-row"><td colspan="7">
