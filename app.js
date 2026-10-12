@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所' };
-const APP_VER = '3.8.29';
+const APP_VER = '3.8.30';
 
 /* ============================================================
    全市场股票字典（离线联想：代码 / 名称 / 拼音首字母）
@@ -1459,11 +1459,6 @@ function renderTrades() {
       g.trades.push(t);
     }
     lastStockAgg = m;
-    /* v3.8.29 当前仍持仓但筛选期间无交易的股票也纳入（初始持仓等），点开可看浮动/总盈亏 */
-    for (const h of computeHoldings()) {
-      if (m.has(h.code)) continue;
-      m.set(h.code, { code: h.code, name: h.name || h.code, qty: 0, amt: 0, fee: 0, buys: 0, sells: 0, cnt: 0, buyQty: 0, buyAmt: 0, sellQty: 0, sellAmt: 0, trades: [] });
-    }
     const list = [...m.values()].sort((a, b) => b.amt - a.amt);
     $('tradeTable').querySelector('tbody').innerHTML = list.map(g => `
       <tr class="stockagg" data-code="${esc(g.code)}" title="点击展开每笔明细与期间盈亏">
