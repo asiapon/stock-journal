@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.46';
+const APP_VER = '3.8.47';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -1813,6 +1813,86 @@ function syncGroupList() {
   if (dl) dl.innerHTML = groups.map(g => `<option value="${esc(g)}">`).join('');
 }
 /* ============================================================
+   v3.8.47 展开添加区后「自动滚进可视区」
+   手机上键盘一弹起，可视高度只剩一半，而添加区在卡片顶部 —— 常被键盘压住，
+   还得手动上滑才看得到「添加」按钮。这里在展开（并聚焦）后自己算一次可视区：
+     · 优先用 visualViewport（能反映键盘占位，也能反映缩放）
+     · 顶栏是 sticky 的，滚上来会被它盖住 → 可视上沿取顶栏底部
+     · 底部导航是 fixed 的，若正压在可视区底部 → 把它让出来
+   然后把整个表单（股票 / 备注 / 分组 / 按钮）滚到键盘之上，填完直接点「添加」。
+   键盘是动画展开的，所以多次补算 + 监听 visualViewport resize。
+   ============================================================ */
+let _wfRevealTimers = [];
+let _wfRevealUnhook = null;
+let _wfExtraPad = 0;
+/* 自选卡是页面最后一张卡：已经滚到底时没有更多可滚空间，
+   临时给 body 补一段底部留白把可滚区撑够，收起表单时还原 */
+function setWatchRevealPad(px) {
+  _wfExtraPad = Math.max(0, Math.round(px || 0));
+  document.body.style.paddingBottom = _wfExtraPad ? _wfExtraPad + 'px' : '';
+}
+/* 当前「真正看得见」的纵向范围：顶栏是 sticky、底部导航是 fixed，都要让出来 */
+function watchVisibleRange() {
+  const vv = window.visualViewport;
+  let visTop = vv ? vv.offsetTop : 0;
+  let visBottom = Math.min(window.innerHeight, vv ? vv.offsetTop + vv.height : Infinity);
+  const tb = document.querySelector('.topbar');
+  if (tb) { const tr = tb.getBoundingClientRect(); if (tr.height > 0) visTop = Math.max(visTop, tr.bottom); }
+  const bn = document.querySelector('.bottom-nav');
+  if (bn) {
+    const br = bn.getBoundingClientRect();
+    /* 只有它确实贴在可视区下沿时才让位；被键盘顶到看不见（bottom 超出可视区）就不管 */
+    if (br.height > 0 && br.top > window.innerHeight * 0.5 && br.bottom <= visBottom + 1) visBottom = br.top;
+  }
+  return { visTop: visTop, visBottom: visBottom };
+}
+function revealWatchForm(form) {
+  if (!form || !form.classList.contains('open')) return;
+  const gap = 10;
+  /* 两趟：第一趟滚过去，第二趟把「被滚动上限截断 / 留白刚撑开」造成的残余误差补掉。
+     键盘是动画展开的，每次 visualViewport 变化 / 定时补算都会再走一遍，逐步落位。 */
+  for (let pass = 0; pass < 2; pass++) {
+    const range = watchVisibleRange();
+    const r = form.getBoundingClientRect();
+    let delta;
+    if (r.height >= range.visBottom - range.visTop - gap * 2) {
+      delta = r.top - (range.visTop + gap);              // 表单比可视区还高：优先露出第一个输入框
+    } else if (r.bottom > range.visBottom - gap) {
+      delta = r.bottom - (range.visBottom - gap);        // 通常走这条：底部对齐到键盘上方
+    } else if (r.top < range.visTop + gap) {
+      delta = r.top - (range.visTop + gap);
+    } else {
+      delta = 0;
+    }
+    if (Math.abs(delta) < 4) return;
+    if (delta > 0) {
+      /* 下方可滚空间不够 → 先补底部留白把可滚区撑够，否则这一下会被滚动上限截断 */
+      const avail = document.documentElement.scrollHeight - document.documentElement.clientHeight - window.scrollY;
+      if (avail < delta - 1) {
+        setWatchRevealPad(Math.min(1600, _wfExtraPad + Math.ceil(delta - avail)));
+        void document.documentElement.offsetHeight;      // 强制回流，让新高度立刻对滚动生效
+      }
+    }
+    window.scrollBy(0, Math.round(delta));
+  }
+}
+function scheduleRevealWatchForm(form) {
+  _wfRevealTimers.forEach(clearTimeout);
+  _wfRevealTimers = [];
+  setWatchRevealPad(0);                      // 每次展开从零开始，避免跨次累加
+  const run = () => revealWatchForm(form);
+  [80, 240, 420, 620].forEach(ms => _wfRevealTimers.push(setTimeout(run, ms)));
+  if (_wfRevealUnhook) _wfRevealUnhook();
+  const vv = window.visualViewport;
+  if (vv) {
+    const onVV = () => run();
+    vv.addEventListener('resize', onVV);
+    _wfRevealUnhook = () => { vv.removeEventListener('resize', onVV); _wfRevealUnhook = null; };
+    _wfRevealTimers.push(setTimeout(() => { if (_wfRevealUnhook) _wfRevealUnhook(); }, 1000));
+  }
+}
+
+/* ============================================================
    v3.8.39 自选添加区「折叠 / 展开」
    默认收起，减少卡片噪音；以下三种情况自动展开：
      · 点标题行「＋ 添加自选」/「收起」切换
@@ -1831,12 +1911,19 @@ function setWatchFormOpen(m, open) {
     btn.classList.toggle('is-open', !!open);
     btn.setAttribute('aria-expanded', open ? 'true' : 'false');
   }
-  if (!open) return;
+  if (!open) {
+    /* 收起时取消未跑完的滚动补算，并还原临时留白，避免收起来之后又自己滚一下 */
+    _wfRevealTimers.forEach(clearTimeout); _wfRevealTimers = [];
+    if (_wfRevealUnhook) _wfRevealUnhook();
+    setWatchRevealPad(0);
+    return;
+  }
   /* 展开后把光标送到该去的框：新增态进股票框，编辑态（股票锁定）进备注框 */
   const inp = document.getElementById(m.input);
   const note = document.getElementById(m.note);
   const target = (inp && inp.readOnly && note) ? note : inp;
   if (target) setTimeout(() => { try { target.focus(); } catch (err) { /* */ } }, 40);
+  scheduleRevealWatchForm(form);              // v3.8.47 滚到键盘之上，一屏可见
 }
 function fillWatchForm(w, m) {
   resetWatchForm(false);                     // 先清空所有挂载点（暂不折叠），避免两个表单同时停在编辑态
