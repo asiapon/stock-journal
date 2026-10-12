@@ -1190,6 +1190,22 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
   .idx-bar-lg .idx-chip { padding: 6px 10px; }
   .idx-bar-lg .idx-chip .i-val { font-size: 14px; }
 }
+/* ---------- v3.8.38 胶囊等宽网格（大盘指数 / 持仓快照统计共用）：PC 一行、手机两行 ---------- */
+.idx-bar-eq {
+  display: grid; grid-template-columns: repeat(3, 1fr);
+  gap: 10px; align-items: stretch; margin: 4px 0 10px;
+}
+.idx-bar-eq .idx-chip { justify-content: center; flex-wrap: wrap; overflow-wrap: anywhere; }
+.idx-bar-eq .hold-warn { grid-column: 1 / -1; justify-self: center; }
+@media (max-width: 720px) {
+  .idx-bar-eq { grid-template-columns: repeat(2, 1fr); gap: 8px; }
+  /* 窄屏两列时胶囊内放不下「标签 数值 比例」一行：把标签单独占一行，
+     数值与比例落到第二行 —— 三只胶囊统一两行，视觉节奏一致 */
+  .idx-bar-eq .idx-chip { padding: 6px 8px; gap: 5px; row-gap: 2px; align-content: center; }
+  .idx-bar-eq .idx-chip .i-name { flex: 0 0 100%; text-align: center; font-size: 11.5px; }
+  .idx-bar-eq .idx-chip .i-val { font-size: 14px; }
+  .idx-bar-eq .idx-chip .i-pct { font-size: 11.5px; }
+}
 
 /* ---------- v3.8.28 明细卡精简：成本双值分隔 ---------- */
 #holdDetailStats .s-sep { color: var(--ink-3, #98A1AC); font-weight: 400; font-size: .8em; }
