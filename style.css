@@ -75,12 +75,26 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   padding: 24px 16px;
   background: linear-gradient(180deg, #F8FAFC 0%, #EFF3F7 100%);
 }
+/* v3.8.54 键盘态：不再靠「给 body 补留白 + 滚动」——Android 上 dvh 不随键盘
+   缩小、且滚动会被浏览器锚定吃掉。改为把容器底部内距撑到「可视高度」，
+   让 flex 居中改成贴着可视区顶部排布，卡片自然整体上移到键盘之上。 */
+.auth-wrap.kb-on {
+  min-height: 0;
+  height: var(--auth-vh, 100dvh);
+  align-items: flex-start;
+  padding-top: 12px;
+  overflow: hidden;
+}
 .auth-card {
   width: 100%; max-width: 380px;
   background: var(--card); border-radius: 16px;
   padding: 32px 28px 24px; box-shadow: var(--shadow);
   border: 1px solid var(--line);
+  transition: transform .18s ease-out;
 }
+/* 键盘占位后卡片若仍装不下（小屏 / 初始化表单更长），整体上移，
+   优先保证底部的提交按钮露在键盘之上（兜底，位移量由 JS 设 --auth-shift） */
+.auth-wrap.kb-on .auth-card { transform: translateY(calc(-1 * var(--auth-shift, 0px))); }
 .auth-logo { text-align: center; margin-bottom: 20px; }
 .auth-logo .logo-ico { width: 40px; height: 40px; color: var(--blue); }
 .auth-logo h1 { font-size: 20px; font-weight: 600; margin-top: 8px; }

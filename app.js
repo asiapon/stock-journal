@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.53';
+const APP_VER = '3.8.54';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -1064,6 +1064,74 @@ function showAuth() {
   // 页签条仅在有"初始化"场景（尚无账号）时显示，避免与登录按钮形成两个"登录"
   $('authTabs').hidden = $('tabInit').hidden;
 }
+
+/* ============================================================
+   v3.8.54 登录页「键盘防遮挡」
+   ------------------------------------------------------------
+   手机端在用户名输入框里打字时，键盘会盖住「登录」按钮（用户截图）。
+   `.auth-wrap` 用 `min-height:100vh/100dvh` —— 而 Android Chrome 默认
+   `interactive-widget=resizes-visual` 下 dvh 不会随键盘缩小，卡片始终
+   按「满屏居中」摆放，登录按钮就落到键盘底下。
+
+   做法（沿用 v3.8.47 那套 visualViewport 思路，但登录页只看「一屏装不装得下」）：
+     · visualViewport.height 反映键盘占位后的真实可视高度
+     · 卡片高度 ≤ 可视高度 → 把整张卡顶进可视区：给 body 补
+       `可视高度 - 卡片高度 - 边距` 的底部留白（.auth-wrap 是 flex 居中，
+       补底部留白等价于把内容往上推）
+     · 卡片比可视区还高（小屏 / 初始化表单更长）→ 补留白不够用，
+       改为整体上移，优先保证底部的提交按钮露在键盘之上
+   键盘是动画展开的，所以多次补算 + 监听 visualViewport resize/scroll。
+   ============================================================ */
+let _authFitTimers = [];
+let _authFitUnhook = null;
+function authClearFit() {
+  _authFitTimers.forEach(clearTimeout);
+  _authFitTimers = [];
+  const wrap = document.querySelector('#authView.auth-wrap');
+  if (wrap) {
+    wrap.classList.remove('kb-on');
+    wrap.style.removeProperty('--auth-vh');
+    wrap.style.removeProperty('--auth-shift');
+  }
+  if (_authFitUnhook) { _authFitUnhook(); _authFitUnhook = null; }
+}
+function authFitKeyboard() {
+  const wrap = document.querySelector('#authView.auth-wrap');
+  if (!wrap || $('authView').hidden) return;
+  const card = wrap.querySelector('.auth-form:not([hidden])') ?
+               wrap.querySelector('.auth-card') : wrap.querySelector('.auth-card');
+  if (!card) return;
+  const vv = window.visualViewport;
+  const visH = Math.round(vv ? vv.height : window.innerHeight);
+  /* 键盘没弹起（可视高度接近整屏）→ 不干预，保持居中 */
+  if (visH >= window.innerHeight - 80) { authClearFit(); return; }
+
+  const margin = 12;
+  wrap.classList.add('kb-on');
+  wrap.style.setProperty('--auth-vh', visH + 'px');
+  wrap.style.setProperty('--auth-shift', '0px');
+  void card.offsetHeight;                       // 强制回流，拿到新布局
+
+  /* 卡片装得下 → 顶到上方即可；装不下 → 再上移，优先露出提交按钮 */
+  const need = card.offsetHeight + margin * 2;
+  const shift = Math.max(0, Math.round(need - visH));
+  wrap.style.setProperty('--auth-shift', shift + 'px');
+}
+function scheduleAuthFitKeyboard() {
+  authClearFit();
+  const run = () => authFitKeyboard();
+  [80, 240, 420, 620].forEach(ms => _authFitTimers.push(setTimeout(run, ms)));
+  const vv = window.visualViewport;
+  if (vv) {
+    const onVV = () => run();
+    vv.addEventListener('resize', onVV);
+    vv.addEventListener('scroll', onVV);
+    _authFitUnhook = () => { vv.removeEventListener('resize', onVV); vv.removeEventListener('scroll', onVV); };
+    /* 键盘收起后（1s 内视口不再变化）恢复居中 */
+    _authFitTimers.push(setTimeout(() => { if (vv.height >= window.innerHeight - 80) authClearFit(); }, 1200));
+  }
+}
+
 async function doLogin(username, password) {
   const r = await rpc('app_login', { p_username: username, p_password: password });
   if (!r.ok) throw new Error(r.msg || '登录失败');
@@ -2287,6 +2355,18 @@ function bindEvents() {
     const inp = $(b.dataset.eye);
     inp.type = inp.type === 'password' ? 'text' : 'password';
   }));
+  /* v3.8.54 登录页：任一输入框获得焦点（手机键盘弹起）时，把卡片顶到键盘之上 */
+  document.querySelectorAll('#authView input').forEach(inp => {
+    inp.addEventListener('focusin', scheduleAuthFitKeyboard);
+    inp.addEventListener('focus', scheduleAuthFitKeyboard);
+  });
+  /* 键盘收起 / 失焦后恢复居中（延时一点，避免输入框之间切换时反复抖动） */
+  document.querySelectorAll('#authView input').forEach(inp => {
+    inp.addEventListener('blur', () => setTimeout(() => {
+      const vv = window.visualViewport;
+      if (!vv || vv.height >= window.innerHeight - 80) authClearFit();
+    }, 150));
+  });
 
   /* 导航 */
   document.querySelectorAll('[data-view]').forEach(btn => btn.addEventListener('click', () => switchView(btn.dataset.view)));
