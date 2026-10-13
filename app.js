@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.54';
+const APP_VER = '3.8.55';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -1295,10 +1295,17 @@ function renderHoldings() {
   /* 持仓表：正常持仓 + 今日清仓的股票（清仓当日保留展示，盈亏已落地） */
   const holds = all.filter(h => h.qty > 0 || (todayByCode.get(h.code) || []).some(t => t.transaction_type === 'sell'));
   /* 当日盈亏（券商口径）：卖出净得 + 期末持仓现价 − 买入净额 − 期初持仓×昨收
-     净额含费用；期初持仓 = 期末 + 今日卖出 − 今日买入。对「今日买今日卖」「今日清仓」均成立 */
+     净额含费用；期初持仓 = 期末 + 今日卖出 − 今日买入。对「今日买今日卖」做 T 与「今日清仓」均成立。
+     v3.8.55 修复：只要拿得到「现价 + 昨收」，没有今日交易也应当能算出当日盈亏
+     （= 期末持仓 × 现价 − 期末持仓 × 昨收），此前 `if (!tt.length) return null` 把
+     无交易的日子一律判成「未获取」，所以老基线持仓永远看不到当日盈亏。 */
   function dayPnlOf(code, endQty, price, prevClose) {
     const tt = todayByCode.get(code) || [];
-    if (!tt.length) return null;
+    if (!tt.length) {
+      /* 无今日交易：纯隔夜持仓的当日盈亏 = 期末持仓 × (现价 − 昨收) */
+      if (price == null || !(prevClose > 0) || endQty <= 0) return null;
+      return endQty * (price - prevClose);
+    }
     let buyNet = 0, buyQty = 0, sellNet = 0, sellQty = 0;
     for (const t of tt) {
       const f = (t.fee && t.fee.total) || 0;
@@ -1683,11 +1690,19 @@ function scrollRecBottom() {
   vv.addEventListener('resize', () => { clearTimeout(t); t = setTimeout(fit, 80); });
   vv.addEventListener('scroll', () => { clearTimeout(t); t = setTimeout(fit, 80); });
 })();
+/* v3.8.55 记一笔弹窗：自然语言区与手动录入区互为手风琴——
+   展开手动录入时收起上面的自然语言区（含快捷 chip），收起手动录入时再放回来。
+   两边不会同时展开，弹窗不会又长又乱，也被迫让用户明确选一种录入方式。 */
+function setNlOpen(open) {
+  const w = $('nlWrap');
+  if (w) w.hidden = !open;
+}
 function setManualOpen(open) {
   const w = $('tfManualWrap'), t = $('tfManualToggle');
   if (w) w.hidden = !open;
   if (t) t.textContent = open ? '收起手动录入 ▴' : '手动录入 ▸';
-  if (open) scrollRecBottom();   // 展开后滚到底，保存按钮可见
+  setNlOpen(!open);                // 互斥：展开手动录入 ⇄ 收起自然语言
+  if (open) scrollRecBottom();     // 展开后滚到底，保存按钮可见
 }
 function openRecModal(reset = true) {
   const m = $('recModal'); if (!m) return;
