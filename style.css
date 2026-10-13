@@ -1311,6 +1311,20 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
    左对齐后各胶囊的标签起点一致、与卡片内其他文字同一左基线，更好扫读 */
 .idx-bar-eq .idx-chip { justify-content: flex-start; flex-wrap: nowrap; white-space: nowrap; }
 .idx-bar-eq .hold-warn { grid-column: 1 / -1; justify-self: start; }
+/* ---------- v3.8.59 数值区固定最小宽度，让百分比起点对齐成列 ----------
+   问题：`.i-val` 原为「按内容自适应宽度」，数值字符数一变（3,800.10 是 8 字符、
+   12,413.46 是 9 字符），紧随其后的 `.i-pct` 就被推着左右漂移。窄屏每行一枚胶囊时
+   三枚的百分比起点实测为 131 / 138.6 / 131，错位 7.6px 一眼可见。
+   做法：数值区给 `min-width` 兜底 + `text-align: right` 右对齐。
+   为什么不是 `width`：定死宽会在数值短时留大段空白；`min-width` 只在数值偏短时补足，
+   数值超长（如 +123,456,789.00）时自然撑开、不截断不压字 —— 即「常见区间严格对齐、
+   极端值自动让位」。实测 6em 已是「不重叠」的临界，取 6.5em 留余量。
+   为什么用 em：`tabular-nums` 下数字宽与字号严格成正比，用 em 可在日后调字号时
+   同比缩放、对齐关系自动保持（纯 px 做不到）。
+   只作用于 `.idx-bar-eq` 内（总览页大盘 / 持仓信息）；查询页展开区的 `.sd-chips`
+   列宽由内容自然决定、整枚换行，不套此规则以免长数值溢出卡片。
+   ------------------------------------------------------------------ */
+.idx-bar-eq .idx-chip .i-val { display: inline-block; min-width: 6.5em; text-align: right; }
 @media (max-width: 720px) {
   /* v3.8.46 手机档固定「每行一个胶囊」：整行宽度充裕（约 326px），标签与数值恒定同一行，
      6 位金额 + 百分比也放得下；原先「2 列半宽」只有约 160px，数字一长就得折行 */
