@@ -93,7 +93,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .auth-card {
   width: 100%; max-width: 380px;
   background: var(--card); border-radius: 16px;
-  padding: 28px 28px 22px; box-shadow: var(--shadow);
+  /* 上下内距配平：标题上方 = padding-top(22) + h1 margin-top(8) = 30px，
+     按钮下方 = padding-bottom(28) + 按钮自身无外边距 = 28px，
+     二者视觉接近，避免「上面空得多、下面挤」的失衡感（用户反馈）。 */
+  padding: 22px 28px 28px; box-shadow: var(--shadow);
   border: 1px solid var(--line);
 }
 .auth-logo { text-align: center; margin-bottom: 20px; }
@@ -102,13 +105,13 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 /* 矮屏内容压缩（无条件，不区分设备）：屏幕本身就矮时，卡片再往上也顶到 padding-top
    天花板了，只能压缩卡片自身高度，为「键盘占屏一半」腾出空间。 */
 @media (max-height: 680px) {
-  .auth-card { padding: 20px 24px 16px; }
+  .auth-card { padding: 16px 24px 22px; }          /* 上下配平：16+4=20 / 22 */
   .auth-logo { margin-bottom: 12px; }
   .auth-logo h1 { font-size: 18px; margin-top: 4px; }
 }
 /* 极矮屏（≤580px，小屏 + 键盘吃掉半屏）：再把卡片上下内距收到最紧。 */
 @media (max-height: 580px) {
-  .auth-card { padding: 16px 20px 10px; }
+  .auth-card { padding: 13px 20px 18px; }          /* 上下配平：13+4=17 / 18 */
   .auth-logo { margin-bottom: 8px; }
   .auth-logo .logo-ico { width: 32px; height: 32px; }
   .auth-tabs { margin-bottom: 12px; }
