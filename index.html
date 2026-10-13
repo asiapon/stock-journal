@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.51">
+<link rel="stylesheet" href="style.css?v=3.8.52">
 </head>
 <body>
 
@@ -74,7 +74,7 @@
       操作日记
     </div>
     <div class="topbar-right">
-      <span id="modelBadge" class="model-badge" title="当前使用的大模型（在 应用设置 → 模型 中切换）">未配置</span>
+      <span id="modelBadge" class="model-badge" title="当前使用的大模型（在 设置 → 模型 中切换）">未配置</span>
       <span id="modeBadge" class="mode-badge" title="数据存储方式">云端</span>
       <span id="userName" class="user-email"></span>
       <span id="userRole" class="role-badge" hidden>管理员</span>
@@ -87,7 +87,7 @@
     <button class="tab active" data-view="today"><span class="tab-ico">◇</span>总览</button>
     <button class="tab" data-view="trades"><span class="tab-ico">≡</span>查询</button>
     <button class="tab" data-view="analysis"><span class="tab-ico">◎</span>分析中心</button>
-    <button class="tab" data-view="me"><span class="tab-ico">⚙</span>应用设置</button>
+    <button class="tab" data-view="me"><span class="tab-ico">⚙</span>设置</button>
   </nav>
 
   <main class="main">
@@ -360,7 +360,7 @@
       <div id="diagHistory" class="card" style="margin-top:12px"></div>
     </section>
 
-    <!-- ============ 应用设置 ============ -->
+    <!-- ============ 设置 ============ -->
     <section id="view-me" class="view">
       <!-- 设置分类页签（参考 trade-manager）：窄屏自动等分 -->
       <div class="set-tabs" id="setTabs">
@@ -545,7 +545,7 @@
     </button>
     <button class="bnav-item" data-view="me">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>
-      <span>应用设置</span>
+      <span>设置</span>
     </button>
   </nav>
 
@@ -629,7 +629,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.51"></script>
-<script src="analysis-extra.js?v=3.8.51"></script>
+<script src="app.js?v=3.8.52"></script>
+<script src="analysis-extra.js?v=3.8.52"></script>
 </body>
 </html>

@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.51';
+const APP_VER = '3.8.52';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -852,7 +852,7 @@ async function customLlmStream(m, messages, opts) {
 }
 async function llmComplete(messages, opts) {
   const m = ModelMgr.cur;
-  if (!m) throw new Error('尚未选择模型，请到「应用设置 → AI 模型」选择');
+  if (!m) throw new Error('尚未选择模型，请到「设置 → AI 模型」选择');
   if (m.custom) return customLlmStream(m, messages, opts);
   if (!cloudLlm) throw new Error('云端模型服务不可用');
   const llm = cloudLlm.llm || cloudLlm;   // SDK 命名空间：cloud.llm.chat
@@ -976,7 +976,7 @@ async function aiParseEntry(inputId, hintId) {
     const res = parseTradeText(raw);
     if (!res) {
       el.className = 'quick-hint warn';
-      el.innerHTML = esc(model ? '本地规则未能识别出交易信息。' : '尚未选择模型（应用设置 → AI 模型），本地规则也未能识别。')
+      el.innerHTML = esc(model ? '本地规则未能识别出交易信息。' : '尚未选择模型（设置 → AI 模型），本地规则也未能识别。')
         + '请重新输入，或 <button class="link-btn p-open-manual" type="button">手动录入</button>';
       return;
     }
@@ -2422,7 +2422,7 @@ function bindEvents() {
     ModelMgr.loadCur(); ModelMgr.render();
   });
 
-  /* 应用设置：分类页签切换 */
+  /* 设置：分类页签切换 */
   $('setTabs').addEventListener('click', e => {
     const b = e.target.closest('.set-tab');
     if (!b || b.hidden) return;

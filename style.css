@@ -131,7 +131,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   background: var(--blue-bg); color: var(--blue); outline: none;
 }
 .model-sel:focus { border-color: var(--blue); }
-/* 顶栏当前模型徽章（只读展示，切换在 应用设置 → 模型） */
+/* 顶栏当前模型徽章（只读展示，切换在 设置 → 模型） */
 .model-badge {
   max-width: 220px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   font-size: 12px; padding: 5px 12px; border-radius: 999px;
@@ -195,7 +195,20 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .quick-input-row { display: flex; gap: 8px; margin: 10px 0; }
 .quick-input-row input, .quick-input-row select {
   flex: 1; min-width: 0; border: 1px solid var(--line-strong);
-  border-radius: var(--radius-sm); padding: 9px 12px; background: #FBFCFD; outline: none;
+  border-radius: var(--radius-sm); outline: none;
+}
+/* v3.8.52 修复：这组规则原来写成 `.quick-input-row input, .quick-input-row select
+   { padding: 9px 12px; background: #FBFCFD }`，带来两个问题——
+   ① 内距与全局 `input/select { height:32px; box-sizing:border-box }` 冲突：
+      32 - 9*2 - 边框 2 = 12px 内容高，小于 13px 字号的真实行高 18.2px，
+      「费用试算」的「买入 / 沪市」下拉文字被上下裁掉一半；
+   ② `background` 简写（选择器优先级高于全局 `select`）把全局下拉的箭头图标
+      一并重置成 none，下拉框看起来就是个空白方块。
+   现改为：垂直内距一律归 0（交给全局 32px 定高居中），下拉单独补回箭头。 */
+.quick-input-row input { padding: 0 12px; background: #FBFCFD; }
+.quick-input-row select {
+  padding: 0 28px 0 12px;
+  background: #FBFCFD url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%2398A1AC' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") no-repeat right 10px center;
 }
 .quick-input-row input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 .quick-hint {
