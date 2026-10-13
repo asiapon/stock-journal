@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.50">
+<link rel="stylesheet" href="style.css?v=3.8.51">
 </head>
 <body>
 
@@ -85,7 +85,7 @@
   <!-- 横向导航（与旧版一致：顶栏下方一排 Tab） -->
   <nav class="tabs" id="topNav">
     <button class="tab active" data-view="today"><span class="tab-ico">◇</span>总览</button>
-    <button class="tab" data-view="trades"><span class="tab-ico">≡</span>交易记录</button>
+    <button class="tab" data-view="trades"><span class="tab-ico">≡</span>查询</button>
     <button class="tab" data-view="analysis"><span class="tab-ico">◎</span>分析中心</button>
     <button class="tab" data-view="me"><span class="tab-ico">⚙</span>应用设置</button>
   </nav>
@@ -175,10 +175,10 @@
     <section id="view-trades" class="view">
       <div class="card">
         <div class="card-title-row">
-          <span class="card-title">交易记录</span>
-          <button class="btn primary sm" id="recModalBtn" type="button">＋ 记一笔</button>
+          <span class="card-title">查询</span>
+          <div class="ctr-actions"><button class="link-btn" id="recModalBtn" type="button">＋ 记一笔</button></div>
         </div>
-        <div class="wtabs" id="tradeModeTabs"><button class="wtab on" data-m="list" type="button">按笔</button><button class="wtab" data-m="stock" type="button">按股票</button></div>
+        <div class="wtabs" id="tradeModeTabs"><button class="wtab on" data-m="list" type="button">默认</button><button class="wtab" data-m="stock" type="button">按股票</button></div>
         <div class="filters-col">
             <div class="filters">
               <span class="f-label">时间</span>
@@ -537,7 +537,7 @@
     </button>
     <button class="bnav-item bnav-add" data-view="trades">
       <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10" stroke-linecap="round"/></svg>
-      <span>交易记录</span>
+      <span>查询</span>
     </button>
     <button class="bnav-item" data-view="analysis">
       <svg viewBox="0 0 24 24"><path d="M4 20V4m0 16h16M7 15l3.5-4.5 3 2.5L18 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
@@ -629,7 +629,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.50"></script>
-<script src="analysis-extra.js?v=3.8.50"></script>
+<script src="app.js?v=3.8.51"></script>
+<script src="analysis-extra.js?v=3.8.51"></script>
 </body>
 </html>

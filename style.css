@@ -185,20 +185,8 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .card-title-row .filters, .card-title-row .btn { margin-left: auto; }
 .hint { color: var(--ink-3); font-size: 12.5px; font-weight: 400; }
 
-/* ---------- 汇总卡 ---------- */
-.sum-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
-.sum-cards.sm { grid-template-columns: repeat(3, 1fr); margin-bottom: 12px; }
-.sum-card {
-  background: var(--bg); border-radius: var(--radius-sm);
-  padding: 10px 12px; min-width: 0;
-}
-.sum-card .s-label { font-size: 12px; color: var(--ink-2); }
-.sum-card .s-value { font-size: 17px; font-weight: 600; margin-top: 2px; font-variant-numeric: tabular-nums; word-break: break-all; }
-.sum-card .s-sub { font-size: 11.5px; color: var(--ink-3); margin-top: 1px; }
-/* ---------- v3.6.3 持仓统计卡：两卡并排合计一行、内容居中、数值字号统一 ---------- */
-#holdSummary { grid-template-columns: repeat(2, 1fr); text-align: center; }
-#holdSummary .s-value, #holdSummary .s-sub { font-size: 13px; font-weight: 600; margin-top: 2px; }
-#holdSummary .s-sub b { font-weight: 600; }
+/* ---------- v3.8.51 汇总卡（.sum-cards / .sum-card / .s-*）已随「按股票」展开明细改胶囊而下线，
+     连同 #holdSummary / #holdDetailStats 两组 id 规则（持仓专页 v3.8.37 下线后即无引用）一并清除 ---------- */
 .pos { color: var(--up); }
 .neg { color: var(--down); }
 .neu { color: var(--ink); }
@@ -453,9 +441,6 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   .grid-2 { grid-template-columns: 1fr; gap: 12px; }
   .grid-2 .card { margin-bottom: 12px; }
   .card { padding: 14px 12px; border-radius: 12px; }
-  .sum-cards { grid-template-columns: repeat(2, 1fr); }
-  .sum-cards.sm { grid-template-columns: repeat(3, 1fr); }
-  .sum-card .s-value { font-size: 15.5px; }
   .form-grid { grid-template-columns: 1fr 1fr; }
   .form-grid .span2 { grid-column: span 2; }
   .form-actions { grid-column: span 2; }
@@ -701,12 +686,18 @@ tr.stockagg { cursor: pointer; }
 tr.stockagg:hover td { background: #F5F8FC; }
 .stock-detail-row > td { background: #FAFBFD; padding: 10px 14px; }
 .stock-detail-row .sd-title { font-size: 12.5px; color: var(--ink-2); margin-bottom: 8px; }
+/* v3.8.51 「按股票」展开区的统计改总览同款胶囊：视觉全部继承 .idx-bar-lg
+   （13px / 8px 14px 内距 / 10px 圆角 / 红涨绿跌），此处只补两件事：
+   ① 不加 .idx-bar-eq：等宽网格的 1fr 会被 nowrap 内容撑破（4 枚在 1090px 里只够 265px，
+      而「期间总盈亏 +1,234,567.89」这类长数值需要 350px+，会溢到卡片外）。让胶囊按内容
+      自然宽度排布，装不下就整枚换行，永远不会溢出。
+   ② 副文用中性灰，不跟着涨跌着色，避免和主值抢读。 */
+.stock-detail-row .sd-chips { margin-bottom: 12px; }
+.stock-detail-row .idx-chip .i-sub { font-size: 13px; font-weight: 500; color: var(--ink-3, #98A1AC); font-variant-numeric: tabular-nums; }
 .stock-detail-row .sd-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; }
 .stock-detail-row .sd-tbl th, .stock-detail-row .sd-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; }
 .stock-detail-row .sd-tbl th { font-size: 11.5px; color: var(--ink-3); font-weight: 500; }
 .stock-detail-row .sd-tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
-.stock-detail-row .sd-sum { display: flex; gap: 16px; flex-wrap: wrap; margin-top: 8px; font-size: 12.5px; color: var(--ink-2); }
-.stock-detail-row .sd-sum b { font-weight: 600; }
 
 /* ---------- v3.3.10 编辑交易仅可改备注：锁定字段置灰 ---------- */
 .lock-dim { opacity: .55; pointer-events: none; background: #F3F5F7; }
@@ -1258,6 +1249,3 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
      6 位金额 + 百分比也放得下；原先「2 列半宽」只有约 160px，数字一长就得折行 */
   .idx-bar-eq { grid-template-columns: 1fr; gap: 8px; }
 }
-
-/* ---------- v3.8.28 明细卡精简：成本双值分隔 ---------- */
-#holdDetailStats .s-sep { color: var(--ink-3, #98A1AC); font-weight: 400; font-size: .8em; }

@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.50';
+const APP_VER = '3.8.51';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -1400,24 +1400,23 @@ function stockDetailRow(g) {
   const costW = has && h.qty ? h.costValue / h.qty : 0;
   const costD = has && h.qty ? h.dilutedValue / h.qty : 0;
   const price = q && q.price != null ? Number(q.price) : null;
-  const cards = `
-    <div class="sum-cards sm sd-cards">
-      <div class="sum-card"><div class="s-label">持仓 / 现价</div>
-        <div class="s-value">${has && h.qty ? h.qty + ' 股' : '已清仓'}</div>
-        <div class="s-sub">${price != null ? '现价 ' + fmt2(price) : '现价未获取'}</div></div>
-      <div class="sum-card"><div class="s-label">成本（加权 / 摊薄）</div>
-        <div class="s-value">${has && h.qty ? fmtP(costW) : '—'}<span class="s-sep"> / </span>${has && h.qty ? fmtP(costD) : '—'}</div>
-        <div class="s-sub">${has && h.qty ? '摊薄已含已实现盈亏' : '盈亏已全部落地'}</div></div>
-      <div class="sum-card"><div class="s-label">累计已实现（全历史）</div>
-        <div class="s-value ${pnlCls(has ? h.realized : 0)}">${has ? (h.realized >= 0 ? '+' : '') + fmt2(h.realized) : '—'}</div>
-        <div class="s-sub">筛选期间 <b>${realizedSum >= 0 ? '+' : ''}${fmt2(realizedSum)}</b></div></div>
-      <div class="sum-card"><div class="s-label">浮动盈亏 / 总盈亏</div>
-        <div class="s-value ${pnlCls(floatNow)}">${floatNow >= 0 ? '+' : ''}${fmt2(floatNow)}</div>
-        <div class="s-sub">已实现+浮动 <b class="${pnlCls(total)}">${total >= 0 ? '+' : ''}${fmt2(total)}</b></div></div>
+  /* v3.8.51 展开区统计改为与总览「大盘 / 持仓」同款胶囊（同字号 13px、同内距与圆角）
+     期间口径（期间已实现 / 期间总盈亏）收进胶囊副文，原底部 sd-sum 汇总行随之下线 */
+  const sdChip = (name, val, cls, sub) => `<span class="idx-chip${cls ? ' ' + cls : ''}">`
+    + `<span class="i-name">${name}</span><span class="i-val">${val}</span>`
+    + (sub ? `<span class="i-sub">${sub}</span>` : '') + '</span>';
+  const sdSign = v => (v >= 0 ? '+' : '');
+  const sdCls = v => (v > 0 ? 'up' : v < 0 ? 'down' : '');
+  const chips = `
+    <div class="idx-bar idx-bar-lg sd-chips">
+      ${sdChip('持仓', has && h.qty ? h.qty + ' 股' : '已清仓', '', price != null ? '现价 ' + fmt2(price) : '现价未获取')}
+      ${sdChip('成本', has && h.qty ? fmtP(costW) + ' / ' + fmtP(costD) : '—', '', '加权 / 摊薄')}
+      ${sdChip('累计已实现', has ? sdSign(h.realized) + fmt2(h.realized) : '—', sdCls(has ? h.realized : 0), '期间 ' + sdSign(realizedSum) + fmt2(realizedSum))}
+      ${sdChip('浮动盈亏', sdSign(floatNow) + fmt2(floatNow), sdCls(floatNow), '期间总盈亏 ' + sdSign(total) + fmt2(total))}
     </div>`;
-  return `<tr class="stock-detail-row"><td colspan="7">
+  return `<tr class="stock-detail-row"><td colspan="6">
     <div class="sd-title">${esc(g.name)}（${esc(g.code)}）筛选期间共 ${list.length} 笔 · ${holdingNote}</div>
-    ${cards}
+    ${chips}
     ${list.length ? `<table class="sd-tbl">` : '<div class="empty" style="padding:10px">筛选期间无操作记录（持仓/盈亏见上方卡片）</div>'}
     ${list.length ? `
       <thead><tr><th>时间</th><th>方向</th><th class="num">价格</th><th class="num">数量</th><th class="num">成交金额</th><th class="num">费用</th><th class="num">已实现盈亏</th></tr></thead>
@@ -1433,11 +1432,6 @@ function stockDetailRow(g) {
         </tr>`).join('')}
       </tbody>
     </table>` : ''}
-    <div class="sd-sum">
-      <span>期间已实现合计 <b class="${pnlCls(realizedSum)}">${realizedSum >= 0 ? '+' : ''}${fmt2(realizedSum)}</b></span>
-      ${h && h.qty > 0 ? `<span>期末持仓浮动 <b class="${pnlCls(floatNow)}">${floatNow >= 0 ? '+' : ''}${fmt2(floatNow)}</b></span>` : ''}
-      <span>期间总盈亏 <b class="${pnlCls(total)}">${total >= 0 ? '+' : ''}${fmt2(total)}</b></span>
-    </div>
   </td></tr>`;
 }
 function tradeRowFiltered() {
@@ -1455,11 +1449,11 @@ function tradeRowFiltered() {
     return true;
   });
 }
-/* 交易视图模式：list=按笔（默认），stock=按股票汇总 */
+/* 交易视图模式：list=默认（逐笔），stock=按股票汇总 */
 let tradeMode = (() => { try { return localStorage.getItem('sj_tradeMode') || 'list'; } catch (e) { return 'list'; } })();
 const TRADE_HEAD_LIST = '<th>时间</th><th>方向</th><th>股票</th><th class="num">价格</th><th class="num">数量</th>'
   + '<th class="num">成交金额</th><th class="num">费用</th><th class="num">发生金额</th><th>操作</th>';
-const TRADE_HEAD_STOCK = '<th>股票</th><th class="num">笔数</th><th class="num">成交量(买/卖)</th><th class="num">成交均价(买/卖)</th>'
+const TRADE_HEAD_STOCK = '<th>股票</th><th class="num">成交量(买/卖)</th><th class="num">成交均价(买/卖)</th>'
   + '<th class="num">成交额</th><th class="num">买/卖笔数</th><th class="num">费用</th>';
 function renderTrades() {
   const rows = tradeRowFiltered();
@@ -1476,12 +1470,11 @@ function renderTrades() {
     const m = new Map();
     for (const t of rows) {
       const k = t.stock_code;
-      if (!m.has(k)) m.set(k, { code: k, name: t.stock_name || k, qty: 0, amt: 0, fee: 0, buys: 0, sells: 0, cnt: 0, buyQty: 0, buyAmt: 0, sellQty: 0, sellAmt: 0, trades: [] });
+      if (!m.has(k)) m.set(k, { code: k, name: t.stock_name || k, qty: 0, amt: 0, fee: 0, buys: 0, sells: 0, buyQty: 0, buyAmt: 0, sellQty: 0, sellAmt: 0, trades: [] });
       const g = m.get(k);
       g.qty += t.quantity || 0;
       g.amt += t.gross_amount || 0;
       g.fee += (t.fee && t.fee.total) || 0;
-      g.cnt++;
       if (t.transaction_type === 'buy') { g.buys++; g.buyQty += t.quantity || 0; g.buyAmt += t.gross_amount || 0; }
       else { g.sells++; g.sellQty += t.quantity || 0; g.sellAmt += t.gross_amount || 0; }
       g.trades.push(t);
@@ -1491,7 +1484,6 @@ function renderTrades() {
     $('tradeTable').querySelector('tbody').innerHTML = list.map(g => `
       <tr class="stockagg" data-code="${esc(g.code)}" title="点击展开每笔明细与期间盈亏">
         <td><div class="stock-cell"><span class="sc-name">${esc(g.name)}</span><span class="sc-code">${esc(g.code)}</span></div></td>
-        <td class="num">${g.cnt}</td>
         <td class="num">${g.buyQty || '—'} / ${g.sellQty || '—'}</td>
         <td class="num">${g.buyQty ? fmt2(g.buyAmt / g.buyQty) : '—'} / ${g.sellQty ? fmt2(g.sellAmt / g.sellQty) : '—'}</td>
         <td class="num">${fmt2(g.amt)}</td>
@@ -2568,7 +2560,7 @@ function bindEvents() {
     }
     if (delBtn) {
       const t = S.trades.find(x => x.id == delBtn.dataset.id);
-      confirmDlg('删除交易记录', `确认删除 ${t.stock_name || t.stock_code} ${t.transaction_type === 'buy' ? '买入' : '卖出'} ${t.quantity}股 @${fmtP(t.price)} 的记录？删除后持仓将重新计算。`, async () => {
+      confirmDlg('删除记录', `确认删除 ${t.stock_name || t.stock_code} ${t.transaction_type === 'buy' ? '买入' : '卖出'} ${t.quantity}股 @${fmtP(t.price)} 的记录？删除后持仓将重新计算。`, async () => {
         try {
           await store.remove('trades', t.id);
           feeOpenIds.delete(String(t.id));
