@@ -46,7 +46,10 @@ function toast(msg, type) {
   t._tm = setTimeout(() => { t.className = ''; }, 2200);
 }
 function fmt2(n) { return n == null || isNaN(n) ? '—' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 }); }
-function fmtP(n) { return n == null || isNaN(n) ? '—' : Number(n).toLocaleString('zh-CN', { maximumFractionDigits: 3 }); }
+/* v3.8.61 价格类数值固定 3 位小数（原为 maximumFractionDigits:3，会抹掉末尾零，
+   使 44.810 显示成 44.81，同一列数字长短不齐）。改为 min=max=3 与 fmt2 同构。
+   影响：持仓表成本价、展开区「成本」胶囊、自选锚点价、交易价格文案 —— 均为价格语义，口径统一。 */
+function fmtP(n) { return n == null || isNaN(n) ? '—' : Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 3, maximumFractionDigits: 3 }); }
 function fmtPct(n) { return (n > 0 ? '+' : '') + (n * 100).toFixed(2) + '%'; }
 function pnlCls(n) { return n > 0 ? 'pos' : n < 0 ? 'neg' : 'neu'; }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -68,7 +71,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.60';
+const APP_VER = '3.8.61';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
