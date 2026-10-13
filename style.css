@@ -72,24 +72,19 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 /* v3.8.57 登录页定位简化——去掉 v3.8.54 那套「监听 visualViewport + 每次聚焦
    重算 + 动态位移」（副作用：输用户名时挪一半、再点密码框又跳一下）。
    改纯 CSS 静态方案，全程无 JS、绝不跳动：
-     · 高屏（>740px）：flex 居中 + 底部内距加倍 → 内容整体上移 20%
-     · 矮屏（≤740px）：改为顶部对齐（卡片贴着 padding-top），
-       因为矮屏上「居中+上移」会被 padding-top 卡住、最多只能移到顶部，
-       而矮屏本来就需要把卡片尽量往上放，顶部对齐最直接也最稳。
-   两者都保证底部提交按钮落在手机键盘上沿之上（键盘常见占屏 40~45%）。 */
-/* ---------- 登录 ---------- */
-/* v3.8.57 登录页定位简化——去掉 v3.8.54 那套「监听 visualViewport + 每次聚焦
-   重算 + 动态位移」（副作用：输用户名时挪一半、再点密码框又跳一下）。
-   统一为「居中 + 底部加空白」这一招（简单、纯 CSS、绝不跳动）：
-   仍是 `align-items: center`，只把**底部内距加厚**。flex 居中的参照点是
-   「上内距底 ~ 下内距顶」的中点，下内距加厚 2X 就等于内容整体上移 X。
-     · padding: 24px 16px 24px      → 正中
-     · padding: 24px 16px (24+40vh) → 上移 20vh
-   手机键盘弹起后可视区只剩约一半屏，上移量保证底部提交按钮落在键盘上沿之上。 */
+     · 桌面（鼠标设备）：标准 flex 居中，不做任何上偏——桌面没有虚拟键盘。
+     · 触屏（手机/平板）：仍是 `align-items: center`，只把**底部内距加厚**。
+       flex 居中的参照点是「上内距底 ~ 下内距顶」的中点，
+       下内距加厚 2X 就等于内容整体上移 X：
+         padding: 24px 16px 24px      → 正中
+         padding: 24px 16px (24+40vh) → 上移 20vh
+       键盘弹起后可视区只剩约一半屏，上移量保证底部提交按钮落在键盘上沿之上。
+   ⚠️ 设备门槛（hover:none + pointer:coarse）不可省：早期只按窗口高度分档，
+      桌面浏览器窗口开矮（如 1092x429）也会被顶上移，观感「卡片贴顶、下方空一片」。 */
 .auth-wrap {
   min-height: 100vh; min-height: 100dvh;
   display: flex; align-items: center; justify-content: center;
-  padding: 24px 16px calc(24px + 40vh);            /* 底部加空白 → 内容上移 20vh */
+  padding: 24px 16px;                              /* 默认：标准居中 */
   background: linear-gradient(180deg, #F8FAFC 0%, #EFF3F7 100%);
 }
 .auth-card {
@@ -102,23 +97,31 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .auth-logo .logo-ico { width: 40px; height: 40px; color: var(--blue); }
 .auth-logo h1 { font-size: 20px; font-weight: 600; margin-top: 8px; }
 /* 分档（必须在基础样式之后，否则同优先级会被基础规则覆盖）。
-   矮屏上移量不足 → 继续加厚底部空白（不改成顶部对齐，保持「居中+空白」这一招统一）。 */
-@media (max-height: 740px) {
-  .auth-wrap { padding-bottom: calc(24px + 52vh); }   /* 上移 26vh */
+   ⚠️ 上偏只在触屏设备启用——桌面没有虚拟键盘，上偏纯属多余。
+   判据是「触屏」而非「窗口高度」：桌面浏览器窗口开得矮（如 1092x429）
+   也会命中 height 分档，若不做设备门槛就会被凭空顶到顶部、下方一片空白。
+   `(hover: none) and (pointer: coarse)` = 无悬停 + 粗指针 = 手机/平板触屏。
+   桌面（hover:hover + 精细指针）不匹配，保持标准居中。
+   触屏内再按高度分档：矮屏上移量加大，为「键盘占屏 50%」腾空间。 */
+@media (hover: none) and (pointer: coarse) {
+  .auth-wrap { padding: 24px 16px calc(24px + 40vh); }  /* 上移 20vh */
+}
+@media (hover: none) and (pointer: coarse) and (max-height: 740px) {
+  .auth-wrap { padding-bottom: calc(24px + 52vh); }     /* 上移 26vh */
 }
 /* 超矮屏（≤680px，老机型 + 大键盘）：上移仍不够，再压缩卡片垂直内距，
    把卡片从约 313px 压到约 284px，为「键盘占屏 50%」的极端情况腾出空间。
    边界取 680 而非 620：卡片高约 313，键盘占屏 50% 时可视区 = 屏高/2，
    680/2 = 340 > 313 恰好容得下；再矮就压卡片。 */
-@media (max-height: 680px) {
-  .auth-wrap { padding-bottom: calc(24px + 60vh); }   /* 上移 30vh */
+@media (hover: none) and (pointer: coarse) and (max-height: 680px) {
+  .auth-wrap { padding-bottom: calc(24px + 60vh); }     /* 上移 30vh */
   .auth-card { padding: 20px 24px 16px; }
   .auth-logo { margin-bottom: 12px; }
   .auth-logo h1 { font-size: 18px; margin-top: 4px; }
 }
 /* 极矮屏（≤580px，5.7 英寸以下小屏 + 键盘吃掉半屏）：再把卡片上下内距收到最紧，
    换回最后几像素，兜住「键盘占屏 50%」的极端场景。 */
-@media (max-height: 580px) {
+@media (hover: none) and (pointer: coarse) and (max-height: 580px) {
   .auth-card { padding: 16px 20px 10px; }
   .auth-logo { margin-bottom: 8px; }
   .auth-logo .logo-ico { width: 32px; height: 32px; }
