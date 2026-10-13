@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.59';
+const APP_VER = '3.8.60';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -121,12 +121,17 @@ const StockDict = {
     }
     return n;
   },
+  /* 从既有数据（交易/自选/行情）补充字典条目。
+     ⚠️ v3.8.60：**绝不覆盖字典已有条目**。
+     历史教训：一笔误录的「603393 红四方」经 learnFromState() 把字典里
+     「603393 = 新天然气」改成了「红四方」，而 603393 是真实存在的股票 ——
+     污染后输入「红四方」联想给 603393、输入 603393 显示红四方，越用越乱，
+     且会在每次启动时自我复现。故只在代码**不在字典中**时才学习（用于补新股）。 */
   learn(code, name) {
     code = String(code || '').trim(); name = String(name || '').trim();
     if (!/^\d{6}$/.test(code) || !name) return;
-    const old = this.d[code];
-    if (old && old.name === name) return;
-    this.d[code] = { name, py: (old && old.py) || '', mkt: inferMarket(code) };
+    if (this.d[code]) return;   // 字典已有该代码：以字典为准，不被用户数据覆盖
+    this.d[code] = { name, py: '', mkt: inferMarket(code) };
   },
   learnFromState() {
     if (!this.ready) return;
@@ -156,14 +161,27 @@ const StockDict = {
     res.forEach(x => delete x._r);
     return res;
   },
-  /* 「600519 贵州茅台」/「600519」/「gzmt」/「贵州茅台」统一解析 */
+  /* 「600519 贵州茅台」/「600519」/「gzmt」/「贵州茅台」统一解析
+     ⚠️ v3.8.60：「代码 + 名称」组合与字典冲突时，**以字典为准**并置 `conflict`。
+     历史教训：用户误输入「红四方 603393」（603393 实为「新天然气」）时，
+     原实现直接返回 {code:603393, name:红四方} 并静默入库 —— 名称与代码张冠李戴，
+     且经 learnFromState() 进一步污染整本字典。现在改为：只要字典里这个代码有归属，
+     就采信字典的名称，并把用户原本写的名称放进 conflict.typedName 供上层提示。 */
   resolve(txt) {
     txt = String(txt || '').trim();
     const m = txt.match(/^(\d{5,6})(?:[\s·、,，]+(.*))?$/);
     if (m) {
       const code = m[1];
-      const name = (m[2] && m[2].trim()) || (this.d[code] && this.d[code].name) || '';
-      return { code, name, mkt: inferMarket(code) };
+      const known = this.d[code];
+      const typedName = (m[2] && m[2].trim()) || '';
+      /* 字典有该代码：名称一律以字典为准 */
+      if (known) {
+        const conflict = typedName && typedName !== known.name
+          ? { typedName, dictName: known.name } : null;
+        return { code, name: known.name, mkt: known.mkt || inferMarket(code), conflict };
+      }
+      /* 字典没有该代码：允许手动录入（可能是字典未收录的新股），但名称用用户写的 */
+      return { code, name: typedName, mkt: inferMarket(code), unknown: true };
     }
     const hits = this.search(txt, 1);
     return hits.length ? hits[0] : null;
@@ -908,8 +926,10 @@ function tradeParseSys() {
 充分发挥你的证券知识，完成以下解析：
 1. 逐笔拆分用户描述中的每笔交易，准确判断买卖方向（action: "buy" 或 "sell"）。
 2. quantity 输出股数：A股 1手=100股（"5手"=500股）；price 输出每股成交价。两者都是纯数字，不要千分位逗号、不要带"股/手/元"等单位，不要把成交金额填进来。
-3. 根据股票名称给出股票代码：A股为 6 位数字。对代码有把握就填，没把握填空字符串，但 stock_name 必填。
-   stock_name 一律用交易所简称（如「中兴通讯」），不要写工商全称。
+3. 根据股票名称给出股票代码：A股为 6 位数字。**必须逐位核对代码，不确定就填空字符串**——
+   相近代码极易混淆（如 603395「红四方」与 603393「新天然气」、600xxx 与 603xxx）；
+   宁可留空也不要写一个不确定的代码，本地会用股票名称自动校正。
+   但 stock_name 必填，且一律用交易所简称（如「中兴通讯」），不要写工商全称。
 4. trade_date 输出 "YYYY-MM-DD HH:MM:SS"，从描述推断成交时间：含具体时间（如"14:23""9月25日上午10点半"）→ 解析成对应时间；只说"上午/早上"且没给时刻 → 该日 08:00:00；只说"下午/午后" → 该日 16:00:00；完全没提 → 用上面的当前时间。
 5. 无法确定的字段置 null，不要编造。
 输出格式：
@@ -940,7 +960,37 @@ function normalizeParsed(j) {
     return { type: t.action === 'sell' ? 'sell' : 'buy', code, name: String(t.stock_name || '').trim(), market: inferMarket(code), qty, price, time };
   }).filter(Boolean);
   if (!list.length) throw new Error('未解析出有效交易（需要：方向、数量、价格、股票）');
-  return list;
+  return list.map(reconcileParsedCode);
+}
+/* ---------- v3.8.60 AI 解析结果以本地字典校正代码 ----------
+   问题：prompt 允许模型「凭证券知识」直接给代码，而模型会把相近代码记混
+   （实测「红四方」被解析成 603393，603393 实为「新天然气」），原实现原样采信、
+   静默入库 —— 名称与代码张冠李戴，还会经 learnFromState() 污染整本字典。
+   做法：拿到 code + name 后回查字典做一致性校正，分三种情形：
+     · 代码有效但名称不符 → 以名称为准，用名称反查正确代码（本例即此，603393→603395）
+     · 代码有效且名称相符 → 保留
+     · 代码无效/未填但有名称 → 用名称反查补全
+   校正结果挂在 `_fix` 上，由待确认列表提示用户「已自动纠正」，不静默改写。 */
+function reconcileParsedCode(t) {
+  if (!t) return t;
+  if (!StockDict.ready) return t;            // 字典未就绪：不猜，原样返回
+  const name = String(t.name || '').trim();
+  let code = String(t.code || '').trim();
+  let fix = null;
+  if (!name) return t;                       // 没名称无从校正，原样返回
+  const byCode = code ? StockDict.d[code] : null;
+  if (code && byCode && byCode.name === name) return t;   // 代码与名称相符
+  /* 名称反查（精确名优先，其次 search 首命中） */
+  let hit = null;
+  for (const c in StockDict.d) { if (StockDict.d[c].name === name) { hit = c; break; } }
+  if (!hit) { const s = StockDict.search(name, 1); hit = s.length ? s[0].code : null; }
+  if (hit && hit !== code) {
+    fix = { from: code || '(空)', to: hit, reason: byCode ? `代码 ${code} 实为「${byCode.name}」` : '代码缺失或有误' };
+    code = hit;
+  } else if (!hit && code && !StockDict.d[code]) {
+    fix = { from: code, to: code, reason: '该代码不在股票字典中，请确认', keep: true };
+  }
+  return Object.assign({}, t, { code, market: inferMarket(code), _fix: fix });
 }
 /* Date → 本地 "YYYY-MM-DDTHH:mm"（datetime-local 口径） */
 function toLocalInput(d) {
@@ -1036,7 +1086,8 @@ function renderPending(hintId, inputId, list, summary) {
     + `<div class="pending-list">` + list.map((t, i) => `
       <div class="p-item">
         <span class="tag ${t.type}">${t.type === 'buy' ? '买入' : '卖出'}</span>
-        <span class="p-desc">${esc(t.name || t.code)} ${t.qty} 股 @${esc(t.price)} · ${esc(String(t.time).replace('T', ' ').slice(0, 16))}</span>
+        <span class="p-desc">${esc(t.name || t.code)} ${t.qty} 股 @${esc(t.price)} · ${esc(String(t.time).replace('T', ' ').slice(0, 16))}${t.code ? ` <span class="p-code">${esc(t.code)}</span>` : ''}</span>
+        ${t._fix ? `<span class="p-fix${t._fix.keep ? ' warn' : ''}">${t._fix.keep ? esc(t._fix.reason) : `已纠正代码 ${esc(t._fix.from)} → ${esc(t._fix.to)}（${esc(t._fix.reason)}）`}</span>` : ''}
         <span class="p-btns">
           <button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" data-close="0" type="button">保存</button>
           ${list.length === 1 ? `<button class="btn primary sm p-save-btn" data-hint="${hintId}" data-input="${inputId}" data-i="${i}" data-close="1" type="button">保存并关闭</button>` : ''}
@@ -1721,14 +1772,15 @@ function resolveTfStock() {
   const inp = $('tfStock');
   const txt = inp.value.trim();
   let code = inp.dataset.code || '', name = inp.dataset.sname || '';
+  let conflict = null;
   if (!(code && txt.startsWith(code)) && txt) {
     const hit = StockDict.resolve(txt);
-    if (hit && hit.code) { code = hit.code; name = hit.name || name; }
+    if (hit && hit.code) { code = hit.code; name = hit.name || name; conflict = hit.conflict || null; }
     else if (/^\d{5,6}$/.test(txt)) { code = txt; name = ''; }
     else { code = ''; name = ''; }
   }
   if (code && !name) { const hit = StockDict.resolve(code); if (hit && hit.name) name = hit.name; }
-  return { code, name, market: code ? inferMarket(code) : 'sh' };
+  return { code, name, market: code ? inferMarket(code) : 'sh', conflict };
 }
 function updateFeePreview() {
   const price = parseFloat($('tfPrice').value), qty = parseInt($('tfQty').value, 10);
@@ -2404,6 +2456,8 @@ function bindEvents() {
   /* 解析结果一键入库（免表单） */
   async function savePendingTrade(t, btn, closeAfter = false) {
     if (t._saved) { toast('该笔已保存过'); return; }
+    /* v3.8.60 入库前再校正一次代码（解析时字典可能尚未就绪，此处兜底） */
+    t = reconcileParsedCode(t) || t;
     let code = t.code || '', name = t.name || '';
     if (!code && name) { const hit = StockDict.resolve(name); if (hit && hit.code) { code = hit.code; name = hit.name || name; } }
     if (!code) { toast('未能识别股票代码，请点「改」手动确认', 'warn'); return; }

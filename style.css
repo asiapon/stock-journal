@@ -259,6 +259,12 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   padding: 8px 10px;
 }
 .p-item .p-desc { flex: 1; min-width: 160px; font-size: 13px; color: var(--ink); }
+/* v3.8.60 AI 解析结果里股票代码的显式展示与「已自动纠正」提示 */
+.p-item .p-code { font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.p-item .p-fix {
+  flex-basis: 100%; font-size: 12px; line-height: 1.5; color: var(--blue);
+}
+.p-item .p-fix.warn { color: var(--amber); }
 .custom-model { border-top: 1px solid var(--line); margin-top: 6px; padding-top: 2px; }
 
 /* ---------- 迷你列表 ---------- */
