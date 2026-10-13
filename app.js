@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.49';
+const APP_VER = '3.8.50';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -1255,11 +1255,8 @@ function renderHoldings() {
     /* 清仓股盈亏列 = 该股全部已实现盈亏（整轮结果，vs 成本）；持仓股 = 摊薄累计盈亏 */
     const float = cleared ? (h.realized || 0) : (price != null ? h.qty * price - h.dilutedValue : null);
     const floatPct = !cleared && price != null && costPrice ? float / h.dilutedValue : null;
-    /* T+1 可用 = 持仓 − 当日买入 */
-    const boughtQty = (todayByCode.get(h.code) || []).reduce((s, t) => s + (t.transaction_type === 'buy' ? t.quantity : 0), 0);
-    const avail = Math.max(0, h.qty - boughtQty);
     const dayPct = price != null && prevClose > 0 ? (price - prevClose) / prevClose : null;
-    return { h, cleared, price, prevClose, costPrice, mv, float, floatPct, avail, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
+    return { h, cleared, price, prevClose, costPrice, mv, float, floatPct, dayPnl, dayPct, color: WB_COLORS[i % WB_COLORS.length] };
   });
   /* 今日清仓股的落地盈亏（已在 rows 中） */
 
@@ -1275,8 +1272,7 @@ function renderHoldings() {
     const getter = {
       mv: r => r.mv, float: r => r.float, floatPct: r => r.floatPct,
       qty: r => r.cleared ? 0 : r.h.qty, cost: r => r.costPrice, price: r => r.price,
-      dayPnl: r => r.dayPnl, dayPct: r => r.dayPct,
-      pos: r => (r.mv != null && totalMV ? r.mv / totalMV : null)
+      dayPnl: r => r.dayPnl, dayPct: r => r.dayPct
     }[holdSort.key];
     if (getter) {
       rows.sort((a, b) => {
@@ -1326,34 +1322,36 @@ function renderHoldings() {
     + (missingQty ? `<span class="hold-warn">${missingQty} 只现价未获取</span>` : '');
   const sumHtmlOf = () => (rows.length ? tvStatsHtml : '');
 
-  /* PC 全列表格：股票/市值/盈亏/盈亏%/持仓可用/成本价/现价/当日盈亏/当日盈亏%/仓位 */
+  /* PC 全列表格：股票/市值/盈亏/盈亏%/数量/成本价/现价/当日盈亏/当日盈亏%
+     （v3.8.50：「持仓/可用」改为「数量」——本表只是交易日志的持仓汇总，
+      不存在「当日买入不可卖」的交易约束，故不再区分可用；「仓位」列一并下线，
+      因为没有账户总资产口径，单股占比没有意义） */
   const pcHtml = rows.map(r => {
-    const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
+    const { h, price, costPrice, mv, float, floatPct, dayPnl, dayPct } = r;
     return `<tr data-code="${esc(h.code)}">
       <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}${r.cleared ? ' <span class="tag cleared">已清仓</span>' : ''}</span><span class="sc-code">${esc(h.code)}</span></div></td>
       <td class="num">${mv != null ? fmt2(mv) : NA}</td>
       <td class="num ${float != null ? pnlCls(float) : ''}">${float != null ? (float >= 0 ? '+' : '') + fmt2(float) : NA}</td>
       <td class="num ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : NA}</td>
-      <td class="num"><div class="two-line"><span title="可用 = 持仓 − 当日买入（T+1）">${h.qty}</span><span class="sub">${avail}</span></div></td>
+      <td class="num">${h.qty}</td>
       <td class="num">${costPrice != null ? fmtP(costPrice) : '—'}</td>
       <td class="num price-cell">${price != null ? fmt2(price) : NA}</td>
       <td class="num ${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? (dayPnl >= 0 ? '+' : '') + fmt2(dayPnl) : NA}</td>
       <td class="num ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : NA}</td>
-      <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : (r.cleared ? '0.00%' : NA)}</td>
     </tr>`;
   }).join('');
 
-  /* 手机端合并列表格：市值(含股票信息) / 盈亏 / 持仓可用 / 成本现价 / 当日盈亏 / 仓位 */
+  /* 手机端合并列表格：市值(含股票信息) / 盈亏 / 数量 / 成本现价 / 当日盈亏
+     （v3.8.50：市值列不再重复显示股票代码 → 名称 + 市值两行） */
   const mobileHtml = rows.map(r => {
-    const { h, price, costPrice, mv, float, floatPct, avail, dayPnl, dayPct } = r;
+    const { h, price, costPrice, mv, float, floatPct, dayPnl, dayPct } = r;
     const sgn = v => (v >= 0 ? '+' : '');
     return `<tr data-code="${esc(h.code)}">
-      <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}${r.cleared ? ' <span class="tag cleared">已清仓</span>' : ''}</span><span class="sc-code">${esc(h.code)}</span><span class="sc-mv">${mv != null ? fmt2(mv) : NA}</span></div></td>
+      <td><div class="stock-cell"><span class="sc-name">${esc(h.name || h.code)}${r.cleared ? ' <span class="tag cleared">已清仓</span>' : ''}</span><span class="sc-mv">${mv != null ? fmt2(mv) : NA}</span></div></td>
       <td class="num"><div class="two-line"><b class="${float != null ? pnlCls(float) : ''}">${float != null ? sgn(float) + fmt2(float) : NA}</b><span class="sub ${floatPct != null ? pnlCls(floatPct) : ''}">${floatPct != null ? fmtPct(floatPct) : ''}</span></div></td>
-      <td class="num"><div class="two-line"><span title="可用 = 持仓 − 当日买入（T+1）">${h.qty}</span><span class="sub">${avail}</span></div></td>
+      <td class="num">${h.qty}</td>
       <td class="num"><div class="two-line"><span>${costPrice != null ? fmtP(costPrice) : '—'}</span><span class="sub">${price != null ? fmt2(price) : '未获取'}</span></div></td>
       <td class="num"><div class="two-line"><b class="${dayPnl != null ? pnlCls(dayPnl) : ''}">${dayPnl != null ? sgn(dayPnl) + fmt2(dayPnl) : NA}</b><span class="sub ${dayPct != null ? pnlCls(dayPct) : ''}">${dayPct != null ? fmtPct(dayPct) : ''}</span></div></td>
-      <td class="num">${mv != null && totalMV ? (mv / totalMV * 100).toFixed(2) + '%' : (r.cleared ? '0.00%' : NA)}</td>
     </tr>`;
   }).join('');
 
@@ -1705,6 +1703,29 @@ async function autoWatchOnBuy(code, name) {
   } catch (e) { /* 失败不影响交易保存主流程 */ }
 }
 let watchTab = (() => { try { return localStorage.getItem('sj_watchTab') || '默认'; } catch (e) { return '默认'; } })();   // 当前分组 Tab（记住上次所在分组）
+/* v3.8.50 分组名单独持久化：此前分组只能从 watchlist 的 group_name 反推，
+   于是「新建了分组但里面还没有股票」→ 一刷新分组就消失，用起来很别扭。
+   现在把分组名记进 localStorage，空分组也一直显示。 */
+let watchGroups = (() => {
+  try {
+    const a = JSON.parse(localStorage.getItem('sj_groups') || '[]');
+    return Array.isArray(a) ? a.filter(x => typeof x === 'string' && x && x !== '默认') : [];
+  } catch (e) { return []; }
+})();
+function saveWatchGroups() { try { localStorage.setItem('sj_groups', JSON.stringify(watchGroups)); } catch (e) { /* */ } }
+function addWatchGroup(name) {
+  name = (name || '').trim();
+  if (!name || name === '默认' || watchGroups.includes(name)) return;
+  watchGroups.push(name); saveWatchGroups();
+}
+function removeWatchGroup(name) {
+  const i = watchGroups.indexOf(name);
+  if (i >= 0) { watchGroups.splice(i, 1); saveWatchGroups(); }
+}
+/* 全部已存在的分组：默认 + 持久化的空分组 + 自选里实际用到的分组 */
+function allWatchGroups() {
+  return [...new Set(['默认', ...watchGroups, ...S.watchlist.map(w => w.group_name || '默认')])].filter(Boolean);
+}
 /* v3.8.22 自选表表头排序状态：dir 1=降序(第一次点击) / -1=升序 / 0=未排序 */
 let watchSort = { key: null, dir: 0 };
 /* v3.8.23 持仓表同款三态排序（自选功能复制试点） */
@@ -1720,7 +1741,7 @@ function updateSortHead(tableSel, state) {
 function updateWatchHead() { updateSortHead('#tvWatchTable', watchSort); }
 /* 自选数据模型：分组 Tab + 行数据（含排序），与挂载点无关 */
 function watchModel() {
-  const groups = [...new Set(['默认', ...S.watchlist.map(w => w.group_name || '默认')])];
+  const groups = allWatchGroups();
   const tabGroups = groups.includes(watchTab) ? groups : [...groups, watchTab].filter(Boolean);
   const list = S.watchlist.filter(w => !watchTab || (w.group_name || '默认') === watchTab);
   const qm = quoteMap();
@@ -1800,7 +1821,9 @@ function paintWatch(m, M) {
   }).join('');
   if (empty) {
     empty.hidden = M.listLen > 0;
-    empty.textContent = watchTab ? `分组「${watchTab}」暂无自选，点右上角「＋ 添加自选」会自动归入此分组` : '暂无自选股，点右上角「＋ 添加自选」开始添加';
+    /* v3.8.50 空态文案带可点的「＋ 添加自选」链接：点它直接展开上方添加区 */
+    const g = watchTab || '默认';
+    empty.innerHTML = `分组「${esc(g)}」暂无自选，点<a href="javascript:void(0)" class="we-add">「＋ 添加自选」</a>添加股票`;
   }
 }
 function renderWatch() {
@@ -1812,7 +1835,7 @@ function renderWatch() {
 }
 /* 分组下拉数据源：所有已用分组 + 默认（数据加载完即同步，供添加/高级选项联想） */
 function syncGroupList() {
-  const groups = [...new Set(['默认', ...S.watchlist.map(w => w.group_name || '默认'), watchTab])].filter(Boolean);
+  const groups = [...new Set([...allWatchGroups(), watchTab])].filter(Boolean);
   const dl = $('groupList');
   if (dl) dl.innerHTML = groups.map(g => `<option value="${esc(g)}">`).join('');
 }
@@ -1999,6 +2022,7 @@ function bindWatchCard(m) {
       try {
         await store.update('watchlist', w.id, { group_name: group, note });
         await store.log('watch', `修改自选 ${w.stock_name || w.stock_code}（理由/分组）`);
+        addWatchGroup(group);                // v3.8.50 用到的分组名一并记住
         toast('已保存');
         resetWatchForm();
         watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (err) { /* */ }
@@ -2026,6 +2050,7 @@ function bindWatchCard(m) {
     try {
       await store.insert('watchlist', row);
       await store.log('watch', `添加自选 ${row.stock_name}（${row.stock_code}）`);
+      addWatchGroup(group);                  // v3.8.50 用到的分组名一并记住
       toast(`已添加自选 ${row.stock_name}`);
       resetWatchForm();
       watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (err) { /* */ }
@@ -2034,6 +2059,11 @@ function bindWatchCard(m) {
   });
   const cancelBtn = el(m.cancel);
   if (cancelBtn) cancelBtn.addEventListener('click', () => resetWatchForm());
+  /* v3.8.50 空态里的「＋ 添加自选」链接（内容随渲染重建，故用事件委托） */
+  const emptyEl = el(m.empty);
+  if (emptyEl) emptyEl.addEventListener('click', e => {
+    if (e.target.closest('.we-add')) { resetWatchForm(false); setWatchFormOpen(m, true); }
+  });
   /* v3.8.39 标题行折叠开关：展开 → 清空进入新增态并聚焦；收起 → 复位 */
   const toggleBtn = m.toggle ? el(m.toggle) : null;
   if (toggleBtn) toggleBtn.addEventListener('click', () => {
@@ -2046,6 +2076,9 @@ function bindWatchCard(m) {
   const tabs = el(m.tabs);
   if (tabs) tabs.addEventListener('click', e => {
     const b = e.target.closest('.wtab'); if (!b) return;
+    /* v3.8.50 只要是「处理分组」（切换 / 新建 / 删除），先把上面的添加区收起来，
+       避免分组变了、添加区还停在上一次的半截输入上 */
+    resetWatchForm();
     if (b.classList.contains('wtab-del')) { delWatchGroup(); return; }
     const g = b.dataset.g;
     if (g === '+') {
@@ -2053,6 +2086,7 @@ function bindWatchCard(m) {
       promptDlg('新建分组', '输入新分组名称，确认后自动切到该分组。', name => {
         name = (name || '').trim();
         if (!name) return;
+        addWatchGroup(name);                 // v3.8.50 落盘：空分组也要一直显示
         watchTab = name;
         try { localStorage.setItem('sj_watchTab', watchTab); } catch (err) { /* */ }
         renderWatch();
@@ -2114,6 +2148,7 @@ function delWatchGroup() {
         await store.update('watchlist', w.id, { group_name: '默认' });
       }
       await store.log('update', `删除分组「${g}」（${n} 只移回默认）`);
+      removeWatchGroup(g);                 // v3.8.50 从持久化分组里移除
       watchTab = '默认';
       try { localStorage.setItem('sj_watchTab', watchTab); } catch (err) { /* */ }
       resetWatchForm();
@@ -2268,6 +2303,8 @@ function bindEvents() {
 
   /* 模态：确认框与输入框共用同一个「确定」按钮（v3.8.43） */
   $('confirmCancel').addEventListener('click', closeConfirm);
+  /* v3.8.50 点遮罩空白处即关闭（点弹窗内部不关），新建/删除分组等无需非点「取消」不可 */
+  $('confirmModal').addEventListener('click', e => { if (e.target === $('confirmModal')) closeConfirm(); });
   $('confirmOk').addEventListener('click', () => {
     const cb = confirmInputCb || confirmCb;
     const val = confirmInputCb ? $('confirmInput').value.trim() : null;

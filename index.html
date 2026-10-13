@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.49">
+<link rel="stylesheet" href="style.css?v=3.8.50">
 </head>
 <body>
 
@@ -93,10 +93,10 @@
   <main class="main">
     <!-- ============ 今日 ============ -->
     <section id="view-today" class="view active">
-      <!-- ① 大盘指数：行情数据源入口（自动刷新 / 刷新 / 报价时间） -->
+      <!-- ① 大盘：行情数据源入口（自动刷新 / 刷新 / 报价时间） -->
       <div class="card">
         <div class="card-title-row">
-          <span class="card-title">大盘指数</span>
+          <span class="card-title">大盘</span>
           <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
             <select id="tvAuto" title="自动刷新行情">
               <option value="0" selected>关闭自动刷新</option>
@@ -110,10 +110,10 @@
         <div class="hint" id="tvQuoteTime">—</div>
       </div>
 
-      <!-- ② 持仓信息：统计数据 + 持仓列表 -->
+      <!-- ② 持仓：统计数据 + 持仓列表 -->
       <div class="card">
         <div class="card-title-row">
-          <span class="card-title">持仓信息</span>
+          <span class="card-title">持仓</span>
           <div class="ctr-actions"><button class="link-btn" id="holdRecBtn" type="button">＋ 记一笔</button></div>
         </div>
         <div class="idx-bar idx-bar-lg idx-bar-eq" id="tvHoldSummary"></div>
@@ -121,14 +121,14 @@
           <table class="tbl" id="tvHoldTable">
             <thead><tr>
               <th>股票</th><th class="num sortable" data-sort="mv">市值</th><th class="num sortable" data-sort="float">盈亏</th><th class="num sortable" data-sort="floatPct">盈亏%</th>
-              <th class="num sortable" data-sort="qty" title="可用 = 持仓 − 当日买入（T+1）">持仓/可用</th><th class="num sortable" data-sort="cost">成本价</th><th class="num sortable" data-sort="price">现价</th>
-              <th class="num sortable" data-sort="dayPnl">当日盈亏</th><th class="num sortable" data-sort="dayPct">当日盈亏%</th><th class="num sortable" data-sort="pos">仓位</th>
+              <th class="num sortable" data-sort="qty" title="数量 = 累计持仓股数（仅作记录，不作 T+1 可卖约束）">数量</th><th class="num sortable" data-sort="cost">成本价</th><th class="num sortable" data-sort="price">现价</th>
+              <th class="num sortable" data-sort="dayPnl">当日盈亏</th><th class="num sortable" data-sort="dayPct">当日盈亏%</th>
             </tr></thead>
             <tbody></tbody>
           </table>
           <table class="tbl" id="tvHoldTableM">
             <thead><tr>
-              <th>市值</th><th class="num">盈亏</th><th class="num" title="可用 = 持仓 − 当日买入（T+1）">持仓/可用</th><th class="num">成本/现价</th><th class="num">当日盈亏</th><th class="num">仓位</th>
+              <th>市值</th><th class="num">盈亏</th><th class="num" title="数量 = 累计持仓股数（仅作记录，不作 T+1 可卖约束）">数量</th><th class="num">成本/现价</th><th class="num">当日盈亏</th>
             </tr></thead>
             <tbody></tbody>
           </table>
@@ -136,10 +136,10 @@
         <div id="tvHoldEmpty" class="empty" hidden>暂无持仓，<a href="javascript:void(0)" id="tvHoldEmptyRec" style="color:var(--blue)">去记一笔</a></div>
       </div>
 
-      <!-- ③ 自选列表 -->
+      <!-- ③ 自选 -->
       <div class="card">
         <div class="card-title-row">
-          <span class="card-title">自选列表</span>
+          <span class="card-title">自选</span>
           <div class="ctr-actions">
             <button class="link-btn" id="tvWatchAddBtn" type="button" aria-expanded="false" aria-controls="tvWatchForm">＋ 添加自选</button>
           </div>
@@ -629,7 +629,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.49"></script>
-<script src="analysis-extra.js?v=3.8.49"></script>
+<script src="app.js?v=3.8.50"></script>
+<script src="analysis-extra.js?v=3.8.50"></script>
 </body>
 </html>

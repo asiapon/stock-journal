@@ -248,6 +248,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .tag.sell { background: var(--down-bg); color: var(--down); }
 .tag.star { background: var(--amber-bg); color: var(--amber); }
 .empty { text-align: center; color: var(--ink-3); padding: 24px 0; font-size: 13px; }
+/* v3.8.50 空态里的可点链接（自选为空时点「＋ 添加自选」直接展开添加区） */
+.empty a, .empty .we-add { color: var(--blue); text-decoration: none; }
+.empty a:hover, .empty .we-add:hover { text-decoration: underline; }
 
 /* ---------- 仓位占比条 ---------- */
 .weight-bar {
@@ -619,7 +622,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 /* 明细时间线字号统一 */
 .tl-time, .tl-sub, .tl-num .t-val, .tl-num .m-sub { font-size: 12.5px; }
 
-/* ---------- v3.1.2 持仓/可用两行（PC+手机） ---------- */
+/* ---------- 持仓两行单元格（手机档：盈亏 / 成本现价 / 当日盈亏；v3.8.50 起「数量」为单值、不再两行） ---------- */
 #holdTable .two-line, #tvHoldTable .two-line { display: flex; flex-direction: column; line-height: 1.35; }
 #holdTable .two-line .sub, #tvHoldTable .two-line .sub { font-size: 11px; color: var(--ink-3); }
 
