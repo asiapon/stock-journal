@@ -84,7 +84,7 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
    （不用 `::after` 占位：row 方向下它会成为第二个 flex item，把卡片横向挤偏。）
    ------------------------------------------------------------ */
 .auth-wrap {
-  --auth-lift: 40px;                               /* 想上移的像素数，改这里 */
+  --auth-lift: 30px;                               /* 想上移的像素数，改这里 */
   min-height: 100vh; min-height: 100dvh;
   display: flex; align-items: center; justify-content: center;
   padding: 24px 16px calc(24px + var(--auth-lift) * 2);
