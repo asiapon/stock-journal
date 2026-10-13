@@ -728,12 +728,20 @@ tr.stockagg:hover td { background: #F5F8FC; }
    ② 副文用中性灰，不跟着涨跌着色，避免和主值抢读。 */
 .stock-detail-row .sd-chips { margin-bottom: 12px; }
 .stock-detail-row .idx-chip .i-sub { font-size: 13px; font-weight: 500; color: var(--ink-3, #98A1AC); font-variant-numeric: tabular-nums; }
-.stock-detail-row .sd-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; }
-/* v3.8.56 明细表 8 列（新增「当笔盈亏」），窄屏横向滚动兜底，避免挤压换行 */
+/* v3.8.56 明细表 8 列（新增「当笔盈亏」）：外层横向滚动兜底窄屏 */
 .sd-tbl-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-.stock-detail-row .sd-tbl th, .stock-detail-row .sd-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; }
+.stock-detail-row .sd-tbl { width: 100%; min-width: 620px; border-collapse: collapse; font-size: 12.5px; background: #fff; table-layout: fixed; }
+.stock-detail-row .sd-tbl th, .stock-detail-row .sd-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; overflow: hidden; text-overflow: ellipsis; }
 .stock-detail-row .sd-tbl th { font-size: 11.5px; color: var(--ink-3); font-weight: 500; white-space: nowrap; }
 .stock-detail-row .sd-tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
+/* v3.8.56 列宽：时间/方向/价格/数量/费用 按需收紧，成交金额与两个盈亏列多分一点 */
+.stock-detail-row .sd-tbl th:nth-child(1), .stock-detail-row .sd-tbl td:nth-child(1) { width: 15%; }
+.stock-detail-row .sd-tbl th:nth-child(2), .stock-detail-row .sd-tbl td:nth-child(2) { width: 8%; }
+.stock-detail-row .sd-tbl th:nth-child(3), .stock-detail-row .sd-tbl td:nth-child(3) { width: 9%; }
+.stock-detail-row .sd-tbl th:nth-child(4), .stock-detail-row .sd-tbl td:nth-child(4) { width: 9%; }
+.stock-detail-row .sd-tbl th:nth-child(5), .stock-detail-row .sd-tbl td:nth-child(5) { width: 15%; }
+.stock-detail-row .sd-tbl th:nth-child(6), .stock-detail-row .sd-tbl td:nth-child(6) { width: 10%; }
+.stock-detail-row .sd-tbl th:nth-child(n+7), .stock-detail-row .sd-tbl td:nth-child(n+7) { width: 17%; }
 
 /* ---------- v3.3.10 编辑交易仅可改备注：锁定字段置灰 ---------- */
 .lock-dim { opacity: .55; pointer-events: none; background: #F3F5F7; }
