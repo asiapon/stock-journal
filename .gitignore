@@ -1,0 +1,5 @@
+# 临时验证页（由 stock-journal-tools 的冒烟/截图脚本生成，属本地产物）
+_smoke*.html
+_probe*.html
+_diag*.html
+_shot*.html
