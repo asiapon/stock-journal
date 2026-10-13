@@ -729,8 +729,10 @@ tr.stockagg:hover td { background: #F5F8FC; }
 .stock-detail-row .sd-chips { margin-bottom: 12px; }
 .stock-detail-row .idx-chip .i-sub { font-size: 13px; font-weight: 500; color: var(--ink-3, #98A1AC); font-variant-numeric: tabular-nums; }
 .stock-detail-row .sd-tbl { width: 100%; border-collapse: collapse; font-size: 12.5px; background: #fff; }
+/* v3.8.56 明细表 8 列（新增「当笔盈亏」），窄屏横向滚动兜底，避免挤压换行 */
+.sd-tbl-scroll { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
 .stock-detail-row .sd-tbl th, .stock-detail-row .sd-tbl td { padding: 5px 8px; border-bottom: 1px solid var(--line); text-align: left; }
-.stock-detail-row .sd-tbl th { font-size: 11.5px; color: var(--ink-3); font-weight: 500; }
+.stock-detail-row .sd-tbl th { font-size: 11.5px; color: var(--ink-3); font-weight: 500; white-space: nowrap; }
 .stock-detail-row .sd-tbl .num { text-align: right; font-variant-numeric: tabular-nums; }
 
 /* ---------- v3.3.10 编辑交易仅可改备注：锁定字段置灰 ---------- */

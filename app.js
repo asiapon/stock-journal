@@ -68,7 +68,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.55';
+const APP_VER = '3.8.56';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -314,28 +314,51 @@ function buildTradeRow({ type, code, name, market, price, qty, time, note }) {
 function computeHoldings() {
   const map = new Map();
   const sorted = [...S.trades].sort((a, b) => new Date(a.transaction_time) - new Date(b.transaction_time));
+  /* v3.8.56 当日配对池：卖出时优先用「同日买入」的成本配对，剩余部分才回落到历史持仓成本。
+     目的：做 T（当日买、当日卖）时「已实现盈亏」反映这一手操作的真实收益，
+     而不是拿隔夜老仓的高成本去比（那会得出与直觉相反的巨额亏损）。
+     dayKey = 本地交易日 YYYY-MM-DD，日切时重置池。 */
+  let dayKey = '', dayQty = 0, dayCost = 0;
   for (const t of sorted) {
     const k = t.stock_code;
-    if (!map.has(k)) map.set(k, { code: k, name: t.stock_name || '', market: t.market, qty: 0, costValue: 0, dilutedValue: 0, realized: 0, timeline: [] });
+    if (!map.has(k)) map.set(k, { code: k, name: t.stock_name || '', market: t.market, qty: 0, costValue: 0, dilutedValue: 0, realized: 0, realizedOp: 0, timeline: [] });
     const h = map.get(k);
     if (t.stock_name) h.name = t.stock_name;
     if (t.market) h.market = t.market;
     const feeTotal = (t.fee && t.fee.total) || 0;
     const net = t.net_amount != null ? Number(t.net_amount) : t.gross_amount - feeTotal;
+    /* 日切：换了一天就清空配对池（按该笔自身的交易日期） */
+    const d = new Date(t.transaction_time);
+    const tKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    if (tKey !== dayKey) { dayKey = tKey; dayQty = 0; dayCost = 0; }
     if (t.transaction_type === 'buy') {
       h.qty += t.quantity;
       h.costValue += t.gross_amount + feeTotal;      // 加权：费用计入成本
       h.dilutedValue += t.gross_amount + feeTotal;
-      h.timeline.push({ t, avg: h.qty ? h.costValue / h.qty : 0, realized: null });
+      dayQty += t.quantity; dayCost += t.gross_amount + feeTotal;
+      h.timeline.push({ t, avg: h.qty ? h.costValue / h.qty : 0, realized: null, realizedOp: null });
     } else {
       const avg = h.qty ? h.costValue / h.qty : 0;
-      const pnl = net - t.quantity * avg;            // 按当时加权成本算已实现盈亏
+      const pnl = net - t.quantity * avg;            // 整轮口径：这笔卖 vs 持仓加权成本
       h.realized += pnl;
+      /* 当笔口径：先用当日买入池配对，剩余部分再用历史加权成本 */
+      let pnlOp;
+      if (dayQty > 0) {
+        const useQty = Math.min(t.quantity, dayQty);
+        const avgDay = dayCost / dayQty;
+        pnlOp = useQty * ((net / t.quantity) - avgDay); // 配对部分：卖出净价 − 当日买入成本
+        dayCost -= useQty * avgDay; dayQty -= useQty;
+        const rest = t.quantity - useQty;
+        if (rest > 0) pnlOp += rest * ((net / t.quantity) - avg);
+      } else {
+        pnlOp = pnl;
+      }
+      h.realizedOp += pnlOp;
       h.costValue -= t.quantity * avg;
       h.dilutedValue -= net;                          // 摊薄：盈亏滚入
       h.qty -= t.quantity;
       if (h.qty <= 0.0001) { h.qty = 0; h.costValue = 0; h.dilutedValue = 0; }
-      h.timeline.push({ t, avg, realized: pnl });
+      h.timeline.push({ t, avg, realized: pnl, realizedOp: pnlOp });
     }
   }
   return [...map.values()];
@@ -1453,16 +1476,24 @@ function stockDetailRow(g) {
   const list = [...g.trades].sort((a, b) => new Date(a.transaction_time) - new Date(b.transaction_time));
   const holdByCode = new Map();
   for (const h of computeHoldings()) holdByCode.set(h.code, h);
-  let realizedSum = 0;
+  let realizedSum = 0, realizedOpSum = 0;
   const items = list.map(t => {
     const fee = (t.fee && t.fee.total) || 0;
     const d = new Date(t.transaction_time), p = n => String(n).padStart(2, '0');
-    return { t, fee, dateStr: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`, pnl: null };
+    return { t, fee, dateStr: `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}`, pnl: null, pnlOp: null };
   });
-  /* 从 timeline 拿每笔卖出已实现盈亏 */
-  const tlMap = new Map();
-  for (const ev of (holdByCode.get(g.code) || { timeline: [] }).timeline) if (ev.realized != null && ev.t) tlMap.set(String(ev.t.id), ev.realized);
-  for (const it of items) { it.pnl = tlMap.has(String(it.t.id)) ? tlMap.get(String(it.t.id)) : null; if (it.pnl != null) realizedSum += it.pnl; }
+  /* 从 timeline 拿每笔卖出已实现盈亏（整轮口径 + 当笔配对口径） */
+  const tlMap = new Map(), tlMapOp = new Map();
+  for (const ev of (holdByCode.get(g.code) || { timeline: [] }).timeline) {
+    if (ev.realized != null && ev.t) tlMap.set(String(ev.t.id), ev.realized);
+    if (ev.realizedOp != null && ev.t) tlMapOp.set(String(ev.t.id), ev.realizedOp);
+  }
+  for (const it of items) {
+    it.pnl = tlMap.has(String(it.t.id)) ? tlMap.get(String(it.t.id)) : null;
+    it.pnlOp = tlMapOp.has(String(it.t.id)) ? tlMapOp.get(String(it.t.id)) : null;
+    if (it.pnl != null) realizedSum += it.pnl;
+    if (it.pnlOp != null) realizedOpSum += it.pnlOp;
+  }
   /* v3.8.27 浮动盈亏改用加权成本口径：与期间已实现互斥，避免摊薄口径重复计入已实现盈利
      （摊薄口径的浮动已把卖出盈利滚入成本，若再与 realizedSum 相加会重复） */
   const h = holdByCode.get(g.code);
@@ -1487,26 +1518,29 @@ function stockDetailRow(g) {
       ${sdChip('持仓', has && h.qty ? h.qty + ' 股' : '已清仓', '', price != null ? '现价 ' + fmt2(price) : '现价未获取')}
       ${sdChip('成本', has && h.qty ? fmtP(costW) + ' / ' + fmtP(costD) : '—', '', '加权 / 摊薄')}
       ${sdChip('累计已实现', has ? sdSign(h.realized) + fmt2(h.realized) : '—', sdCls(has ? h.realized : 0), '期间 ' + sdSign(realizedSum) + fmt2(realizedSum))}
+      ${sdChip('当笔盈亏', sdSign(realizedOpSum) + fmt2(realizedOpSum), sdCls(realizedOpSum), '卖出配当日买入')}
       ${sdChip('浮动盈亏', sdSign(floatNow) + fmt2(floatNow), sdCls(floatNow), '期间总盈亏 ' + sdSign(total) + fmt2(total))}
     </div>`;
   return `<tr class="stock-detail-row"><td colspan="6">
     <div class="sd-title">${esc(g.name)}（${esc(g.code)}）筛选期间共 ${list.length} 笔 · ${holdingNote}</div>
     ${chips}
-    ${list.length ? `<table class="sd-tbl">` : '<div class="empty" style="padding:10px">筛选期间无操作记录（持仓/盈亏见上方卡片）</div>'}
-    ${list.length ? `
-      <thead><tr><th>时间</th><th>方向</th><th class="num">价格</th><th class="num">数量</th><th class="num">成交金额</th><th class="num">费用</th><th class="num">已实现盈亏</th></tr></thead>
-      <tbody>
-        ${items.map(it => `<tr>
-          <td>${it.dateStr}</td>
-          <td><span class="tag ${it.t.transaction_type}">${it.t.transaction_type === 'buy' ? '买入' : '卖出'}</span></td>
-          <td class="num">${fmt2(it.t.price)}</td>
-          <td class="num">${it.t.quantity}</td>
-          <td class="num">${fmt2(it.t.gross_amount)}</td>
-          <td class="num">${fmt2(it.fee)}</td>
-          <td class="num ${it.pnl != null ? pnlCls(it.pnl) : ''}">${it.pnl != null ? (it.pnl >= 0 ? '+' : '') + fmt2(it.pnl) : '—'}</td>
-        </tr>`).join('')}
-      </tbody>
-    </table>` : ''}
+    ${list.length ? `<div class="sd-tbl-scroll">
+      <table class="sd-tbl">
+        <thead><tr><th>时间</th><th>方向</th><th class="num">价格</th><th class="num">数量</th><th class="num">成交金额</th><th class="num">费用</th><th class="num">当笔盈亏</th><th class="num">累计已实现</th></tr></thead>
+        <tbody>
+          ${items.map(it => `<tr>
+            <td>${it.dateStr}</td>
+            <td><span class="tag ${it.t.transaction_type}">${it.t.transaction_type === 'buy' ? '买入' : '卖出'}</span></td>
+            <td class="num">${fmt2(it.t.price)}</td>
+            <td class="num">${it.t.quantity}</td>
+            <td class="num">${fmt2(it.t.gross_amount)}</td>
+            <td class="num">${fmt2(it.fee)}</td>
+            <td class="num ${it.pnlOp != null ? pnlCls(it.pnlOp) : ''}">${it.pnlOp != null ? (it.pnlOp >= 0 ? '+' : '') + fmt2(it.pnlOp) : '—'}</td>
+            <td class="num ${it.pnl != null ? pnlCls(it.pnl) : ''}">${it.pnl != null ? (it.pnl >= 0 ? '+' : '') + fmt2(it.pnl) : '—'}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>` : '<div class="empty" style="padding:10px">筛选期间无操作记录（持仓/盈亏见上方卡片）</div>'}
   </td></tr>`;
 }
 function tradeRowFiltered() {
