@@ -490,7 +490,14 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 
 /* ---------- 股票联想下拉 ---------- */
 .add-row { display: flex; gap: 8px; margin-bottom: 12px; }
-.add-row.sug-anchor { position: relative; }
+/* v3.8.53 修复「联想下拉按整行铺开、还掉到『添加』按钮下面」：
+   原来把 .sug-anchor 挂在整行 .add-row 上，而 .sug-box 是 `position:absolute;
+   top:100%; left:0; right:0` —— 定位父级一旦是整行，下拉就是整行宽、且落在整行下沿
+   （手机上 .add-row 换行成 输入框/备注/分组/添加 四行，下拉被顶到最下面去）。
+   现在把「股票筛选框 + .sug-box」单独包进 .sug-anchor 容器，定位父级下沉到筛选框本身，
+   下拉于是与筛选框同宽、同左沿、紧贴其下沿。容器与输入框的 flex 尺寸见下方媒体查询。 */
+.add-row .sug-stock { min-width: 0; }
+.add-row .sug-stock input { width: 100%; }
 .add-row input {
   flex: 1; min-width: 0; padding: 10px 12px; border: 1px solid var(--line-strong);
   border-radius: var(--radius-sm); background: #FBFCFD; outline: none;
@@ -753,6 +760,8 @@ tr.stockagg:hover td { background: #F5F8FC; }
 @media (max-width: 639px) {
   .add-row { flex-wrap: wrap; }
   .add-row input { flex: 1 1 100%; }
+  /* v3.8.53 筛选框被 .sug-stock 包住后，宽度比例要落到容器上（输入框本身已 width:100%） */
+  .add-row .sug-stock { flex: 1 1 100%; }
   .wg-quick { flex: 1 1 100%; }
 }
 
@@ -773,6 +782,8 @@ tr.stockagg:hover td { background: #F5F8FC; }
 /* 桌面端：股票 30% / 备注 30% / 分组 20%，剩余约 20% 留给右侧操作按钮组 */
 @media (min-width: 640px) {
   #watchForm .add-row #wfInput,      #tvWatchForm .add-row #tvWfInput       { flex: 0 1 30%; min-width: 0; }
+  /* v3.8.53 筛选框被 .sug-stock 包裹后，30% 这块比例要落在容器上（输入框已 width:100%） */
+  #tvWatchForm .add-row .sug-stock                                          { flex: 0 1 30%; min-width: 0; }
   #watchForm .add-row #wfNoteQuick,  #tvWatchForm .add-row #tvWfNoteQuick   { flex: 0 1 30%; min-width: 0; }
   #watchForm .add-row .wg-quick,     #tvWatchForm .add-row .wg-quick        { flex: 0 1 20%; min-width: 0; }
 }

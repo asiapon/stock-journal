@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.52">
+<link rel="stylesheet" href="style.css?v=3.8.53">
 </head>
 <body>
 
@@ -145,9 +145,12 @@
           </div>
         </div>
         <form id="tvWatchForm" class="watch-form">
-          <div class="add-row sug-anchor">
-            <input type="text" id="tvWfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt">
-            <div id="tvWfSug" class="sug-box" hidden></div>
+          <div class="add-row">
+            <!-- v3.8.53 联想下拉改挂在筛选框自身（.sug-anchor 容器）上，见 style.css 注释 -->
+            <div class="sug-anchor sug-stock">
+              <input type="text" id="tvWfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt">
+              <div id="tvWfSug" class="sug-box" hidden></div>
+            </div>
             <input type="text" id="tvWfNoteQuick" autocomplete="off" placeholder="备注 / 加入理由（选填）">
             <input type="text" id="tvWfGroupQuick" class="wg-quick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名">
             <div class="add-actions">
@@ -629,7 +632,7 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.52"></script>
-<script src="analysis-extra.js?v=3.8.52"></script>
+<script src="app.js?v=3.8.53"></script>
+<script src="analysis-extra.js?v=3.8.53"></script>
 </body>
 </html>
