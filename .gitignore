@@ -3,3 +3,7 @@ _smoke*.html
 _probe*.html
 _diag*.html
 _shot*.html
+
+# 工作区本地数据：只允许应用绑定文件入库（跨机器认应用用），其余一概不提交
+.workbuddy/*
+!.workbuddy/applications.yaml

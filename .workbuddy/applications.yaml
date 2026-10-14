@@ -1,0 +1,5 @@
+# stock-journal 应用绑定（跨机器可移植：只含「应用名 → appId」，不含绝对路径）
+# 发布/覆盖目标 = 应用「操作日记」；新增应用请勿在此手写，应由平台侧操作。
+applications:
+  - name: Stock Journal
+    locator: wbapp_CwUOa3QUCTJDNRwFYHCDQ6
