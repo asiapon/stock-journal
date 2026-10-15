@@ -113,6 +113,17 @@ if ("$existsDb".Trim() -ne "1") {
 & $psql -U postgres -h 127.0.0.1 -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $DeployDir "schema.sql") | Out-Null
 Write-Host "  数据库 $DbName 就绪（schema 已同步）"
 
+# 初始化管理员（默认 admin/admin，可自定义；重复安装时已有账号会被保留，不会覆盖）
+$adminUser = Read-Host "  管理员用户名（回车 = admin）"
+if (-not $adminUser) { $adminUser = "admin" }
+$adminPwd = Read-Host "  管理员密码（回车 = admin；登录后可再改）"
+if (-not $adminPwd) { $adminPwd = "admin" }
+$au = $adminUser.Replace("'", "''"); $ap = $adminPwd.Replace("'", "''")
+$r = & $psql -U postgres -h 127.0.0.1 -d $DbName -tAc "SELECT public.app_setup_admin('$au', '$ap');"
+if ("$r" -match '"ok"\s*:\s*true') { Write-Host "  ✅ 管理员 $adminUser 已创建（打开网页直接登录）" }
+elseif ("$r" -match '已初始化|已存在') { Write-Host "  管理员已存在，保留现有账号（未改动）" }
+else { Write-Host "  ⚠ 管理员创建返回：$r（可打开网页用「首次初始化」手动创建）" }
+
 # ---------- 4. 后端依赖 + .env ----------
 Write-Host "--- [4/6] 后端依赖与配置"
 # Python：整包安装 SKILL.md 技能包（a-stock-data 等）需要
