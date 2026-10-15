@@ -30,3 +30,155 @@
 2026-10-15T13:42:45.054Z | web | rpc | app_list_users | OK | 4ms | 
 2026-10-15T13:42:51.588Z | rpc | app_bulk_delete |  | FAIL | 5ms | 类型json的输入语法无效 | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_tables":["trades","watchlist","quotes","op_logs"]}
 2026-10-15T13:42:54.239Z | web | rpc | app_bulk_delete | FAIL | 9ms | 服务不可用(500)
+2026-10-15T13:59:15.625Z | rpc | app_list_users | app_list_users | OK | 13ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T13:59:17.678Z | rpc | app_has_users | app_has_users | OK | 3ms | ok | {}
+2026-10-15T13:59:17.702Z | rpc | app_query | trades | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-15T13:59:17.938Z | rpc | app_query | watchlist | OK | 240ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-15T13:59:17.940Z | rpc | app_query | op_logs | OK | 238ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-15T13:59:17.953Z | rpc | app_query | quotes | OK | 253ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-15T13:59:17.957Z | rpc | app_query | settings | OK | 256ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-15T13:59:17.966Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T13:59:17.976Z | rpc | app_list_users | app_list_users | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T13:59:18.110Z | rpc | app_list_users | app_list_users | OK | 0ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T13:59:20.616Z | web | rpc | app_has_users | FAIL | 22ms | 
+2026-10-15T13:59:20.616Z | web | rpc | app_query | OK | 10ms | 
+2026-10-15T13:59:20.616Z | web | rpc | app_query | OK | 249ms | 
+2026-10-15T13:59:20.616Z | web | rpc | app_query | OK | 245ms | 
+2026-10-15T13:59:20.616Z | web | rpc | app_query | OK | 262ms | 
+2026-10-15T13:59:20.616Z | web | rpc | app_query | OK | 260ms | 
+2026-10-15T13:59:20.616Z | web | rpc | app_query | OK | 10ms |  | 总览/行情·刷新
+2026-10-15T13:59:20.616Z | web | rpc | app_list_users | OK | 6ms |  | 总览/行情·刷新
+2026-10-15T13:59:20.616Z | web | quote | 东财 指数快照 | FAIL | 120ms | Failed to fetch | 总览/行情·刷新
+2026-10-15T13:59:20.616Z | web | quote | 腾讯 指数快照 | OK | 14ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新
+2026-10-15T13:59:20.616Z | web | rpc | app_list_users | OK | 3ms | 
+2026-10-15T13:59:24.901Z | rpc | app_bulk_delete |  | FAIL | 8ms | 类型json的输入语法无效 | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_tables":["trades","watchlist","quotes","op_logs"]}
+2026-10-15T13:59:27.408Z | web | rpc | app_bulk_delete | FAIL | 13ms | 服务不可用(500)
+2026-10-15T14:03:33.351Z | rpc | app_bulk_delete | app_bulk_delete | OK | 76ms | 未登录或会话已过期 | {"p_token":"invalid-test-token","p_tables":["trades","watchlist","quotes","op_logs"]}
+2026-10-15T14:03:33.573Z | rpc | app_bulk_insert | settings | OK | 3ms | 未登录或会话已过期 | {"p_token":"invalid-test-token","p_table":"settings","p_rows":[{"k":"_t","v":"1"}]}
+2026-10-15T14:08:47.281Z | rpc | app_has_users | app_has_users | OK | 11ms | ok | {}
+2026-10-15T14:08:47.294Z | rpc | app_query | trades | OK | 10ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-15T14:08:47.457Z | rpc | app_query | quotes | OK | 170ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-15T14:08:47.465Z | rpc | app_query | settings | OK | 177ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-15T14:08:47.476Z | rpc | app_query | watchlist | OK | 190ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-15T14:08:47.491Z | rpc | app_query | op_logs | OK | 203ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-15T14:08:47.497Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:08:47.508Z | rpc | app_list_users | app_list_users | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T14:08:47.657Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T14:08:50.165Z | web | rpc | app_has_users | FAIL | 27ms | 
+2026-10-15T14:08:50.165Z | web | rpc | app_query | OK | 13ms | 
+2026-10-15T14:08:50.165Z | web | rpc | app_query | OK | 182ms | 
+2026-10-15T14:08:50.165Z | web | rpc | app_query | OK | 196ms | 
+2026-10-15T14:08:50.165Z | web | rpc | app_query | OK | 196ms | 
+2026-10-15T14:08:50.165Z | web | rpc | app_query | OK | 208ms | 
+2026-10-15T14:08:50.165Z | web | rpc | app_query | OK | 15ms |  | 总览/行情·刷新
+2026-10-15T14:08:50.165Z | web | rpc | app_list_users | OK | 7ms |  | 总览/行情·刷新
+2026-10-15T14:08:50.165Z | web | quote | 东财 指数快照 | FAIL | 122ms | Failed to fetch | 总览/行情·刷新
+2026-10-15T14:08:50.165Z | web | quote | 腾讯 指数快照 | OK | 26ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新
+2026-10-15T14:08:50.165Z | web | rpc | app_list_users | OK | 3ms | 
+2026-10-15T14:08:55.674Z | rpc | app_bulk_delete | app_bulk_delete | OK | 6ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_tables":["trades","watchlist","quotes","op_logs"]}
+2026-10-15T14:08:55.727Z | rpc | app_bulk_insert | trades | OK | 37ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades","p_rows":[{"fee":{},"note":"初始化持仓（2026-10-14 按券商口径录入，成本金额精确到分，不计费用）","price":22.9666,"market":"sz","source":"manual","quantity":7000,"net_amount":160766.37,"stock_code":"002611","stock_name":"东方精工","gross_amount":160766.37,"transac
+2026-10-15T14:08:55.731Z | rpc | app_bulk_insert | watchlist | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist","p_rows":[]}
+2026-10-15T14:08:55.733Z | rpc | app_bulk_insert | quotes | OK | 0ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes","p_rows":[]}
+2026-10-15T14:08:55.741Z | rpc | app_insert | settings | OK | 5ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings","p_data":{"key":"fee","value":{}}}
+2026-10-15T14:08:55.750Z | rpc | app_insert | op_logs | OK | 6ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs","p_data":{"action":"import","summary":"导入备份：交易 4 条、自选 0 条"}}
+2026-10-15T14:08:55.754Z | rpc | app_query | trades | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-15T14:08:55.756Z | rpc | app_query | watchlist | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-15T14:08:55.757Z | rpc | app_query | quotes | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-15T14:08:55.758Z | rpc | app_query | settings | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-15T14:08:55.759Z | rpc | app_query | op_logs | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-15T14:08:55.767Z | rpc | app_list_users | app_list_users | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T14:08:58.273Z | web | rpc | app_bulk_delete | OK | 23ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_bulk_insert | OK | 39ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_bulk_insert | OK | 3ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_bulk_insert | OK | 2ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_insert | OK | 9ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_insert | OK | 8ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_query | OK | 5ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_query | OK | 6ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_query | OK | 6ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_query | OK | 7ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_query | OK | 8ms | 
+2026-10-15T14:08:58.273Z | web | rpc | app_list_users | OK | 7ms | 
+2026-10-15T14:09:01.472Z | rpc | app_query | watchlist | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-15T14:09:01.472Z | rpc | app_query | quotes | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-15T14:09:01.474Z | rpc | app_query | trades | OK | 5ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-15T14:09:01.573Z | rpc | app_query | op_logs | OK | 102ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-15T14:09:01.574Z | rpc | app_query | settings | OK | 104ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-15T14:09:01.797Z | rpc | app_list_users | app_list_users | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T14:09:04.309Z | web | rpc | app_query | OK | 24ms | 
+2026-10-15T14:09:04.309Z | web | rpc | app_query | OK | 24ms | 
+2026-10-15T14:09:04.309Z | web | rpc | app_query | OK | 25ms | 
+2026-10-15T14:09:04.309Z | web | rpc | app_query | OK | 105ms | 
+2026-10-15T14:09:04.309Z | web | rpc | app_query | OK | 106ms | 
+2026-10-15T14:09:04.309Z | web | quote | 东财 push2.eastmoney.com | FAIL | 95ms | Failed to fetch | 总览/行情·刷新(强刷)
+2026-10-15T14:09:04.309Z | web | quote | 腾讯 qt.gtimg.cn | OK | 11ms | 4/4 只 | 总览/行情·刷新(强刷)
+2026-10-15T14:09:04.309Z | web | quote | 东财 指数快照 | FAIL | 95ms | Failed to fetch | 总览/行情·刷新(强刷)
+2026-10-15T14:09:04.309Z | web | quote | 腾讯 指数快照 | OK | 11ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新(强刷)
+2026-10-15T14:09:04.309Z | web | rpc | app_list_users | OK | 15ms | 
+2026-10-15T14:45:12.011Z | rpc | app_insert | qa_history | OK | 112ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9m6t8nywrmw","question":"用一个\"跌 5% 买入、涨 5% 卖出\"的网格策略回测中兴通讯最近一年，能赚钱吗？","answer":""}}
+2026-10-15T14:45:12.015Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:45:14.518Z | web | kline | 腾讯K线 | OK | 84ms | sz000063 day 410根 | 智能问答·backtest：用一个"跌 5% 买入、涨 5% 卖出"的网格策
+2026-10-15T14:45:14.518Z | web | rpc | app_insert | OK | 116ms | 
+2026-10-15T14:45:14.518Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T14:45:20.054Z | rpc | app_delete | qa_history | OK | 5ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":5}
+2026-10-15T14:45:20.061Z | rpc | app_insert | qa_history | OK | 5ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9m6t8nywrmw","question":"用一个\"跌 5% 买入、涨 5% 卖出\"的网格策略回测中兴通讯最近一年，能赚钱吗？","answer":"不赚钱，但比死扛好不少。\n\n**回测结果（近一年，10万本金，含手续费）：**\n\n| 指标 | 策略 | 买入持有 |\n|---|---|---|\n| 总收益 | **-21.5%** | -39.2% |\n| 最大
+2026-10-15T14:45:20.064Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:45:22.568Z | web | rpc | app_delete | OK | 7ms | 
+2026-10-15T14:45:22.568Z | web | rpc | app_insert | OK | 7ms | 
+2026-10-15T14:45:22.568Z | web | rpc | app_query | OK | 3ms | 
+2026-10-15T14:48:38.977Z | rpc | app_insert | qa_history | OK | 112ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9nl49x8xhh8","question":"中兴通讯最近值得买入吗？如果买，止损位和第一目标位大概放在哪？","answer":""}}
+2026-10-15T14:48:38.981Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:48:43.236Z | web | rpc | app_insert | OK | 115ms | 
+2026-10-15T14:48:43.236Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T14:48:43.236Z | web | llm | 云端模型 glm-5.3-flash | OK | 1862ms | 68 字
+2026-10-15T14:48:43.236Z | web | llm | agentic 回路回退 | FAIL | 0ms | stream must be true; non-streaming chat completions are not supported
+2026-10-15T14:48:53.250Z | rpc | app_delete | qa_history | OK | 81ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":7}
+2026-10-15T14:48:53.272Z | rpc | app_insert | qa_history | OK | 19ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9nl49x8xhh8","question":"中兴通讯最近值得买入吗？如果买，止损位和第一目标位大概放在哪？","answer":"# 中兴通讯：值得买吗？\n\n先说实话：我手里没有实时行情，只看到你记录的持仓——**16000股，成本44.81**。这只票你其实已经重仓了。\n\n## 我的看法（供参考）\n\n**基本面角度**：中兴属于通信设备龙头，逻辑主要看运营商资本开支、
+2026-10-15T14:48:53.276Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:48:55.791Z | web | rpc | app_delete | OK | 85ms | 
+2026-10-15T14:48:55.791Z | web | rpc | app_insert | OK | 21ms | 
+2026-10-15T14:48:55.791Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T14:50:09.545Z | rpc | app_insert | qa_history | OK | 101ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9nnh5p1vnmc","question":"回测中兴通讯最近一年的均线策略，看看胜率、盈亏比与最大回撤，并与买入持有做个对比。","answer":""}}
+2026-10-15T14:50:09.549Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:50:12.053Z | web | kline | 腾讯K线 | OK | 44ms | sz000063 day 410根 | 智能问答·backtest：回测中兴通讯最近一年的均线策略，看看胜率、盈亏比
+2026-10-15T14:50:12.053Z | web | rpc | app_insert | OK | 105ms | 
+2026-10-15T14:50:12.053Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T14:50:13.751Z | rpc | app_delete | qa_history | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":9}
+2026-10-15T14:50:13.759Z | rpc | app_insert | qa_history | OK | 5ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9nnh5p1vnmc","question":"回测中兴通讯最近一年的均线策略，看看胜率、盈亏比与最大回撤，并与买入持有做个对比。","answer":"# 中兴通讯 MA5×MA20 均线交叉策略回测（近一年）\n\n**核心指标对比：**\n\n| 指标 | 均线策略 | 买入持有 |\n|---|---|---|\n| 总收益 | **-37.5%** | -39.2% |\n|
+2026-10-15T14:50:13.763Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:50:16.266Z | web | rpc | app_delete | OK | 5ms | 
+2026-10-15T14:50:16.266Z | web | rpc | app_insert | OK | 8ms | 
+2026-10-15T14:50:16.266Z | web | rpc | app_query | OK | 3ms | 
+2026-10-15T14:50:31.798Z | rpc | app_insert | qa_history | OK | 109ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9no99ic1juy","question":"从我的自选股里找出 K 线形态最像 中兴通讯 的前 5 只，用近 60 个交易日比对。","answer":""}}
+2026-10-15T14:50:31.825Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:50:34.329Z | web | kline | 腾讯K线 | OK | 48ms | sz000063 day 141根 | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T14:50:34.329Z | web | kline | 腾讯K线 | OK | 25ms | sz000066 day 141根 | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T14:50:34.329Z | web | kline | 腾讯K线 | OK | 24ms | sz002611 day 141根 | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T14:50:34.329Z | web | kline | 腾讯K线 | OK | 25ms | sz002352 day 141根 | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T14:50:34.329Z | web | rpc | app_insert | OK | 135ms | 
+2026-10-15T14:50:34.329Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T14:50:39.823Z | rpc | app_delete | qa_history | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":11}
+2026-10-15T14:50:39.834Z | rpc | app_insert | qa_history | OK | 6ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9no99ic1juy","question":"从我的自选股里找出 K 线形态最像 中兴通讯 的前 5 只，用近 60 个交易日比对。","answer":"你自选股是空的，所以这次实际比对的池子是「自选 + 持仓」，只有 3 只有效候选——凑不满 5 只，就把这 3 只都列出来了。\n\n**结论：和 中兴通讯 形态最像的是 中国长城**（58.6 分，接近 60 分门槛），东方精工
+2026-10-15T14:50:39.837Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:50:42.348Z | web | rpc | app_delete | OK | 8ms | 
+2026-10-15T14:50:42.348Z | web | rpc | app_insert | OK | 8ms | 
+2026-10-15T14:50:42.348Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T14:51:30.593Z | rpc | app_insert | qa_history | OK | 126ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9npiq5y7jg8","question":"对中兴通讯进行全面、深入的五维诊断，覆盖基本面与估值、技术趋势、资金行为、消息事件和机构观点，重点识别不同维度之间的共识、冲突、证据缺口、主要风险及后续验证指标。生成一份包含关键图表和统一综合判断的报告。","answer":""}}
+2026-10-15T14:51:30.598Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:51:33.149Z | web | kline | 腾讯K线 | OK | 51ms | sz000063 day 261根 | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | kline | 腾讯K线 | OK | 55ms | sz000063 week 180根 | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | dc | 腾讯批量行情(问答工具层) | OK | 0ms | 1/1 只 | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | dc | 腾讯分时 000063 | OK | 99ms | 267 行 | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | rpc | app_insert | OK | 131ms |  | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | rpc | app_query | OK | 4ms |  | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | dc | 东财评级预期 000063 | OK | 136ms | 1 行 | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | dc | 东财财务 000063 | OK | 145ms | 1 行 | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | dc | 东财估值 000063 | OK | 156ms | 1 行 | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | dc | 东财资讯 中兴通讯 | OK | 162ms | 6 行 | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:33.150Z | web | dc | 东财龙虎榜 000063 | OK | 175ms | 60 行 | 智能问答·diag：对中兴通讯进行全面、深入的五维诊断，覆盖基本面与
+2026-10-15T14:51:52.961Z | rpc | app_delete | qa_history | OK | 75ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":13}
+2026-10-15T14:51:52.984Z | rpc | app_insert | qa_history | OK | 20ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9npiq5y7jg8","question":"对中兴通讯进行全面、深入的五维诊断，覆盖基本面与估值、技术趋势、资金行为、消息事件和机构观点，重点识别不同维度之间的共识、冲突、证据缺口、主要风险及后续验证指标。生成一份包含关键图表和统一综合判断的报告。","answer":"# 中兴通讯（000063）五维诊断报告\n\n**综合判断：短期偏空但超卖，趋势看空、反弹概率上升，信心度中等
+2026-10-15T14:51:52.988Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:51:55.500Z | web | rpc | app_delete | OK | 79ms | 
+2026-10-15T14:51:55.500Z | web | rpc | app_insert | OK | 23ms | 
+2026-10-15T14:51:55.500Z | web | rpc | app_query | OK | 4ms | 

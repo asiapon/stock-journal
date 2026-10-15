@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.12.6';
+const APP_VER = '3.12.7';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5043,6 +5043,23 @@ function bindQaExamples() {
     const btn = e.target.closest('.qa-ex-card');
     if (!btn) return;
     qaUseExample(btn.dataset.q);
+  });
+  /* v3.12.7 常驻示例入口：对话进行中也能随时打开示例面板（选完自动收起） */
+  const exBtn = $('qaExBtn'), panel = $('qaExPanel');
+  if (!exBtn || !panel || exBtn.dataset.exBound) return;
+  exBtn.dataset.exBound = '1';
+  exBtn.addEventListener('click', () => {
+    if (panel.hidden) {
+      if (!panel.innerHTML) panel.innerHTML = qaEmptyHtml();
+      panel.hidden = false;
+      panel.scrollTop = 0;
+    } else panel.hidden = true;
+  });
+  panel.addEventListener('click', e => {
+    const btn = e.target.closest('.qa-ex-card');
+    if (!btn) return;
+    qaUseExample(btn.dataset.q);
+    panel.hidden = true;                      // 选完收起，不挡输入区
   });
 }
 function renderQaMessages() {

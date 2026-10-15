@@ -1984,3 +1984,9 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 .msg.user.flash { box-shadow: 0 0 0 2px var(--up, #d93a2b) inset; border-radius: 8px; transition: box-shadow .4s; }
 /* v3.12.4 服务器日志 tail 显示 */
 .srv-log { font: 11px/1.6 Consolas, monospace; white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 8px 10px; border-radius: 8px; max-height: 420px; overflow: auto; }
+/* v3.12.7 常驻示例问题面板（工具栏 💡 切换，选完自动收起） */
+.qa-ex-panel {
+  max-height: 320px; overflow-y: auto; border: 1px solid var(--line, #e2e8f0);
+  border-radius: 10px; padding: 10px; background: var(--card, #fff);
+  margin-bottom: 6px; box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
+}
