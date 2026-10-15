@@ -69,7 +69,24 @@ if (-not $PgSuperPassword) {
   $secure = Read-Host "  输入 postgres 超级用户密码（安装 PG 时设置的那个）" -AsSecureString
   $PgSuperPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
 }
-$env:PGPASSWORD = $PgSuperPassword
+# 密码验证 + 重试（3 次）；连不上多半是 winget 静默安装未按你输入设置密码 → 跑 reset-pg.ps1 重置
+$pwOk = $false
+for ($attempt = 1; $attempt -le 3 -and -not $pwOk; $attempt++) {
+  $env:PGPASSWORD = $PgSuperPassword
+  $t = (& $psql -U postgres -h 127.0.0.1 -tAc "SELECT 1") 2>$null
+  if ("$t".Trim() -eq "1") { $pwOk = $true; break }
+  if ($attempt -lt 3) {
+    Write-Host "  ✗ 第 $attempt 次认证失败。若忘记密码：另开管理员 PowerShell 运行  .\reset-pg.ps1  重置后再试" -ForegroundColor Yellow
+    $secure = Read-Host "  重新输入 postgres 密码" -AsSecureString
+    $PgSuperPassword = [Runtime.InteropServices.Marshal]::PtrToStringAuto([Runtime.InteropServices.Marshal]::SecureStringToBSTR($secure))
+  }
+}
+if (-not $pwOk) {
+  Write-Host "✗ 连续 3 次认证失败。请运行救援脚本重置密码后重跑本脚本：" -ForegroundColor Red
+  Write-Host "    powershell -ExecutionPolicy Bypass -File .\reset-pg.ps1" -ForegroundColor Red
+  exit 1
+}
+Write-Host "  postgres 认证通过"
 
 # ---------- 3. 角色 / 数据库 / schema ----------
 Write-Host "--- [3/6] 数据库初始化"
@@ -78,15 +95,15 @@ if (-not $DbPassword) {
   $DbPassword = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '').Substring(0, 20)
   $GeneratedPw = $true
 } else { $GeneratedPw = $false }
-$existsRole = (& $psql -U postgres -h localhost -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DbUser'") 2>$null
+$existsRole = (& $psql -U postgres -h 127.0.0.1 -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DbUser'") 2>$null
 if ("$existsRole".Trim() -ne "1") {
-  & $psql -U postgres -h localhost -c "CREATE ROLE $DbUser LOGIN PASSWORD '$DbPassword'" | Out-Null
+  & $psql -U postgres -h 127.0.0.1 -c "CREATE ROLE $DbUser LOGIN PASSWORD '$DbPassword'" | Out-Null
 }
-$existsDb = (& $psql -U postgres -h localhost -tAc "SELECT 1 FROM pg_database WHERE datname='$DbName'") 2>$null
+$existsDb = (& $psql -U postgres -h 127.0.0.1 -tAc "SELECT 1 FROM pg_database WHERE datname='$DbName'") 2>$null
 if ("$existsDb".Trim() -ne "1") {
-  & $psql -U postgres -h localhost -c "CREATE DATABASE $DbName OWNER $DbUser" | Out-Null
+  & $psql -U postgres -h 127.0.0.1 -c "CREATE DATABASE $DbName OWNER $DbUser" | Out-Null
 }
-& $psql -U postgres -h localhost -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $DeployDir "schema.sql") | Out-Null
+& $psql -U postgres -h 127.0.0.1 -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $DeployDir "schema.sql") | Out-Null
 Write-Host "  数据库 $DbName 就绪（schema 已同步）"
 
 # ---------- 4. 后端依赖 + .env ----------
