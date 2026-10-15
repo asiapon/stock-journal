@@ -129,6 +129,26 @@ app.get('/api/logs/tail', async (req, res) => {
 app.get('/api/logs/download', (req, res) => {
   res.download(logger.todayFile());
 });
+/* v3.12.6 按交易日的 K 线覆盖统计（对账视图）：
+   kline_cache 每行一支票、bars = [日期,开,收,高,低,量,额] ×280 根，
+   jsonb 展开按 bar[0]（交易日）聚合——任意一天有多少只票有 K 线一目了然。
+   全量展开约 153 万元素（2-5 秒），结果缓存 10 分钟。 */
+let _klibDailyCache = null;
+app.get('/api/klib/daily', async (req, res) => {
+  if (!pool) return res.status(500).json({ ok: false, msg: '服务端未配置 DATABASE_URL' });
+  if (_klibDailyCache && Date.now() - _klibDailyCache.at < 600000)
+    return res.json(Object.assign({ ok: true, cached: true }, _klibDailyCache.data));
+  try {
+    const { rows } = await pool.query(
+      `SELECT b->>0 AS day, count(*)::int AS stocks
+         FROM kline_cache, jsonb_array_elements(bars) b
+        GROUP BY 1 ORDER BY 1 DESC LIMIT 120`);
+    const { rows: tot } = await pool.query('SELECT count(*)::int AS n FROM kline_cache');
+    const data = { total: tot[0].n, rows };
+    _klibDailyCache = { at: Date.now(), data };
+    res.json(Object.assign({ ok: true, cached: false }, data));
+  } catch (e) { res.status(500).json({ ok: false, msg: e.message }); }
+});
 app.post('/api/pack/remove', (req, res) => {
   const { name } = req.body || {};
   if (!name) return res.status(400).json({ ok: false, msg: '缺少 name' });

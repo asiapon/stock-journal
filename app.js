@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.12.5';
+const APP_VER = '3.12.6';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -3252,6 +3252,28 @@ function bindEvents() {
   async function renderKlibStatUI() {
     const sum = $('klibStatSummary'), daily = $('klibStatDaily');
     if (!sum) return;
+    /* v3.12.6 自托管：改用服务端「按 K 线交易日」的对账统计（此前按入库日分组，
+       首次回补把 280 天历史全记在回补当天名下，极易误读为数据结构有问题） */
+    const isSelf = !(location.hostname.endsWith('workbuddy.host')) && location.protocol !== 'file:';
+    if (isSelf && S.mode === 'cloud') {
+      sum.textContent = 'K线库（服务端 PostgreSQL）：每只股票一行，bars 数组每天一条 [日期,开,收,高,低,量,额]——按交易日可查任意一天的涨跌幅排名。';
+      daily.innerHTML = '<p class="hint">交易日覆盖统计加载中…</p>';
+      try {
+        const j = await fetch('/api/klib/daily').then(r => r.json());
+        if (!j.ok) throw new Error(j.msg || '统计失败');
+        const pct = d => j.total ? (d.stocks / j.total * 100).toFixed(1) + '%' : '--';
+        daily.innerHTML = '<div class="table-wrap"><table class="batch-table"><thead><tr>'
+          + '<th>K线交易日</th><th class="num">当日有K线的股票数</th><th class="num">占总票数</th>'
+          + '</tr></thead><tbody>'
+          + j.rows.slice(0, 20).map(r => '<tr><td>' + esc(r.day) + '</td><td class="num">'
+            + Number(r.stocks).toLocaleString('zh-CN') + '</td><td class="num">' + pct(r) + '</td></tr>').join('')
+          + '</tbody></table></div>'
+          + '<p class="hint">结构：每只股票一行（共 ' + j.total.toLocaleString('zh-CN') + ' 行），bars 数组每天一条记录；任意交易日的涨跌幅排名都可以按日期计算。统计缓存 10 分钟。</p>';
+      } catch (e) {
+        daily.innerHTML = '<p class="hint">交易日统计读取失败：' + esc(e.message || e) + '</p>';
+      }
+      return;
+    }
     const meta = (typeof KLib !== 'undefined') ? await KLib.metaGet().catch(() => ({})) : {};
     let cloud = null;
     try { if (typeof KLib !== 'undefined' && S.mode === 'cloud' && S.token) cloud = await KLib.cloudStats(); }
