@@ -2040,3 +2040,12 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 /* v3.13.3 图片附件缩略图 */
 .qa-attach-chip { display: inline-flex; align-items: center; gap: 6px; }
 .qa-chip-img { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line, #e2e8f0); }
+/* v3.13.4 示例面板头部（✕ 收起）+ 弹层层级加固（手机上不被其他层挡住） */
+.qa-ex-head { display: flex; align-items: center; justify-content: space-between; padding: 2px 2px 8px; border-bottom: 1px solid var(--line, #e2e8f0); margin-bottom: 8px; }
+.qa-ex-head b { font-size: 13px; }
+.qa-ex-close { border: 0; background: transparent; font-size: 15px; cursor: pointer; color: var(--ink-3, #94a3b8); padding: 2px 6px; border-radius: 6px; }
+.qa-ex-close:hover { background: var(--bg, #f1f5f9); color: var(--ink); }
+.qa-plus-menu, .qa-skill-menu, .qa-ex-panel { z-index: 200; }
+@media (max-width: 720px) {
+  .qa-ex-grid { grid-template-columns: 1fr; }
+}

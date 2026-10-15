@@ -65,3 +65,9 @@
 2026-10-15T22:23:08.840Z | web | kline | 东财 push2his | FAIL | 89ms | 600519 klt=101 Failed to fetch
 2026-10-15T22:23:08.840Z | web | kline | K线库不可用，回退在线流程 | FAIL | 0ms | Failed to fetch
 2026-10-15T22:23:08.840Z | web | quote | 腾讯涨幅榜 | FAIL | 0ms | offset=0 Failed to fetch
+2026-10-15T23:06:00.673Z | rpc | app_list_users | app_list_users | OK | 87ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T23:06:03.188Z | web | quote | 东财 push2.eastmoney.com | FAIL | 374ms | Failed to fetch | 总览/行情·刷新(强刷)
+2026-10-15T23:06:03.188Z | web | quote | 腾讯 qt.gtimg.cn | OK | 155ms | 4/4 只 | 总览/行情·刷新(强刷)
+2026-10-15T23:06:03.188Z | web | quote | 东财 指数快照 | FAIL | 133ms | Failed to fetch | 总览/行情·刷新(强刷)
+2026-10-15T23:06:03.188Z | web | quote | 腾讯 指数快照 | OK | 21ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新(强刷)
+2026-10-15T23:06:03.188Z | web | rpc | app_list_users | OK | 91ms | 

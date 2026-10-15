@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.13.3';
+const APP_VER = '3.13.4';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5061,7 +5061,12 @@ function bindQaExamples() {
     if (!item) return;
     const act = item.dataset.act;
     if (act === 'attach') { closeAll(); $('qaFileInput').click(); }
-    else if (act === 'examples') { closeAll(); const p = $('qaExPanel'); if (!p.innerHTML) p.innerHTML = qaEmptyHtml(); p.hidden = false; }
+    else if (act === 'examples') {
+      closeAll();
+      const p = $('qaExPanel');
+      if (!p.innerHTML) p.innerHTML = '<div class="qa-ex-head"><b>💡 示例问题</b><button type="button" class="qa-ex-close" title="收起">✕</button></div>' + qaEmptyHtml();
+      p.hidden = !p.hidden;                   // 开关语义：已开则收起
+    }
     else if (act === 'skills') { menu.hidden = true; skMenu.hidden = false; $('qaSkillSearch').value = ''; renderQaSkillPick(''); setTimeout(() => $('qaSkillSearch').focus(), 30); }
   });
   skMenu.addEventListener('click', e => {
@@ -5094,8 +5099,20 @@ function bindQaExamples() {
   document.addEventListener('click', e => {
     if (!menu.hidden && !menu.contains(e.target) && e.target !== plus && !plus.contains(e.target)) menu.hidden = true;
     if (!skMenu.hidden && !skMenu.contains(e.target) && e.target !== plus && !plus.contains(e.target)) skMenu.hidden = true;
+    /* 示例面板：点外部收起（面板内的卡片/关闭按钮不触发） */
+    const p = $('qaExPanel');
+    if (p && !p.hidden && !p.contains(e.target)) p.hidden = true;
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+  /* 示例面板内：✕ 收起 / 点卡片填入并收起（v3.13.0 重构时丢了面板的点击绑定，这里补回） */
+  const exPanel = $('qaExPanel');
+  exPanel.addEventListener('click', e => {
+    if (e.target.closest('.qa-ex-close')) { exPanel.hidden = true; return; }
+    const btn = e.target.closest('.qa-ex-card');
+    if (!btn) return;
+    qaUseExample(btn.dataset.q);
+    exPanel.hidden = true;
+  });
 }
 /* 技能选择列表：搜索过滤 + 点击填触发问句 + 右侧启停开关 */
 function renderQaSkillPick(filter) {
