@@ -128,7 +128,10 @@ if (-not $pyOk) {
     Write-Host "  ⚠ 未装 Python 且无 winget —— SKILL.md 技能包不可用，其余功能不受影响" -ForegroundColor Yellow
   }
 }
-& python -m pip install --quiet requests pandas stockstats mootdx baostock xlrd openpyxl 2>$null
+# pip 会往 stderr 写进度 → EAP=Stop 下会被误判为终止错误，这里局部降级并静默
+$eapSaved = $ErrorActionPreference; $ErrorActionPreference = 'Continue'
+& python -m pip install --quiet requests pandas stockstats mootdx baostock xlrd openpyxl 2>&1 | Out-Null
+$ErrorActionPreference = $eapSaved
 if ($LASTEXITCODE -ne 0) { Write-Host "  ⚠ Python 依赖安装失败，请手动: python -m pip install requests pandas stockstats mootdx baostock xlrd openpyxl" -ForegroundColor Yellow }
 Push-Location $DeployDir
 & npm install --omit=dev --no-fund --no-audit 2>$null | Out-Null
