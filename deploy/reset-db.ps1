@@ -31,8 +31,9 @@ if (Test-Path $envFile) {
 }
 $pgBin = $null
 if (Test-Path "C:\Program Files\PostgreSQL") {
-  $ver = (Get-ChildItem "C:\Program Files\PostgreSQL" | Sort-Object Name -Descending | Select-Object -First 1).Name
-  $pgBin = "C:\Program Files\PostgreSQL\$ver\bin"
+  foreach ($d in (Get-ChildItem "C:\Program Files\PostgreSQL" | Sort-Object Name -Descending)) {
+    if (Test-Path (Join-Path $d.FullName "bin\psql.exe")) { $pgBin = Join-Path $d.FullName "bin"; break }
+  }
 }
 $psql = Join-Path $pgBin "psql.exe"
 if (-not (Test-Path $psql)) { Write-Host "✗ 找不到 psql.exe" -ForegroundColor Red; exit 1 }

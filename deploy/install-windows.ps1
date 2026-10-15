@@ -58,11 +58,17 @@ if (-not $nodeOk) {
 # ---------- 2. PostgreSQL ----------
 Write-Host "--- [2/6] PostgreSQL"
 $pgBin = $null
+# 检测要「真的能找到 psql.exe」——卸载器会删掉程序文件但残留空目录，只看目录存在会误判
 if (Test-Path "C:\Program Files\PostgreSQL") {
-  $ver = (Get-ChildItem "C:\Program Files\PostgreSQL" | Sort-Object Name -Descending | Select-Object -First 1).Name
-  $pgBin = "C:\Program Files\PostgreSQL\$ver\bin"
-  Write-Host "  已有 PostgreSQL $ver，跳过安装"
-} else {
+  foreach ($d in (Get-ChildItem "C:\Program Files\PostgreSQL" | Sort-Object Name -Descending)) {
+    if (Test-Path (Join-Path $d.FullName "bin\psql.exe")) {
+      $pgBin = Join-Path $d.FullName "bin"
+      Write-Host "  已有 PostgreSQL $($d.Name)，跳过安装"
+      break
+    }
+  }
+}
+if (-not $pgBin) {
   $winget = Get-Command winget -ErrorAction SilentlyContinue
   if (-not $winget) { Write-Host "✗ 未检测到 winget。请手动安装 PostgreSQL（https://www.postgresql.org/download/windows/）后重跑。" -ForegroundColor Red; exit 1 }
   Write-Host "  安装 PostgreSQL 16（winget，耗时几分钟）…"
