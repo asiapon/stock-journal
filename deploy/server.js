@@ -168,7 +168,13 @@ app.post('/.cloud/database/rest/rpc/:fn', async (req, res) => {
   const argsSummary = JSON.stringify(body).slice(0, 300);
   try {
     const names = await fnArgs(fn);
-    const values = names.map(n => (body[n] === undefined ? null : body[n]));
+    /* v3.12.6 数组/对象参数 → JSON 字符串：云端平台序列化数组为 JSON（函数声明 jsonb），
+       而 node-pg 会把 JS 数组序列化成 PG 数组字面量 '{a,b}' —— jsonb 解析必炸
+       （导入的 app_bulk_delete/app_bulk_insert 第一步就报「类型json的输入语法无效」）。 */
+    const values = names.map(n => {
+      const v = body[n] === undefined ? null : body[n];
+      return (Array.isArray(v) || (v && typeof v === 'object')) ? JSON.stringify(v) : v;
+    });
     const { rows } = await pool.query(
       `SELECT public."${fn}"(${values.map((_, i) => '$' + (i + 1)).join(', ')}) AS result`, values);
     const out = rows[0] ? rows[0].result : { ok: false, msg: '函数无返回' };
