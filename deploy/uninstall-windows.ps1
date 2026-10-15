@@ -75,7 +75,21 @@ if (Ask "删除数据库 stockjournal 与角色 stockjournal（默认否）") {
 Write-Host "--- 公共组件（默认保留，回车 = 保留）"
 if ($RemovePg -or (Ask "卸载 PostgreSQL 16 ？⚠ 会删除服务器上全部数据库")) {
   $winget = Get-Command winget -ErrorAction SilentlyContinue
-  if ($winget) { winget uninstall -e --id PostgreSQL.PostgreSQL.16 | Out-Null; Write-Host "  PostgreSQL 已卸载" }
+  # EDB 卸载器本身是 GUI 向导；找到它的 uninstall-postgresql.exe 用 --mode unattended 静默执行，不弹窗
+  $unExe = $null
+  if (Test-Path "C:\Program Files\PostgreSQL") {
+    $ver = (Get-ChildItem "C:\Program Files\PostgreSQL" | Sort-Object Name -Descending | Select-Object -First 1).Name
+    $cand = "C:\Program Files\PostgreSQL\$ver\uninstall-postgresql.exe"
+    if (Test-Path $cand) { $unExe = $cand }
+  }
+  if ($unExe) {
+    Write-Host "  静默卸载中（约 1-2 分钟，无窗口）…"
+    Start-Process $unExe "--mode unattended" -Wait
+    Write-Host "  PostgreSQL 已卸载"
+  } elseif ($winget) {
+    winget uninstall -e --id PostgreSQL.PostgreSQL.16 | Out-Null
+    Write-Host "  PostgreSQL 已卸载（可能弹了官方向导，按提示点完即可）"
+  } else { Write-Host "  无法自动卸载（未找到卸载器与 winget）" }
 } else { Write-Host "  保留 PostgreSQL" }
 
 if ($RemoveNode -or (Ask "卸载 Node.js LTS？（机器上可能还有别的程序在用）")) {
