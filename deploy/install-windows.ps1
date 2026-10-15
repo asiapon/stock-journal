@@ -15,6 +15,13 @@ param(
   [switch]$AutoStart
 )
 $ErrorActionPreference = "Stop"
+# 控制台切 UTF-8：psql/npm/python 的中文输出不再乱码
+try {
+  chcp 65001 > $null
+  [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+  $env:PGCLIENTENCODING = 'UTF8'
+} catch { # 老控制台不支持也不影响功能
+}
 $DeployDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $RootDir = Split-Path -Parent $DeployDir
 $DbName = "stockjournal"
