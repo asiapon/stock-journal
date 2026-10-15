@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# systemd 服务单元：由 install-ubuntu.sh 自动生成到 /etc/systemd/system/，此文件是留档模板。
+# 手动安装时：把 ${DEPLOY_DIR} 换成你的 deploy 目录绝对路径，然后
+#   sudo cp stock-journal.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now stock-journal
+[Unit]
+Description=Stock Journal (股票日记) self-hosted server
+After=network.target postgresql.service
+Wants=postgresql.service
+
+[Service]
+Type=simple
+WorkingDirectory=${DEPLOY_DIR}
+ExecStart=/usr/bin/node ${DEPLOY_DIR}/server.js
+Restart=always
+RestartSec=3
+User=root
+Environment=NODE_ENV=production
+
+[Install]
+WantedBy=multi-user.target

@@ -47,6 +47,9 @@ const state = {
   set boardVer(v) { AX.boardVer = v; },
   get snap() { return AX.snap; },
   set snap(v) { AX.snap = v; },
+  /* v3.9.12 这次快照的元信息（时间/覆盖数/批次/耗时/是否缓存）—— 卡片时间戳与「下载源数据」都要用 */
+  get snapMeta() { return AX.snapMeta; },
+  set snapMeta(v) { AX.snapMeta = v; },
   get heatSort() { return AX.heatSort; },
   set heatSort(v) { AX.heatSort = v; },
   get batch() { return AX.batch; },
@@ -172,11 +175,13 @@ async function fetchQuotesTencent(codes) {
       };
     }
     /* v3.9.10 失败只记一条日志（成功不打 —— 全市场快照一次 70 批，全记会刷屏）。
-       此前该函数静默吞掉所有异常，市场热度的数据取不到时日志页毫无线索。 */
-    if (!Object.keys(out).length) NetLog.push('quote', '腾讯 qt.gtimg.cn(快照分批)', false, Date.now() - t0, `${codes.length} 只全部未返回`);
+       此前该函数静默吞掉所有异常，市场热度的数据取不到时日志页毫无线索。
+       v3.9.13 审计：失败条目带上实际请求的 URL（截断）与参数，可核对。 */
+    if (!Object.keys(out).length) NetLog.push('quote', '腾讯 qt.gtimg.cn(快照分批)', false, Date.now() - t0, `${codes.length} 只全部未返回`,
+      { url: 'https://qt.gtimg.cn/q=' + q.slice(0, 200) + '…', req: `${codes.length} 只/批`, err: '整批未返回' });
     return out;
   } catch (e) {
-    NetLog.push('quote', '腾讯 qt.gtimg.cn(快照分批)', false, Date.now() - t0, e.message || String(e));
+    NetLog.push('quote', '腾讯 qt.gtimg.cn(快照分批)', false, Date.now() - t0, e.message || String(e), { err: e.message || String(e) });
     return {};
   }
 }
@@ -192,9 +197,12 @@ function reloadTrades() { return Promise.resolve(); }   // 数据层由主 app.j
 /* 全市场实时快照：代码清单来自 stock-dict.json（与主应用同源），60s 缓存 */
 const Q_TTL = 60 * 1000;
 let _qCache = null, _qPending = null;
+/* v3.9.12 快照除了行情 map 还要带上「这次取数的元信息」（时间/覆盖数/总代码数/批次/耗时/是否命中缓存）。
+   旧写法 refreshHeat 里只存了 snap.map，snap.at 被丢掉 → 卡片上「快照 时间」永远是「—」，
+   用户既看不到这份数据是几点取的，也没法把它当凭证核对。 */
 async function qSnapshot() {
   const now = Date.now();
-  if (_qCache && now - _qCache.at < Q_TTL) return _qCache;
+  if (_qCache && now - _qCache.at < Q_TTL) return Object.assign({}, _qCache, { cached: true });
   if (_qPending) return _qPending;
   _qPending = (async function () {
     const t0 = Date.now();
@@ -219,13 +227,22 @@ async function qSnapshot() {
     /* v3.9.10 快照此前完全不进网络日志（一次 70 批请求静默完成）→ 记一条汇总：
        覆盖数 / 总数 / 失败批次数，日志页可直接核对市场热度的数据来源与完整性。 */
     if (!got) {
-      NetLog.push('quote', '腾讯 全市场快照(qt.gtimg.cn)', false, Date.now() - t0, `0/${codes.length} 只 · ${parts.length} 批全部失败`);
+      NetLog.push('quote', '腾讯 全市场快照(qt.gtimg.cn)', false, Date.now() - t0, `0/${codes.length} 只 · ${parts.length} 批全部失败（未获取到）`,
+        { url: 'https://qt.gtimg.cn/q=<' + parts.length + '批×80只>', req: `字典 ${codes.length} 只 · 并发 6`, err: '未获取到' });
       throw new Error('实时行情接口没有返回数据（可能是网络波动或临时限流），请稍后重试');
     }
-    const snap = { map: map, at: Date.now(), n: got };
+    const snap = {
+      map: map, at: Date.now(), n: got, cached: false,
+      total: codes.length, parts: parts.length, emptyBatches: emptyBatches,
+      ms: Date.now() - t0, dictSize: Object.keys(StockDict.d).length,
+      /* 请求 URL 示例（整条 URL 5000+ 只票太长，取第一批前 8 只做样本 + 省略号） */
+      url: 'https://qt.gtimg.cn/q=' + parts[0].map(txQuotePrefix).slice(0, 8).join(',') + ',…',
+      batchSize: 80, concurrency: 6,
+    };
     _qCache = snap;
     NetLog.push('quote', '腾讯 全市场快照(qt.gtimg.cn)', true, Date.now() - t0,
-      `${got}/${codes.length} 只 · ${parts.length} 批` + (emptyBatches ? ` · ${emptyBatches} 批失败(该批个股缺失)` : ''));
+      `${got}/${codes.length} 只 · ${parts.length} 批` + (emptyBatches ? ` · ${emptyBatches} 批失败(该批个股缺失)` : ''),
+      { url: snap.url, req: `字典 ${codes.length} 只 · ${parts.length} 批×80 · 并发 6`, resp: `${got}/${codes.length} 只` });
     return snap;
   })();
   try { return await _qPending; } finally { _qPending = null; }
@@ -750,7 +767,9 @@ function heatPctTxt(v) { return v == null ? '—' : (v > 0 ? '+' : '') + v.toFix
 function heatCls(v) { return v > 0.005 ? 'hh-up' : v < -0.005 ? 'hh-down' : 'hh-flat'; }
 function heatAmtTxt(v) { return v >= 10000 ? (v / 10000).toFixed(2) + ' 万亿' : (v || 0).toFixed(0) + ' 亿'; }
 function heatTimeTxt() {
-  const at = (state.snap && state.snap.at) || 0;
+  /* v3.9.12 旧实现读 state.snap.at —— 但 state.snap 是行情 map，.at 一直是 undefined，
+     卡片上「快照 —」。改读 snapMeta（refreshHeat 存的本次取数元信息）。 */
+  const at = (state.snapMeta && state.snapMeta.at) || 0;
   if (!at) return '—';
   const d = new Date(at);
   const p = n => String(n).padStart(2, '0');
@@ -856,7 +875,7 @@ function renderHeatView() {
       <div class="hh-wrap"><table class="hh-tbl"><thead><tr><th>名称</th><th class="num">涨幅</th><th class="num">成交额</th><th>所属板块</th></tr></thead><tbody>
       ${lim.list.slice(0, 60).map(q => `<tr><td>${esc(q.name)}<span class="hh-cnt">${q.code}</span></td><td class="num hh-up">${heatPctTxt(q.pct)}</td><td class="num">${q.amount ? q.amount.toFixed(1) + ' 亿' : '—'}</td><td class="hh-tags">${(state.boardRev[q.code] || []).slice(0, 3).map(b => esc(b)).join(' · ') || '—'}</td></tr>`).join('')}
       </tbody></table></div></details>` : ''}
-    <div class="hh-foot">数据来源：腾讯行情 qt.gtimg.cn 全市场直连快照（沪深主板 + 创业板 + 科创板 + 北交所，代码清单来自随应用发布的股票字典；约 60 秒缓存复用，每次取数都会记入「设置 → 日志」）。涨停按「昨收×涨幅上限」还原涨停价精确判定。<br>口径提示：上方「上涨/下跌」主数字为<b>沪深两市</b>（与同花顺等行情软件大盘页可直接对照）；北交所单独一行小字。其余统计（涨跌分布 / 涨停复盘 / 成交额）为全市场口径；疑似停牌（零成交且现价=昨收）会计入平盘，同花顺口径里这类被剔除，这是平盘家数对不上的主要原因。点「⬇ 全市场明细」可导出逐股 CSV 自行核对。</div>
+    <div class="hh-foot">数据来源：腾讯行情 qt.gtimg.cn 全市场直连快照（沪深主板 + 创业板 + 科创板 + 北交所，代码清单来自随应用发布的股票字典；约 60 秒缓存复用，每次取数都会记入「设置 → 日志」）。涨停按「昨收×涨幅上限」还原涨停价精确判定。<br>口径提示：上方「上涨/下跌」主数字为<b>沪深两市</b>（与同花顺等行情软件大盘页可直接对照）；北交所单独一行小字。其余统计（涨跌分布 / 涨停复盘 / 成交额）为全市场口径；疑似停牌（零成交且现价=昨收）会计入平盘，同花顺口径里这类被剔除，这是平盘家数对不上的主要原因。点标题行「⬇ 下载源数据」导出<b>本次分析的完整源数据</b>（取数凭证 + 评分构成 + 三套口径家数 + 逐股明细 + 板块汇总 + 涨停复盘），拿它和同花顺逐股对账。</div>
   `;
   box.querySelectorAll('.hh-sort[data-hsort]').forEach(btn => {
     btn.onclick = () => { state.heatSort = btn.dataset.hsort; renderHeatView(); };
@@ -872,6 +891,15 @@ function renderHeatView() {
       } catch (e) { toast('导出失败：' + (e && e.message || e), 'warn'); }
     };
   });
+  /* v3.9.12 标题行主按钮「⬇ 下载源数据」：导出本次分析的完整源数据包（与个股诊断的
+     「⬇ 下载」同一交互习惯）。快照没拉到之前隐藏。 */
+  const dlBtn = document.getElementById('heatDlBtn');
+  if (dlBtn) {
+    dlBtn.hidden = !state.snap;
+    dlBtn.onclick = () => {
+      try { heatExportSourceCsv(); } catch (e) { toast('导出失败：' + (e && e.message || e), 'warn'); }
+    };
+  }
   box.querySelectorAll('.hh-row').forEach(tr => {
     tr.onclick = () => {
       const d = box.querySelector('.hh-detail[data-board-detail="' + CSS.escape(tr.dataset.board) + '"]');
@@ -900,8 +928,9 @@ function marketLabelOf(code) {
   if (/^00/.test(code)) return '深主板';
   return '其他';
 }
-/* 全市场明细：逐股一行（按涨跌幅降序），含涨停/跌停/停牌判定列 —— 用户可直接拿去和同花顺逐股对账 */
-function heatExportDetailCsv() {
+/* 全市场明细行（逐股一行，按涨跌幅降序，含涨停/跌停/停牌判定列）——
+   v3.9.12 抽成独立函数：「⬇ 全市场明细」和「⬇ 下载源数据」共用，避免两份逻辑漂移 */
+function heatDetailRows() {
   const h = computeMarketHeat(state.snap);
   const rows = [['代码', '名称', '市场', '现价', '昨收', '涨跌幅%', '涨跌额', '成交额(亿)', '换手率%', '振幅%', '涨停', '跌停', '疑似停牌']];
   const list = Object.values(state.snap).filter(q => q && q.pct != null && isFinite(q.pct)).sort((a, b) => b.pct - a.pct);
@@ -916,16 +945,111 @@ function heatExportDetailCsv() {
   rows.push([]);
   rows.push(['# 汇总', `共${h.n}只`, `涨${h.up}`, `跌${h.down}`, `平${h.flat}`, `涨停${h.zt}`, `跌停${h.dt}`, `沪深涨${h.up - h.bse.up}跌${h.down - h.bse.down}`, `北证涨${h.bse.up}跌${h.bse.down}`, `疑似停牌${h.suspended}`]);
   rows.push(['# 数据来源', `腾讯行情 qt.gtimg.cn 全市场快照 ${heatTimeTxt()}`, `快照共 ${h.n} 只`, '涨停=昨收×涨幅上限还原判定']);
-  csvDownload('market-snapshot-' + csvStamp() + '.csv', rows);
+  return rows;
 }
-/* 板块汇总：全部板块（不只 TOP15），含平均涨幅/涨跌家数/涨停数/成交额 */
-function heatExportBoardCsv() {
-  if (!state.boardDict.length) { toast('板块字典未加载，板块汇总暂不可用', 'warn'); return; }
+function heatExportDetailCsv() {
+  csvDownload('market-snapshot-' + csvStamp() + '.csv', heatDetailRows());
+}
+/* 板块汇总行（全部板块，不只 TOP15）—— v3.9.12 同样抽出共用 */
+function heatBoardRows() {
   const rows = [['板块', '成分数', '平均涨幅%', '上涨', '下跌', '涨停', '成交额(亿)']];
   for (const b of computeBoardHeat(state.snap, state.boardDict, { minMembers: 1 })) {
     rows.push([b.name, b.n, Number(b.avgPct.toFixed(3)), b.up, b.down, b.zt, Number(b.amount.toFixed(2))]);
   }
-  csvDownload('board-heat-' + csvStamp() + '.csv', rows);
+  return rows;
+}
+function heatExportBoardCsv() {
+  if (!state.boardDict.length) { toast('板块字典未加载，板块汇总暂不可用', 'warn'); return; }
+  csvDownload('board-heat-' + csvStamp() + '.csv', heatBoardRows());
+}
+/* v3.9.12 「⬇ 下载源数据」：市场热度的完整源数据包（一份多段式 CSV，Excel 直接打开）。
+   为什么加：个股诊断给每张 K 线配了「⬇ 下载」，市场热度却只有两个藏在涨跌分布
+   排序按钮旁边的散按钮，用户 perception 就是「没提供源数据，没法核对」。
+   现在把「这次分析用到的一切」摊进一个文件：取数凭证（时间/覆盖数/批次/耗时/URL）+
+   温度评分每个分项的贡献分 + 三套口径的涨跌家数 + 涨跌分布 + 逐股明细 + 板块汇总 + 涨停复盘。
+   对账思路：先看「1 元信息」确认数据新鲜度，再看「2/3/4」逐个数字核对，有出入去「5 逐股明细」找差在哪几只票。 */
+function heatFullTime(d) {
+  if (!d || !d.getTime()) return '—';
+  const p = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}`;
+}
+function heatExportSourceCsv() {
+  if (!state.snap) { toast('还没有快照数据，先点「刷新行情」拉一次', 'warn'); return; }
+  const h = computeMarketHeat(state.snap);
+  const m = state.snapMeta || {};
+  const sc = heatScore(h);
+  const upRatio = h.n ? h.up / h.n : 0;
+  const med = h.medPct == null ? 0 : h.medPct;
+  const rawScore = 50 + med * 18 + (upRatio - 0.5) * 60 + (h.zt - h.dt) * 0.10;
+  const bdTotal = h.b.hi + h.b.mid + h.b.low + h.b.flat + h.b.dmid + h.b.dlow || 1;
+  const rows = [];
+  const sec = t => { rows.push([]); rows.push(['# ' + t]); };
+
+  /* 1 元信息：这份数据几点取的、从哪来、覆盖多全 —— 拿去对账的「凭证」 */
+  sec('1 本次取数凭证（元信息）');
+  rows.push(['导出时间', heatFullTime(new Date())]);
+  rows.push(['快照时间', heatFullTime(new Date(m.at || 0)), m.cached ? '60 秒缓存复用（非本次新拉）' : '本次实拉']);
+  rows.push(['数据源', '腾讯行情 qt.gtimg.cn 全市场直连快照（GBK 解码，本地计算）']);
+  rows.push(['请求 URL 样例', m.url || '—']);
+  rows.push(['覆盖 / 应取', `${m.n != null ? m.n : h.n} / ${m.total != null ? m.total : '—'} 只`, `股票字典共 ${m.dictSize != null ? m.dictSize : '—'} 条，热度只取 A 股前缀(60|68|00|30|43|83|87|92)`]);
+  rows.push(['请求批次', `${m.parts != null ? m.parts : '—'} 批（每批 ${m.batchSize || 80} 只 · 并发 ${m.concurrency || 6}）` + (m.emptyBatches ? `，其中 ${m.emptyBatches} 批失败(该批个股缺失)` : '')]);
+  rows.push(['取数耗时', m.ms != null ? (m.ms / 1000).toFixed(1) + ' 秒' : '—']);
+  rows.push(['板块字典版本', state.boardVer || '—']);
+
+  /* 2 温度评分构成：卡片上那个 0~100 的分数是怎么算出来的 */
+  sec('2 市场温度评分构成（0~100）');
+  rows.push(['公式', '50 + 中位涨幅×18 + (上涨占比-0.5)×60 + (涨停数-跌停数)×0.10，结果裁剪到 0~100']);
+  rows.push(['分项', '原始值', '贡献分']);
+  rows.push(['中位涨幅%', Number(med.toFixed(3)), Number((med * 18).toFixed(2))]);
+  rows.push(['上涨占比', (upRatio * 100).toFixed(2) + '%', Number(((upRatio - 0.5) * 60).toFixed(2))]);
+  rows.push(['涨停-跌停', `${h.zt}-${h.dt}=${h.zt - h.dt}`, Number(((h.zt - h.dt) * 0.10).toFixed(2))]);
+  rows.push(['裁剪前得分', Number(rawScore.toFixed(2))]);
+  rows.push(['最终得分', sc.score, sc.label]);
+
+  /* 3 涨跌家数三套口径：和同花顺对数前先选对行 */
+  sec('3 涨跌家数（三套口径，对照同花顺用第 2 行）');
+  rows.push(['口径', '上涨', '下跌', '平盘', '涨停', '跌停']);
+  rows.push(['全市场（含北交所）', h.up, h.down, h.flat, h.zt, h.dt]);
+  rows.push(['沪深两市（同花顺大盘页口径，不含北交所）', h.up - h.bse.up, h.down - h.bse.down, h.flat - h.bse.flat, h.zt - h.bse.zt, h.dt - h.bse.dt]);
+  rows.push(['北交所单独', h.bse.up, h.bse.down, h.bse.flat, h.bse.zt, h.bse.dt]);
+  rows.push(['疑似停牌（零成交且现价=昨收，同花顺口径里这类被剔除）', h.suspended, '计入平盘', '', '', '']);
+
+  /* 4 涨跌分布：分段条形图背后那 6 个数 */
+  sec('4 涨跌分布（全市场）');
+  rows.push(['区间', '家数', '占比']);
+  rows.push(['涨超 9.5%', h.b.hi, (h.b.hi / bdTotal * 100).toFixed(2) + '%']);
+  rows.push(['涨 5~9.5%', h.b.mid, (h.b.mid / bdTotal * 100).toFixed(2) + '%']);
+  rows.push(['涨 0~5%', h.b.low, (h.b.low / bdTotal * 100).toFixed(2) + '%']);
+  rows.push(['平盘', h.b.flat, (h.b.flat / bdTotal * 100).toFixed(2) + '%']);
+  rows.push(['跌 0~5%', h.b.dmid, (h.b.dmid / bdTotal * 100).toFixed(2) + '%']);
+  rows.push(['跌超 5%', h.b.dlow, (h.b.dlow / bdTotal * 100).toFixed(2) + '%']);
+  rows.push(['中位涨幅%', h.medPct == null ? '—' : Number(h.medPct.toFixed(3))]);
+  rows.push(['全市场成交额(亿)', Number(h.amount.toFixed(1))]);
+
+  /* 5 逐股明细：涨跌家数有出入时，在这里逐股找出差在哪几只票 */
+  sec('5 逐股明细（全市场，按涨跌幅降序）');
+  for (const r of heatDetailRows()) rows.push(r);
+
+  /* 6 板块汇总 */
+  sec('6 板块热度汇总（全部板块）');
+  if (state.boardDict.length) for (const r of heatBoardRows()) rows.push(r);
+  else rows.push(['板块字典未加载，本段为空']);
+
+  /* 7 涨停复盘 */
+  sec('7 涨停复盘（当日涨停股，按成交额降序）');
+  const lim = computeLimitRank(state.snap, state.boardRev);
+  rows.push(['代码', '名称', '涨幅%', '成交额(亿)', '所属板块(前3)']);
+  for (const q of lim.list) {
+    rows.push([q.code, q.name, q.pct, q.amount != null ? Number(q.amount.toFixed(2)) : '', (state.boardRev[q.code] || []).slice(0, 3).join(' · ')]);
+  }
+
+  /* 8 口径备注 */
+  sec('8 口径备注');
+  rows.push(['1', '「上涨/下跌」卡片主数字 = 沪深两市（第 3 段第 2 行），可与同花顺大盘页直接对照；北交所单独一行小字。']);
+  rows.push(['2', '疑似停牌（零成交且现价=昨收）会计入我们的「平盘」，同花顺口径里这类被剔除 —— 平盘家数对不上的主因。']);
+  rows.push(['3', '涨停/跌停 = 昨收 × 涨幅上限还原涨停价精确判定（含 ST 5%、主板 10%、创业/科创 20%、北交所 30%）。']);
+  rows.push(['4', '板块热度 = 板块成分股在本次快照里的平均涨幅；一只股票可归属多个板块/概念。']);
+  csvDownload('market-heat-source-' + csvStamp() + '.csv', rows);
 }
 
 /* ---- 刷新：拉全市场快照并重绘 ---- */
@@ -935,17 +1059,27 @@ async function refreshHeat(force) {
   const btn = document.getElementById('heatRefreshBtn');
   if (btn) { btn.disabled = true; btn.textContent = '拉取中…'; }
   box.innerHTML = '<div class="empty-tip">正在拉取全市场实时快照（约 3 秒）…</div>';
+  /* v3.9.13 审计：本次快照取数标上触发来源 */
+  return NetLog.withCtx('分析页·市场热度' + (force ? '(强刷)' : ''), async () => {
   try {
     if (!state.boardDict.length) { try { await ensureBoardDict(false); } catch (e) { /* 板块不可用不影响热度 */ } }
     if (force) _qCache = null;
     const snap = await qSnapshot();
     state.snap = snap.map;
+    /* v3.9.12 把这次快照的元信息一并留下：卡片时间戳、下载源数据都要用 */
+    state.snapMeta = {
+      at: snap.at, n: snap.n, total: snap.total, parts: snap.parts,
+      emptyBatches: snap.emptyBatches, ms: snap.ms, cached: !!snap.cached,
+      url: snap.url || '', batchSize: snap.batchSize || 80, concurrency: snap.concurrency || 6,
+      dictSize: snap.dictSize || 0,
+    };
     renderHeatView();
   } catch (e) {
     box.innerHTML = '<div class="empty-tip">行情拉取失败：' + esc(e && e.message || '未知错误') + '</div>';
   } finally {
     if (btn) { btn.disabled = false; btn.textContent = '刷新行情'; }
   }
+  });
 }
 
 /* ---- 渲染：持仓画像 ---- */
@@ -2233,6 +2367,27 @@ const KIND_LABEL = { stock: ['个股诊断', 'k-diag'], batch: ['批量诊断', 
   on('btBasketBtn', runBtBasket);
   on('batchDiagBtn', () => runBatchDiagnose());
   on('momRunBtn', runMomentumScan);   // v3.8.74 动量筛选（手动触发，不自动跑）
+  /* v3.10.0 K 线库状态行 + 手动同步按钮（进场时显示缓存状态，不自动联网） */
+  (function initMomKlib() {
+    const el = document.getElementById('momKlibStatus');
+    if (el && typeof KLib !== 'undefined') {
+      KLib.statusLine().then(s => { el.textContent = '💾 ' + s.txt; }).catch(() => { el.textContent = '💾 K 线库状态未知（IndexedDB 不可用？）'; });
+    }
+    on('momSyncBtn', async () => {
+      if (typeof KLib === 'undefined') return toast('K 线库模块未加载');
+      const btn = document.getElementById('momSyncBtn'), st2 = document.getElementById('momKlibStatus');
+      btn.disabled = true; btn.textContent = '⏳ 同步中…';
+      try {
+        const r = await KLib.ensure(p => { if (st2) st2.textContent = '💾 ' + p.stage; });
+        if (st2) st2.textContent = '💾 本机 ' + r.n + ' 只 · 最新 ' + r.targetDate + (r.failed ? ' · 失败 ' + r.failed + ' 只' : '');
+        toast('K 线库已同步：' + r.n + ' 只');
+      } catch (e) {
+        if (st2) st2.textContent = '💾 同步失败：' + (e && e.message || e);
+        toast('K 线库同步失败：' + (e && e.message || e));
+      }
+      btn.disabled = false; btn.textContent = '🔄 同步K线库';
+    });
+  })();
   on('heatRefreshBtn', () => refreshHeat(true));
   on('profileRunBtn', () => { renderProfileView(true); });
   const btStrat = document.getElementById('btStrat');
@@ -2391,52 +2546,218 @@ function momJudge(it, pool, rankMap) {
   return it;
 }
 
+/* ============================================================
+   v3.10.0 本地全市场精确计算 —— K 线库（KLib）就绪后走这条路径
+   ------------------------------------------------------------
+   与旧在线流程的本质区别：历史名次不再估算。每天对全市场逐日排序，
+   「连续 N 日都在前 M 名」是 100% 精确的复算结果（旧流程只有当日是真实的）。
+   纯函数、不吃 IO，方便测试台直接验。
+   ============================================================ */
+/* 默认条件：新条件（RPS/新高/均线）默认关闭，默认行为 = 旧版严格化（名次变精确） */
+const momOpts = { n: 3, topN: 1000, volK: 1.1, minAmountYi: 0.5, rpsMin: 0, nearHighPct: 0, maBull: false };
+
+/* data: Map(code -> {name, bars})，bars 紧凑数组 [d,o,c,h,l,v,a]
+   返回 {hits, stats:{universe, targetDate}}，hits 按 N 日累计涨幅降序 */
+function momComputeLocal(data, o) {
+  /* ① 确定目标交易日 = 全库最晚末根日期；只统计「当天有交易」的票（停牌票名次无法对齐） */
+  let targetDate = '';
+  for (const rec of data.values()) {
+    const b = rec.bars;
+    if (b.length && b[b.length - 1][0] > targetDate) targetDate = b[b.length - 1][0];
+  }
+  if (!targetDate) return { hits: [], stats: { universe: 0, targetDate: '' } };
+  const minLen = Math.max(o.n + 2, o.rpsMin > 0 ? 121 : 0, o.nearHighPct < 0 ? 61 : 0, o.maBull ? 61 : 0);
+  const uni = [];
+  for (const [code, rec] of data) {
+    const b = rec.bars;
+    if (!b.length || b[b.length - 1][0] !== targetDate || b.length < minLen) continue;
+    uni.push({ code, name: rec.name || '', bars: b });
+  }
+  const uniN = uni.length;
+  if (!uniN) return { hits: [], stats: { universe: 0, targetDate } };
+
+  /* ② 每日全市场名次（精确）：对最近 N 天逐日排序。名次覆盖全部有数据的票（含 ST/北交所），
+        与同花顺「全 A 涨幅榜」同一口径；排除条件只做过滤、不影响名次分母 */
+  const dayRank = [];
+  for (let k = 0; k < o.n; k++) {
+    const arr = [];
+    for (const s of uni) {
+      const i = s.bars.length - o.n + k;
+      const prev = s.bars[i - 1][2], cur = s.bars[i][2];
+      arr.push([s.code, prev > 0 ? (cur / prev - 1) * 100 : -1e9]);
+    }
+    arr.sort((a, b) => b[1] - a[1]);
+    const m = new Map();
+    for (let i = 0; i < arr.length; i++) m.set(arr[i][0], i + 1);
+    dayRank.push(m);
+  }
+
+  /* ③ RPS120：120 日累计收益的全市场百分位（0~100，越高越强） */
+  const rpsMap = new Map();
+  if (o.rpsMin > 0) {
+    const rets = [];
+    for (const s of uni) {
+      const b = s.bars, L = b.length;
+      if (L >= 121 && b[L - 121][2] > 0) rets.push([s.code, (b[L - 1][2] / b[L - 121][2] - 1) * 100]);
+    }
+    rets.sort((a, b) => b[1] - a[1]);
+    rets.forEach((e, i) => rpsMap.set(e[0], Math.round((1 - i / rets.length) * 1000) / 10));
+  }
+
+  /* ④ 逐票判定 */
+  const hits = [];
+  for (const s of uni) {
+    if (o.excludeBJ !== false && /^(4|8|9)/.test(s.code)) continue;
+    if (o.excludeST !== false && /ST|退/.test(s.name)) continue;
+    const b = s.bars, L = b.length, last = b[L - 1];
+    const amtYi = (last[6] || 0) / 1e8;
+    if (!(amtYi >= o.minAmountYi)) continue;
+
+    /* 连涨 + 名次（精确） */
+    const days = [];
+    let pass = true;
+    for (let k = 0; k < o.n; k++) {
+      const i = L - o.n + k;
+      const pct = b[i - 1][2] > 0 ? (b[i][2] / b[i - 1][2] - 1) * 100 : -1e9;
+      const rank = dayRank[k].get(s.code);
+      if (!(pct > 0) || !(rank <= o.topN)) { pass = false; break; }
+      days.push({ d: b[i][0], pct, rank, rankExact: true });
+    }
+    if (!pass) continue;
+    /* 量能递增 */
+    for (let k = 1; k < o.n; k++) {
+      const i = L - o.n + k;
+      if (!(b[i][5] >= b[i - 1][5] * o.volK)) { pass = false; break; }
+    }
+    if (!pass) continue;
+    /* RPS 门槛 */
+    let rps = null;
+    if (o.rpsMin > 0) { rps = rpsMap.get(s.code) || 0; if (rps < o.rpsMin) continue; }
+    /* 距 250 日新高：distHigh = (收/区间最高 - 1)%；nearHighPct<0 才启用（如 -10 = 回撤 10% 以内） */
+    let distHigh = null;
+    if (o.nearHighPct < 0) {
+      let hi = 0;
+      for (let i = Math.max(0, L - 250); i < L; i++) if (b[i][3] > hi) hi = b[i][3];
+      distHigh = hi > 0 ? (last[2] / hi - 1) * 100 : null;
+      if (distHigh == null || distHigh < o.nearHighPct) continue;
+    }
+    /* 均线多头：收 > MA5 > MA10 > MA20 > MA60 */
+    if (o.maBull) {
+      const ma = w => { let s2 = 0; for (let i = L - w; i < L; i++) s2 += b[i][2]; return s2 / w; };
+      const c = last[2];
+      if (!(c > ma(5) && ma(5) > ma(10) && ma(10) > ma(20) && ma(20) > ma(60))) continue;
+    }
+
+    const base = b[L - o.n - 1][2];
+    hits.push({
+      code: s.code, name: s.name, price: last[2], amount: amtYi, targetDate,
+      days, cum: base > 0 ? (last[2] / base - 1) * 100 : 0,
+      volRatio: b[L - o.n][5] > 0 ? last[5] / b[L - o.n][5] : 0,
+      rps, distHigh,
+    });
+  }
+  hits.sort((a, b) => b.cum - a.cum);
+  return { hits, stats: { universe: uniN, targetDate } };
+}
+
+/* 从面板输入读条件（非法值回落默认，绝不因输入抛错中断筛选） */
+function readMomOpts() {
+  const num = (id, def, min, max) => {
+    const el = document.getElementById(id);
+    if (!el) return def;
+    const v = parseFloat(el.value);
+    return isFinite(v) ? Math.min(max, Math.max(min, v)) : def;
+  };
+  momOpts.n = Math.round(num('momN', 3, 1, 10));
+  momOpts.topN = Math.round(num('momTopN', 1000, 10, 6000));
+  momOpts.volK = num('momVolK', 1.1, 1, 10);
+  momOpts.minAmountYi = num('momAmt', 0.5, 0, 1e4);
+  momOpts.rpsMin = num('momRps', 0, 0, 100);
+  momOpts.nearHighPct = num('momHigh', 0, -100, 0);
+  const maEl = document.getElementById('momMa');
+  momOpts.maBull = !!(maEl && maEl.checked);
+  /* 旧在线回退流程共用这组条件 */
+  MOM.n = momOpts.n; MOM.topN = momOpts.topN; MOM.volK = momOpts.volK; MOM.minAmount = momOpts.minAmountYi;
+}
+
+/* v3.10.0 入口：首选本地 K 线库精确计算；库不可用才回退在线近似流程 */
 async function runMomentumScan() {
   const btn = document.getElementById('momRunBtn');
   if (!btn) return;
   if (momState.running) return toast('正在筛选，请稍候…');
-  momState.running = true; momState.err = ''; momState.items = []; momState.approx = false;
-  momState.stage = '① 取涨幅榜前 ' + MOM.topN + ' 名…'; momState.done = 0; momState.total = 0;
+  readMomOpts();
+  momState.running = true; momState.err = ''; momState.items = []; momState.approx = false; momState.src = '';
+  momState.stage = '准备 K 线库…'; momState.done = 0; momState.total = 0;
   renderMomView();
   btn.disabled = true; btn.textContent = '⏳ 筛选中…';
   try {
-    const rankMap = await momTopRanked(MOM.topN);
-    if (!rankMap.size) throw new Error('涨幅榜没有返回数据（接口可能临时不可用，请稍后重试）');
-    momState.stage = '② 拉取全市场快照并粗筛…';
-    renderMomView();
-    const poolRes = await momPool(rankMap);
-    const pool = poolRes.rows;
-    if (!pool.length) throw new Error('粗筛后没有候选（可能是全市场普跌，或成交额门槛过严）');
-    momState.total = pool.length;
-    momState.stage = '③ 读取日K（' + pool.length + ' 只）…';
-    renderMomView();
-    const items = new Array(pool.length);
-    let next = 0;
-    const worker = async () => {
-      for (;;) {
-        const i = next++;
-        if (i >= pool.length) return;
-        try { items[i] = await momOne(pool[i]); } catch (e) { items[i] = null; }
-        momState.done++;
-        if (momState.done % 5 === 0 || momState.done === pool.length) renderMomView();
-      }
-    };
-    await Promise.all(Array.from({ length: Math.min(MOM.concurrency, pool.length) }, worker));
-    const valid = items.filter(Boolean);
-    const passed = [];
-    for (const it of valid) { const r = momJudge(it, valid, rankMap); if (r) passed.push(r); }
-    passed.sort((a, b) => b.cum - a.cum);
-    momState.items = passed;
-    momState.approx = passed.some(r => r.days.some(d => !d.rankExact));
-    momState.stage = '涨幅榜前 ' + MOM.topN + ' → 粗筛 ' + pool.length
-      + ' → 日K可用 ' + valid.length + ' → 命中 ' + passed.length;
-    momState.at = nowTs();
+    try {
+      /* 首次运行会自动回补全市场 12 个月日K（约 3-5 分钟，带进度）；之后每天增量只差当日一根 */
+      const r = await KLib.ensure(p => {
+        momState.stage = p.stage; momState.done = p.done || 0; momState.total = p.total || 0; renderMomView();
+      });
+      const data = await KLib.all();
+      if (data.size < 1000) throw new Error('K 线库不足 1000 只（' + data.size + '），无法做全市场排名');
+      momState.src = 'local';
+      momState.stage = '全市场精确计算（' + data.size + ' 只）…';
+      momState.done = 0; momState.total = 0;
+      renderMomView();
+      const res = momComputeLocal(data, momOpts);
+      momState.items = res.hits;
+      momState.approx = false;
+      momState.stage = 'K线库 ' + res.stats.universe + ' 只 · 交易日 ' + res.stats.targetDate
+        + ' → 命中 ' + res.hits.length + '（历史名次 100% 精确）';
+      momState.at = nowTs();
+    } catch (eLocal) {
+      /* K 线库不可用（IndexedDB 被禁 / 参考票失败等）→ 旧在线流程兜底，名次含估算 */
+      NetLog.push('kline', 'K线库不可用，回退在线流程', false, 0, eLocal.message || String(eLocal));
+      momState.src = 'online';
+      await runMomentumOnline();
+      momState.approx = true;
+    }
   } catch (e) {
     momState.err = (e && e.message) || '筛选失败';
   }
   momState.running = false;
   btn.disabled = false; btn.textContent = '🔍 开始筛选';
   renderMomView();
+}
+
+/* 旧在线流程（v3.8.74 原样保留，仅作 K 线库不可用时的兜底；历史名次为估算） */
+async function runMomentumOnline() {
+  momState.stage = '① 取涨幅榜前 ' + MOM.topN + ' 名…'; momState.done = 0; momState.total = 0;
+  renderMomView();
+  const rankMap = await momTopRanked(MOM.topN);
+  if (!rankMap.size) throw new Error('涨幅榜没有返回数据（接口可能临时不可用，请稍后重试）');
+  momState.stage = '② 拉取全市场快照并粗筛…';
+  renderMomView();
+  const poolRes = await momPool(rankMap);
+  const pool = poolRes.rows;
+  if (!pool.length) throw new Error('粗筛后没有候选（可能是全市场普跌，或成交额门槛过严）');
+  momState.total = pool.length;
+  momState.stage = '③ 读取日K（' + pool.length + ' 只）…';
+  renderMomView();
+  const items = new Array(pool.length);
+  let next = 0;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= pool.length) return;
+      try { items[i] = await momOne(pool[i]); } catch (e) { items[i] = null; }
+      momState.done++;
+      if (momState.done % 5 === 0 || momState.done === pool.length) renderMomView();
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(MOM.concurrency, pool.length) }, worker));
+  const valid = items.filter(Boolean);
+  const passed = [];
+  for (const it of valid) { const r = momJudge(it, valid, rankMap); if (r) passed.push(r); }
+  passed.sort((a, b) => b.cum - a.cum);
+  momState.items = passed;
+  momState.approx = passed.some(r => r.days.some(d => !d.rankExact));
+  momState.stage = '涨幅榜前 ' + MOM.topN + ' → 粗筛 ' + pool.length
+    + ' → 日K可用 ' + valid.length + ' → 命中 ' + passed.length;
+  momState.at = nowTs();
 }
 
 function renderMomView() {
@@ -2457,7 +2778,7 @@ function renderMomView() {
   const rows = st.items.map((r, i) => {
     const dayCells = r.days.map(d => {
       const cls = d.rankExact ? 'mom-d exact' : 'mom-d';
-      const t = d.rankExact ? '当日榜单真实名次' : '估算名次（无历史榜单，按候选池折算）';
+      const t = d.rankExact ? '全市场精确名次（本地K线库复算）' : '估算名次（无历史榜单，按候选池折算）';
       return '<span class="' + cls + '" title="' + t + '">+' + d.pct.toFixed(1) + '%<i>' + d.rank + '</i></span>';
     }).join('');
     return '<tr>'
@@ -2468,20 +2789,24 @@ function renderMomView() {
       + '<td class="num">' + dayCells + '</td>'
       + '<td class="num">' + r.volRatio.toFixed(2) + '×</td>'
       + '<td class="num">' + momAmtTxt(r.amount) + '</td>'
-      + '<td class="num">' + momCapTxt(r.totalCap) + '</td>'
+      + '<td class="num">' + (r.rps == null ? '--' : r.rps.toFixed(1)) + '</td>'
+      + '<td class="num">' + (r.distHigh == null ? '--' : r.distHigh.toFixed(1) + '%') + '</td>'
       + '<td><button class="icon-btn" data-momcode="' + esc(r.code) + '">诊断</button></td>'
       + '</tr>';
   }).join('');
   box.innerHTML = prog
     + '<div class="mom-sum">命中 <b>' + st.items.length + '</b> 只'
-      + (st.approx ? '<span class="mom-warn" title="历史日没有榜单快照，名次由当日涨幅在候选池内排序后折算得到，非精确全市场排名">名次含估算</span>' : '')
+      + (st.src === 'local' ? '<span class="mom-exact" title="本地K线库逐日全市场复算">名次精确</span>'
+        : '<span class="mom-warn" title="历史日没有榜单快照，名次由当日涨幅在候选池内排序后折算得到，非精确全市场排名">名次含估算</span>')
       + '<span class="batch-at">更新于 ' + esc(st.at || '') + '</span></div>'
     + '<div class="table-wrap"><table class="batch-table mom-table"><thead><tr>'
-      + '<th>#</th><th>股票</th><th class="num">' + MOM.n + '日累计</th><th class="num">逐日涨幅<i>名次</i></th>'
-      + '<th class="num">量能</th><th class="num">成交额</th><th class="num">总市值</th><th></th>'
+      + '<th>#</th><th>股票</th><th class="num">' + momOpts.n + '日累计</th><th class="num">逐日涨幅<i>名次</i></th>'
+      + '<th class="num">量能</th><th class="num">成交额</th><th class="num" title="120日累计收益的全市场百分位">RPS120</th>'
+      + '<th class="num" title="现价距250日最高价的幅度">距新高</th><th></th>'
       + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
     + '<div class="diag-form-row">'
       + '<button class="btn block" id="momDiagAllBtn" type="button">📊 全部批量诊断（' + st.items.length + ' 只）</button>'
+      + '<button class="btn block" id="momExportBtn" type="button">⬇ 导出结果 CSV（含逐日名次）</button>'
       + '</div>';
   box.querySelectorAll('button[data-momcode]').forEach(el => {
     el.onclick = () => analyzeStockByCode(el.dataset.momcode);
@@ -2494,5 +2819,25 @@ function renderMomView() {
     runBatchDiagnose(extra, MOM.n + '日强势 · 量能递增（' + extra.length + ' 只）');
     const pane = document.getElementById('batchBox');
     if (pane) pane.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+  /* v3.10.0 结果导出：逐日涨幅+精确名次全带上下文，方便离线核对 */
+  const exp = document.getElementById('momExportBtn');
+  if (exp) exp.onclick = () => {
+    if (!st.items.length) return toast('没有可导出的结果');
+    const rows = [['#', '代码', '名称', momOpts.n + '日累计%', '量能倍数', '成交额(亿)', 'RPS120', '距250日新高%', '目标交易日']];
+    for (let k = 0; k < momOpts.n; k++) rows[0].push('D-' + (momOpts.n - 1 - k) + '涨幅%', 'D-' + (momOpts.n - 1 - k) + '名次');
+    for (let i = 0; i < st.items.length; i++) {
+      const r = st.items[i];
+      const row = [i + 1, r.code, r.name, Number(r.cum.toFixed(3)), Number(r.volRatio.toFixed(3)),
+        Number(r.amount.toFixed(3)), r.rps == null ? '' : r.rps, r.distHigh == null ? '' : Number(r.distHigh.toFixed(2)), r.targetDate || st.at || ''];
+      for (const d of r.days) row.push(Number(d.pct.toFixed(3)), d.rank + (d.rankExact ? '' : '(估)'));
+      rows.push(row);
+    }
+    rows.push([]);
+    rows.push(['# 条件', `连续${momOpts.n}日涨幅>0且名次≤${momOpts.topN}`, `量能≥前日×${momOpts.volK}`,
+      `成交额≥${momOpts.minAmountYi}亿`, momOpts.rpsMin > 0 ? `RPS120≥${momOpts.rpsMin}` : 'RPS未启用',
+      momOpts.nearHighPct < 0 ? `距新高≥${momOpts.nearHighPct}%` : '新高未启用', momOpts.maBull ? '要求均线多头' : '均线未启用']);
+    rows.push(['# 数据来源', st.src === 'local' ? '本地K线库（12个月日K，历史名次100%精确）' : '腾讯涨幅榜+快照（历史名次为估算）', '', '', '', '', '', '', '']);
+    csvDownload('momentum-' + csvStamp() + '.csv', rows);
   };
 }

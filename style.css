@@ -267,6 +267,10 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 }
 .card-title-row .card-title { margin-bottom: 0; }
 .card-title-row .filters, .card-title-row .btn { margin-left: auto; }
+/* v3.9.12 标题行右侧按钮组（市场热度「⬇ 下载源数据 + 刷新行情」）：多个按钮共享一个 margin-left:auto，
+   组内用 gap 分隔 —— 若不用包装 span，第二个 .btn 也会吃 margin-left:auto 把第一个挤回中间 */
+.title-actions { margin-left: auto; display: flex; gap: 8px; align-items: center; }
+.title-actions .btn { margin-left: 0; }
 .hint { color: var(--ink-3); font-size: 12.5px; font-weight: 400; }
 
 /* ---------- v3.8.51 汇总卡（.sum-cards / .sum-card / .s-*）已随「按股票」展开明细改胶囊而下线，
@@ -1934,3 +1938,26 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 @media (max-width: 640px) {
   .qa-skill-hint { white-space: normal; }
 }
+
+/* ---------- v3.9.13 审计级网络日志（.nl-*）：触发/URL/参数/返回逐条可展开 ---------- */
+.nl-item { border: 1px solid var(--line); border-radius: 8px; margin-bottom: 4px; background: var(--bg); }
+.nl-item summary { display: flex; align-items: center; gap: 6px; padding: 6px 8px; cursor: pointer; font-size: 12.5px; min-width: 0; }
+.nl-item summary::-webkit-details-marker { display: none; }
+.nl-t { color: var(--ink-3); font-variant-numeric: tabular-nums; flex: none; }
+.nl-badge { flex: none; font-size: 10.5px; font-weight: 700; padding: 1px 5px; border-radius: 4px; }
+.nl-badge.ok { color: #15803d; background: rgba(21, 128, 61, .12); }
+.nl-badge.fail { color: #b91c1c; background: rgba(185, 28, 28, .14); }
+.nl-kind { color: var(--ink-3); flex: none; font-size: 11px; }
+.nl-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.nl-ms { color: var(--ink-3); flex: none; font-variant-numeric: tabular-nums; font-size: 11px; }
+.nl-item.nl-fail { border-color: rgba(185, 28, 28, .35); }
+.nl-row { display: flex; gap: 8px; padding: 3px 10px 3px 12px; font-size: 12px; border-top: 1px dashed var(--line); }
+.nl-k { flex: none; width: 34px; color: var(--ink-3); }
+.nl-v { word-break: break-all; min-width: 0; color: var(--ink-2); }
+
+/* ---------- v3.10.0 动量筛选：条件输入行 + 精确名次徽标 ---------- */
+.mom-conds { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; font-size: 13px; margin-bottom: 6px; }
+.mom-conds .num-in { width: 72px; padding: 3px 6px; }
+.mom-conds .chk { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
+.mom-exact { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  color: #15803d; background: rgba(21, 128, 61, .12); margin-left: 8px; }

@@ -74,9 +74,12 @@ async function latestTradeDate() {
   return todayStr();
 }
 
-/* 分页拉全量（pageSize 上限实测 500）。失败时若已有数据就截断返回，一条都没有才抛错 */
+/* 分页拉全量（pageSize 上限实测 500）。失败时若已有数据就截断返回，一条都没有才抛错。
+   v3.9.13 审计：每轮拉取记一条——报告名/过滤条件/取得行数；0 行明示「未获取到」。 */
 async function dcFetchAll(report, columns, filter, onPage) {
+  const t0 = Date.now();
   const out = [];
+  const url0 = DC_BASE + 'reportName=' + report + '&columns=' + columns + '&filter=' + String(filter).slice(0, 180);
   for (let p = 1; p <= 40; p++) {
     const url = DC_BASE + 'reportName=' + report + '&columns=' + columns
       + '&pageSize=500&pageNumber=' + p + '&sortColumns=SECURITY_CODE&sortTypes=1'
@@ -87,12 +90,19 @@ async function dcFetchAll(report, columns, filter, onPage) {
       const j = await r.json();
       if (j && j.code && j.code !== 0) throw new Error(j.message || ('返回 code ' + j.code));
       d = (j && j.result && j.result.data) || [];
-    } catch (e) { if (!out.length) throw e; break; }
+    } catch (e) {
+      NetLog.push('dc', '东财数据中心 ' + report, false, Date.now() - t0, '未获取到：' + (e.message || e),
+        { url: url0, req: 'filter=' + filter, resp: '已取 ' + out.length + ' 行后失败', err: e.message || String(e) });
+      if (!out.length) throw e; break;
+    }
     if (!d.length) break;
     out.push.apply(out, d);
     if (onPage) onPage(out.length);
     if (d.length < 500) break;
   }
+  NetLog.push('dc', '东财数据中心 ' + report, out.length > 0, Date.now() - t0,
+    out.length ? out.length + ' 行' : '未获取到（0 行）',
+    { url: url0, req: 'filter=' + String(filter).slice(0, 200), resp: out.length + ' 行', err: out.length ? '' : '未获取到' });
   return out;
 }
 
@@ -150,24 +160,39 @@ async function emQuotes(codes) {
       });
     }
   }
+  /* v3.9.13 审计：整轮批量行情的覆盖情况（缺的票明示，不静默） */
+  NetLog.push('dc', '腾讯批量行情(问答工具层)', out.length > 0, 0,
+    out.length ? `${out.length}/${list.length} 只` : '未获取到（0 只）',
+    { url: 'https://qt.gtimg.cn/q=<分批 60 只/批>', resp: out.length + '/' + list.length + ' 只' + (out.length < list.length ? `（未返回 ${list.length - out.length} 只）` : ''), err: out.length ? '' : '未获取到' });
   if (!out.length) { try { return await emQuotesEast(list); } catch (e) { /* 两条源都挂了 → 空数组 */ } }
   return out;
 }
 
 /* 东财行情备源（push2） */
 async function emQuotesEast(list) {
+  const t0 = Date.now();
   const url = 'https://push2.eastmoney.com/api/qt/ulist.np/get?fltt=2&invt=2'
     + '&fields=f2,f3,f4,f8,f9,f12,f14,f15,f16,f17,f18,f20,f21,f23'
     + '&secids=' + list.map(secidOf).join(',');
-  const res = await fetch(url);
-  const j = await res.json();
-  return ((j.data && j.data.diff) || []).map(d => ({
-    src: '东财', code: d.f12, name: d.f14,
-    price: nOr(d.f2), pct: nOr(d.f3), chg: nOr(d.f4),
-    open: nOr(d.f17), prevClose: nOr(d.f18), high: nOr(d.f15), low: nOr(d.f16),
-    turnover: nOr(d.f8), pe: nOr(d.f9), peLabel: '市盈率(动)', pb: nOr(d.f23),
-    mktCap: nOr(d.f20), floatCap: nOr(d.f21),
-  }));
+  try {
+    const res = await fetch(url);
+    const j = await res.json();
+    const rows = ((j.data && j.data.diff) || []).map(d => ({
+      src: '东财', code: d.f12, name: d.f14,
+      price: nOr(d.f2), pct: nOr(d.f3), chg: nOr(d.f4),
+      open: nOr(d.f17), prevClose: nOr(d.f18), high: nOr(d.f15), low: nOr(d.f16),
+      turnover: nOr(d.f8), pe: nOr(d.f9), peLabel: '市盈率(动)', pb: nOr(d.f23),
+      mktCap: nOr(d.f20), floatCap: nOr(d.f21),
+    }));
+    /* v3.9.13 审计：返回行数；缺的票如实标注 */
+    NetLog.push('dc', '东财行情 push2(备源)', rows.length > 0, Date.now() - t0,
+      rows.length ? `${rows.length}/${list.length} 只` : '未获取到（0 行）',
+      { url, resp: rows.length + '/' + list.length + ' 只', err: rows.length ? '' : '未获取到' });
+    return rows;
+  } catch (e) {
+    NetLog.push('dc', '东财行情 push2(备源)', false, Date.now() - t0, '未获取到：' + (e.message || e), { url, err: e.message || String(e) });
+    throw e;
+  }
 }
 
 /* 分页批量（板块成分表要用几十~上百只，一次 URL 会太长） */
@@ -189,44 +214,63 @@ function dcUrl(report, filter, size, sortCol, sortType) {
   if (filter) u += '&filter=' + encodeURIComponent(filter);
   return u;
 }
+/* v3.9.13 审计小助手：单接口取数记一条（URL + 返回摘要；空结果明示「未获取到」，绝不静默） */
+function qaAuditLog(name, url, t0, rows, failMsg) {
+  NetLog.push('dc', name, !failMsg && rows > 0, Date.now() - t0,
+    failMsg ? ('未获取到：' + failMsg) : (rows + ' 行'),
+    { url, resp: failMsg ? '' : rows + ' 行', err: failMsg || '' });
+}
 
 /* 财务报表摘要（东财数据中心 · 最近一期） */
 async function emFinance(code) {
+  const t0 = Date.now();
   const url = 'https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=RPT_LICO_FN_CPD&columns=ALL'
     + '&filter=' + encodeURIComponent('(SECURITY_CODE="' + code + '")')
     + '&pageSize=1&sortColumns=REPORTDATE&sortTypes=-1';
-  const res = await fetch(url);
-  const j = await res.json();
-  const d = j && j.result && j.result.data && j.result.data[0];
-  if (!d) return null;
-  return {
+  try {
+    const res = await fetch(url);
+    const j = await res.json();
+    const d = j && j.result && j.result.data && j.result.data[0];
+    if (!d) { qaAuditLog('东财财务 ' + code, url, t0, 0, '返回空'); return null; }
+    qaAuditLog('东财财务 ' + code, url, t0, 1);
+    return {
     period: d.DATATYPE || (d.REPORTDATE || '').slice(0, 10),
     income: nOr(d.TOTAL_OPERATE_INCOME), netProfit: nOr(d.PARENT_NETPROFIT),
     roe: nOr(d.WEIGHTAVG_ROE), eps: nOr(d.BASIC_EPS), bps: nOr(d.BPS),
     grossMargin: nOr(d.XSMLL), incomeYoY: nOr(d.YSTZ), profitYoY: nOr(d.SJLTZ),
     board: d.BOARD_NAME || '', dividend: d.ASSIGNDSCRPT || '',
   };
+  } catch (e) { qaAuditLog('东财财务 ' + code, url, t0, 0, e.message || String(e)); throw e; }
 }
 
 /* 估值快照（东财数据中心 · PE/PB/PS/PEG 与市值） */
 async function emValuation(code) {
-  const res = await fetch(dcUrl('RPT_VALUEANALYSIS_DET', '(SECURITY_CODE="' + code + '")'));
-  const j = await res.json();
-  const d = j && j.result && j.result.data && j.result.data[0];
-  if (!d) return null;
-  return {
-    pe: nOr(d.PE_TTM), pb: nOr(d.PB_MRQ), ps: nOr(d.PS_TTM), pcf: nOr(d.PCF_OCF_TTM),
-    peg: nOr(d.PEG_CAR), cap: nOr(d.TOTAL_MARKET_CAP),
-    board: d.BOARD_NAME || '', date: String(d.TRADE_DATE || '').slice(0, 10),
-  };
+  const t0 = Date.now();
+  const url = dcUrl('RPT_VALUEANALYSIS_DET', '(SECURITY_CODE="' + code + '")');
+  try {
+    const res = await fetch(url);
+    const j = await res.json();
+    const d = j && j.result && j.result.data && j.result.data[0];
+    if (!d) { qaAuditLog('东财估值 ' + code, url, t0, 0, '返回空'); return null; }
+    qaAuditLog('东财估值 ' + code, url, t0, 1);
+    return {
+      pe: nOr(d.PE_TTM), pb: nOr(d.PB_MRQ), ps: nOr(d.PS_TTM), pcf: nOr(d.PCF_OCF_TTM),
+      peg: nOr(d.PEG_CAR), cap: nOr(d.TOTAL_MARKET_CAP),
+      board: d.BOARD_NAME || '', date: String(d.TRADE_DATE || '').slice(0, 10),
+    };
+  } catch (e) { qaAuditLog('东财估值 ' + code, url, t0, 0, e.message || String(e)); throw e; }
 }
 
 /* 机构一致预期（东财数据中心 · 覆盖机构数 / 评级分布 / 目标价区间 / EPS 预测 / 概念板块） */
 async function emRating(code) {
-  const res = await fetch(dcUrl('RPT_WEB_RESPREDICT', '(SECURITY_CODE="' + code + '")'));
-  const j = await res.json();
-  const d = j && j.result && j.result.data && j.result.data[0];
-  if (!d) return null;
+  const t0 = Date.now();
+  const url = dcUrl('RPT_WEB_RESPREDICT', '(SECURITY_CODE="' + code + '")');
+  try {
+    const res = await fetch(url);
+    const j = await res.json();
+    const d = j && j.result && j.result.data && j.result.data[0];
+    if (!d) { qaAuditLog('东财评级预期 ' + code, url, t0, 0, '返回空'); return null; }
+    qaAuditLog('东财评级预期 ' + code, url, t0, 1);
   const eps = [[d.YEAR1, d.EPS1], [d.YEAR2, d.EPS2], [d.YEAR3, d.EPS3]]
     .filter(x => x[0] && x[1] != null).map(x => x[0] + 'E ' + Number(x[1]).toFixed(2));
   return {
@@ -236,53 +280,70 @@ async function emRating(code) {
     eps, board: d.INDUSTRY_BOARD || '',
     concepts: String(d.CONCEPTINDEX_BOARD || '').split(',').filter(Boolean).slice(0, 6),
   };
+  } catch (e) { qaAuditLog('东财评级预期 ' + code, url, t0, 0, e.message || String(e)); throw e; }
 }
 
 /* 最近公告 */
 async function emNotices(code, n) {
+  const t0 = Date.now();
   const url = 'https://np-anotice-stock.eastmoney.com/api/security/ann?sr=-1&page_size=' + (n || 6)
     + '&page_index=1&ann_type=A&client_source=web&stock_list=' + code;
-  const res = await fetch(url);
-  const j = await res.json();
-  return ((j.data && j.data.list) || []).map(x => ({
-    date: (x.notice_date || '').slice(0, 10),
-    title: String(x.title || '').replace(/^[^:：]{2,12}[:：]/, '').trim(),
-  }));
+  try {
+    const res = await fetch(url);
+    const j = await res.json();
+    const list = ((j.data && j.data.list) || []).map(x => ({
+      date: (x.notice_date || '').slice(0, 10),
+      title: String(x.title || '').replace(/^[^:：]{2,12}[:：]/, '').trim(),
+    }));
+    qaAuditLog('东财公告 ' + code, url, t0, list.length, list.length ? '' : '返回空');
+    return list;
+  } catch (e) { qaAuditLog('东财公告 ' + code, url, t0, 0, e.message || String(e)); throw e; }
 }
 
 /* 个股相关新闻（东财搜索 · JSONP） */
 async function emNews(name, n) {
+  const t0 = Date.now();
   const param = encodeURIComponent(JSON.stringify({
     uid: '', keyword: name, type: ['cmsArticleWebOld'], client: 'web', clientType: 'web', clientVersion: 'curr',
     param: { cmsArticleWebOld: { searchScope: 'default', sort: 'time', pageIndex: 1, pageSize: n || 6 } },
   }));
-  const res = await fetch('https://search-api-web.eastmoney.com/search/jsonp?cb=cb&param=' + param);
-  const text = await res.text();
-  const a = text.indexOf('('), b = text.lastIndexOf(')');
-  const j = parseJsonLoose(a >= 0 && b > a ? text.slice(a + 1, b) : text);
-  const list = (j && j.result && j.result.cmsArticleWebOld) || [];
-  return list.map(x => ({
-    date: String(x.date || '').slice(0, 10),
-    title: String(x.title || '').replace(/<\/?em>/g, '').trim(),
-    src: x.mediaName || '',
-  })).filter(x => x.title);
+  const url = 'https://search-api-web.eastmoney.com/search/jsonp?cb=cb&param=' + param;
+  try {
+    const res = await fetch(url);
+    const text = await res.text();
+    const a = text.indexOf('('), b = text.lastIndexOf(')');
+    const j = parseJsonLoose(a >= 0 && b > a ? text.slice(a + 1, b) : text);
+    const list = (j && j.result && j.result.cmsArticleWebOld) || [];
+    const out = list.map(x => ({
+      date: String(x.date || '').slice(0, 10),
+      title: String(x.title || '').replace(/<\/?em>/g, '').trim(),
+      src: x.mediaName || '',
+    })).filter(x => x.title);
+    qaAuditLog('东财资讯 ' + name, url, t0, out.length, out.length ? '' : '返回空');
+    return out;
+  } catch (e) { qaAuditLog('东财资讯 ' + name, url, t0, 0, e.message || String(e)); throw e; }
 }
 
 /* 当日分时（腾讯）：累计均价 vs 收盘 → 日内强弱与资金节奏 */
 async function emMinute(code) {
+  const t0 = Date.now();
   const sec = ({ sh: 'sh', sz: 'sz', bse: 'bj' })[marketOf(code)] + code;
-  const res = await fetch('https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=' + sec);
+  const url = 'https://web.ifzq.gtimg.cn/appstock/app/minute/query?code=' + sec;
+  let res;
+  try { res = await fetch(url); } catch (e) { qaAuditLog('腾讯分时 ' + code, url, t0, 0, e.message || String(e)); throw e; }
   const j = await res.json();
   const node = j && j.data && j.data[sec] && j.data[sec].data;
   const rows = (node && node.data) || [];
-  if (rows.length < 5) return null;
+  /* v3.9.13 分时不足 5 点（如集合竞价时段）明示「未获取到」，调用方按无数据处理 */
+  if (rows.length < 5) { qaAuditLog('腾讯分时 ' + code, url, t0, 0, '当日分时不足 5 点（非交易时段或停牌）'); return null; }
   const pts = [];
   for (const s of rows) {
     const p = String(s).split(' ');
     const price = parseFloat(p[1]), cumVol = parseFloat(p[2]) || 0, cumAmt = parseFloat(p[3]) || 0;
     if (isFinite(price)) pts.push({ t: p[0], price, cumVol, cumAmt });
   }
-  if (pts.length < 5) return null;
+  if (pts.length < 5) { qaAuditLog('腾讯分时 ' + code, url, t0, 0, '当日分时不足 5 点'); return null; }
+  qaAuditLog('腾讯分时 ' + code, url, t0, pts.length);
   const last = pts[pts.length - 1];
   const avg = last.cumVol > 0 ? last.cumAmt / (last.cumVol * 100) : null;   // 累计额 / (累计手 × 100) = 均价
   return {
@@ -295,10 +356,16 @@ async function emMinute(code) {
 
 /* 近期龙虎榜（东财数据中心 · 近 120 天席位买卖） */
 async function emBillboard(code) {
-  const res = await fetch(dcUrl('RPT_BILLBOARD_DAILYDETAILSBUY', '(SECURITY_CODE="' + code + '")', 60, 'TRADE_DATE', -1));
-  const j = await res.json();
+  const t0 = Date.now();
+  const url = dcUrl('RPT_BILLBOARD_DAILYDETAILSBUY', '(SECURITY_CODE="' + code + '")', 60, 'TRADE_DATE', -1);
+  let j;
+  try {
+    const res = await fetch(url);
+    j = await res.json();
+  } catch (e) { qaAuditLog('东财龙虎榜 ' + code, url, t0, 0, e.message || String(e)); throw e; }
   const rows = (j && j.result && j.result.data) || [];
-  if (!rows.length) return null;
+  if (!rows.length) { qaAuditLog('东财龙虎榜 ' + code, url, t0, 0, '近 120 天无上榜记录（正常，非错误）'); return null; }
+  qaAuditLog('东财龙虎榜 ' + code, url, t0, rows.length);
   const since = Date.now() - 120 * 864e5;
   const agg = new Map();
   for (const r of rows) {
@@ -1873,10 +1940,24 @@ function qaRouteByRule(q) {
        既多花一次调用、也可能被误判成市场取数；这里的附加条件是 resolveStockCode 认得出来，
        所以「创业板里站上 MA60 的股票」这类全市场问句不受影响（它已被上面的 screener 接走）。 */
     || (has(/\bMA\s*\d+/i) && !!resolveStockCode(t))) tool = 'tech';
+  /* v3.10.4 a-stock-data 移植技能：优先级在 market 之前（market 的关键词表里有「分红」，
+     不先判会被吃掉）。涨停类两分支：问原因/封板质量走同花顺揭秘，其余走东财四池；
+     负向守卫排除「涨停了吗 / 涨停价」这类个股行情问句（继续走 market/tech）。 */
+  else if (has(/涨停原因|封板率|封板成功率|涨停揭秘|涨停[^，。；]{0,8}(原因|题材)|(原因|题材)[^，。；]{0,8}涨停/)) tool = 'asd-thszt';
+  else if (has(/涨停池|涨停板|炸板|跌停池|连板|打板|最高板|晋级率|涨停情绪|涨停家数|涨停的股票|涨停了?/)
+    && !/涨停价|了吗|没有涨停|是否涨停/.test(t)) tool = 'asd-zt';
+  else if (has(/解禁/)) tool = 'asd-lockup';
+  else if (has(/可转债|转债|转股价值|转股溢价/)) tool = 'asd-cb';
+  else if (has(/业绩预告|预增|预亏|扭亏为盈/)) tool = 'asd-forecast';
+  else if (has(/LPR|lpr|贷款市场报价利率/)) tool = 'asd-lpr';
+  else if (has(/分红送转|分红历史|历年分红|派息|送股|转增/)) tool = 'asd-dividend';
   else if (has(/估值|市盈率|市净率|市值|现价|股价|价格|多少钱|多少元|报价|最新价|行情|涨跌幅|涨跌|换手|成交量|量比|财务|营收|收入|净利润|利润|ROE|净资产收益|毛利率|每股收益|业绩|年报|半年报|季报|公告|分红|减持|增持|回购|研报|评级|目标价|机构|新闻|资讯|消息|动态|资金流|主力|净流入|北向|股东/)) tool = 'market';
   if (!tool) return null;
-  // 组合级 / 全市场级工具无需标的
-  if (tool === 'review' || tool === 'risk' || tool === 'screener' || tool === 'sim') return { tool };
+  // 组合级 / 全市场级工具无需标的。v3.10.4 起asd-* 七个工具也免标的：
+  // 涨停四池 / 揭秘 / LPR / 可转债 / 业绩预告本来就是全市场口径；解禁 / 分红
+  // 由包装器内 skillPickCodes 用全市场字典解析（认不出会明示报错，不静默）。
+  if (tool === 'review' || tool === 'risk' || tool === 'screener' || tool === 'sim'
+    || tool.indexOf('asd-') === 0) return { tool };
   // 主题（公告 / 财务 / 综合）在拿到标的之前就能判，先算出来备用
   const topic = /公告|分红|减持|增持|回购|研报|评级|目标价|新闻|资讯|消息|动态/.test(t) ? 'notice'
     : /财务|营收|收入|净利润|利润|ROE|净资产收益|毛利率|业绩|年报|半年报|季报|每股收益/.test(t) ? 'finance' : 'all';
@@ -2555,6 +2636,410 @@ ${miss.length ? miss.map(x => '- ' + x).join('\n') : '- 五个维度均有数据
 /* ============================================================
    十二、主入口：判断是否需要跑工具 → 返回注入主回答的【工具计算结果】文本
    ============================================================ */
+/* ============================================================
+   第十五章 v3.10.4 a-stock-data 移植技能（免费直连，零 Key、不花 token 外的任何额度）
+   来源：github.com/simonlin1212/a-stock-data（Apache-2.0）。该项目本体是
+   「SKILL.md + 内嵌 Python」，浏览器跑不了 Python；这里把它目录里
+   浏览器可直连的 7 类端点用 JS 移植进来，取数逻辑与原项目一致，来源照实标注。
+   大模型只负责「问句 → 调哪个工具」，取数全部免费直连 —— 与用户预期的
+   「几乎不花费 token，只是大模型确定调用哪个」一致。
+   ============================================================ */
+
+/* 东财数据中心单页取数小助手（复用既有 dcUrl 的参数形状；ASD = a-stock-data）。
+   source=WEB&client=WEB 是原项目 _em_datacenter_strict 的必带参数 —— 缺了部分报表
+   （如 RPT_BOND_CB_LIST）会返回空，属于「参数不完整」而非「没数据」。 */
+async function asdDc(report, filter, size, sortCol, sortTypes, extra) {
+  let u = 'https://datacenter-web.eastmoney.com/api/data/v1/get?reportName=' + report
+    + '&columns=ALL&pageSize=' + (size || 20) + '&pageNumber=1'
+    + '&source=WEB&client=WEB';
+  if (sortCol) u += '&sortColumns=' + sortCol + '&sortTypes=' + (sortTypes == null ? -1 : sortTypes);
+  if (filter) u += '&filter=' + encodeURIComponent(filter);
+  if (extra) u += '&' + extra;
+  const t0 = Date.now();
+  try {
+    const res = await fetch(u);
+    const j = await res.json();
+    const rows = (j && j.result && j.result.data) || [];
+    qaAuditLog('a-stock-data ' + report, u, t0, rows.length, rows.length ? '' : (j && j.message) || '返回空');
+    return rows;
+  } catch (e) {
+    qaAuditLog('a-stock-data ' + report, u, t0, 0, e.message || String(e));
+    throw e;
+  }
+}
+
+/* —— 8.1 东财涨停板四池（push2ex，零鉴权） —— */
+const ASD_ZT_UT = '7eea3edcaed734bea9cbfc24409ed989';
+function asdZtTime(t) {
+  const s = String(t == null ? '' : t).padStart(6, '0');
+  return s.slice(0, 2) + ':' + s.slice(2, 4) + ':' + s.slice(4, 6);
+}
+async function asdZtApi(endpoint, sort, date) {
+  const t0 = Date.now();
+  const url = 'https://push2ex.eastmoney.com/' + endpoint + '?ut=' + ASD_ZT_UT
+    + '&dpt=wz.ztzt&Pageindex=0&pagesize=10000&sort=' + sort + '&date=' + date;
+  try {
+    const res = await fetch(url, { headers: { 'Referer': 'https://quote.eastmoney.com/' } });
+    const j = await res.json();
+    const pool = (j && j.data && j.data.pool) || [];
+    qaAuditLog('a-stock-data ' + endpoint, url, t0, pool.length, pool.length ? '' : '返回空（可能非交易日）');
+    return pool;
+  } catch (e) {
+    qaAuditLog('a-stock-data ' + endpoint, url, t0, 0, e.message || String(e));
+    return [];
+  }
+}
+function asdZtRow(p) {
+  return {
+    code: p.c, name: p.n, price: p.p / 1000, pct: Math.round(p.zdp * 100) / 100,
+    turnover: p.hs == null ? null : Math.round(p.hs * 100) / 100,
+    industry: p.hybk || '',
+    ztStat: String((p.zttj || {}).days || '?') + '天' + String((p.zttj || {}).ct || '?') + '板',
+  };
+}
+/* 问句里抠日期（2026-10-15 / 20261015 / 10月15日 …），缺省今天（北京时间） */
+function asdDateFromQ(q) {
+  const m = /(\d{4})[-/年.](\d{1,2})[-/月.](\d{1,2})/.exec(String(q || ''));
+  if (m) return m[1] + String(m[2]).padStart(2, '0') + String(m[3]).padStart(2, '0');
+  const d = new Date(Date.now() + 8 * 3600 * 1000);
+  const p = n => String(n).padStart(2, '0');
+  return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate());
+}
+async function asdZtPools(date) {
+  const [ztRaw, zbRaw, dtRaw, yzRaw] = await Promise.all([
+    asdZtApi('getTopicZTPool', 'fbt:asc', date),
+    asdZtApi('getTopicZBPool', 'fbt:asc', date),
+    asdZtApi('getTopicDTPool', 'fund:asc', date),
+    asdZtApi('getYesterdayZTPool', 'zs:desc', date),
+  ]);
+  const zt = ztRaw.map(p => Object.assign(asdZtRow(p), {
+    amount: p.amount, floatCap: p.ltsz, limitDays: p.lbc,
+    firstSeal: asdZtTime(p.fbt), lastSeal: asdZtTime(p.lbt), sealFund: p.fund, breakTimes: p.zbc,
+  }));
+  const zb = zbRaw.map(p => Object.assign(asdZtRow(p), {
+    limitPrice: p.ztp / 1000, firstSeal: asdZtTime(p.fbt), breakTimes: p.zbc, amp: p.zf,
+  }));
+  const dt = dtRaw.map(p => Object.assign(asdZtRow(p), {
+    sealFund: p.fund, lastSeal: asdZtTime(p.lbt), dtDays: p.days, openTimes: p.oc,
+  }));
+  const yz = yzRaw.map(p => Object.assign(asdZtRow(p), { amp: p.zf, yLimitDays: p.ylbc }));
+  /* 8.3 情绪速算：炸板率 / 最高连板 / 连板梯队 */
+  const ladder = {};
+  zt.forEach(s => { ladder[s.limitDays] = (ladder[s.limitDays] || 0) + 1; });
+  const sentiment = {
+    zt: zt.length, zb: zb.length, dt: dt.length,
+    breakRate: (zt.length + zb.length) ? Math.round(zb.length / (zt.length + zb.length) * 1000) / 10 : 0,
+    maxHeight: zt.reduce((m, s) => Math.max(m, s.limitDays || 0), 0),
+    ladder: Object.keys(ladder).sort((a, b) => a - b).map(k => k + '板' + ladder[k] + '家').join(' · ') || '—',
+  };
+  return { zt, zb, dt, yz, sentiment, date };
+}
+
+/* —— 8.2 同花顺涨停揭秘（原因题材 + 封板质量） ——
+   ⚠ 该接口未确认开放 CORS，浏览器可能读不到响应 —— 取不到就明示，绝不静默编造 */
+async function asdThsZt(date) {
+  const t0 = Date.now();
+  const url = 'https://data.10jqka.com.cn/dataapi/limit_up/limit_up_pool?page=1&limit=200'
+    + '&field=199112,10,9001,330323,330324,330325,9002,330329,133971,133970,1968584,3475914,9003,9004'
+    + '&filter=HS,GEM2STAR&order_field=330324&order_type=0&date=' + date;
+  try {
+    const res = await fetch(url);
+    const j = await res.json();
+    const info = (j && j.data && j.data.info) || [];
+    qaAuditLog('a-stock-data 同花顺涨停揭秘', url, t0, info.length, info.length ? '' : '返回空');
+    return info.map(it => ({
+      code: it.code, name: it.name, price: it.latest, pct: it.change_rate,
+      reason: it.reason_type || '', boardType: it.limit_up_type || '',
+      sealRate: it.limit_up_suc_rate == null ? null : Math.round(it.limit_up_suc_rate * 1000) / 10,
+      breakTimes: it.open_num || 0, highDays: it.high_days || '',
+      firstTime: it.first_limit_up_time ? new Date(it.first_limit_up_time * 1000).toTimeString().slice(0, 8) : '',
+    }));
+  } catch (e) {
+    qaAuditLog('a-stock-data 同花顺涨停揭秘', url, t0, 0, e.message || String(e) + '（可能被浏览器 CORS 拦截）');
+    throw new Error('同花顺涨停揭秘接口取不到（可能被浏览器跨域拦截）：' + (e.message || e));
+  }
+}
+
+/* —— 3.6 限售解禁（RPT_LIFT_STAGE） —— */
+async function asdLockup(code, days) {
+  const start = new Date().toISOString().slice(0, 10);
+  const end = new Date(Date.now() + (days || 90) * 86400000).toISOString().slice(0, 10);
+  const map = r => ({
+    date: String(r.FREE_DATE || '').slice(0, 10),
+    type: r.FREE_SHARES_TYPE || '',
+    shares: r.FREE_SHARES, ableShares: r.ABLE_FREE_SHARES,
+    ratio: r.FREE_RATIO == null ? null : Math.round(r.FREE_RATIO * 10000) / 100,   // 小数 → %
+  });
+  const hist = await asdDc('RPT_LIFT_STAGE', '(SECURITY_CODE="' + code + '")', 10, 'FREE_DATE', -1);
+  const up = await asdDc('RPT_LIFT_STAGE',
+    '(SECURITY_CODE="' + code + '")(FREE_DATE>=\'' + start + '\')(FREE_DATE<=\'' + end + '\')', 20, 'FREE_DATE', 1);
+  return { history: hist.map(map), upcoming: up.map(map), end: end };
+}
+
+/* —— 4.4 分红送转（RPT_SHAREBONUS_DET） —— */
+async function asdDividend(code) {
+  const rows = await asdDc('RPT_SHAREBONUS_DET', '(SECURITY_CODE="' + code + '")', 20, 'EX_DIVIDEND_DATE', -1);
+  return rows.map(r => ({
+    date: String(r.EX_DIVIDEND_DATE || '').slice(0, 10),
+    bonusRmb: r.PRETAX_BONUS_RMB, transfer: r.TRANSFER_RATIO, bonus: r.BONUS_RATIO,
+    progress: r.ASSIGN_PROGRESS || '',
+  }));
+}
+
+/* —— 14.1 业绩预告（RPT_PUBLIC_OP_NEWPREDICT）：code 空 = 全市场最新 30 条 —— */
+async function asdForecast(code) {
+  const rows = await asdDc('RPT_PUBLIC_OP_NEWPREDICT', code ? '(SECURITY_CODE="' + code + '")' : '',
+    30, 'NOTICE_DATE', -1);
+  const yi = v => (v == null || !isFinite(v)) ? null : Math.abs(v) >= 1e8 ? Math.round(v / 1e8 * 100) / 100 + '亿' : Math.round(v / 1e4) + '万';
+  return rows.map(r => ({
+    code: r.SECURITY_CODE, name: r.SECURITY_NAME_ABBR,
+    noticeDate: String(r.NOTICE_DATE || '').slice(0, 10), reportDate: String(r.REPORT_DATE || '').slice(0, 10),
+    indicator: r.PREDICT_FINANCE || '', type: r.PREDICT_TYPE || '',
+    range: (r.PREDICT_AMT_LOWER != null && r.PREDICT_AMT_UPPER != null)
+      ? yi(r.PREDICT_AMT_LOWER) + ' ~ ' + yi(r.PREDICT_AMT_UPPER) : '',
+    chg: (r.ADD_AMP_LOWER != null && r.ADD_AMP_UPPER != null)
+      ? r.ADD_AMP_LOWER + '% ~ ' + r.ADD_AMP_UPPER + '%' : '',
+    content: String(r.PREDICT_CONTENT || '').slice(0, 80),
+  }));
+}
+
+/* —— 11.5 LPR（RPTA_WEB_RATE）：全历史从 1991 年起远超 500 行，倒序取最近 12 期 —— */
+async function asdLpr() {
+  const rows = await asdDc('RPTA_WEB_RATE', '', 12, 'TRADE_DATE', -1);
+  const list = rows.filter(r => r.LPR1Y != null)
+    .map(r => ({ date: String(r.TRADE_DATE || '').slice(0, 10), y1: r.LPR1Y, y5: r.LPR5Y }));
+  return list.reverse();
+}
+
+/* —— 15.1 可转债（RPT_BOND_CB_LIST + 服务端报价列） ——
+   只拉最近上市约 1500 只（3 页）；历史摘牌不全，如实标注 —— */
+const ASD_CB_QUOTES = 'quoteColumns=' + encodeURIComponent(
+  'f2~01~CONVERT_STOCK_CODE~CONVERT_STOCK_PRICE,f235~10~SECURITY_CODE~TRANSFER_PRICE,'
+  + 'f236~10~SECURITY_CODE~TRANSFER_VALUE,f2~10~SECURITY_CODE~CURRENT_BOND_PRICE,'
+  + 'f237~10~SECURITY_CODE~TRANSFER_PREMIUM_RATIO') + '&quoteType=0';
+async function asdCb() {
+  let rows = [];
+  for (let p = 1; p <= 3; p++) {
+    const part = await asdDc('RPT_BOND_CB_LIST', '', 500, 'PUBLIC_START_DATE,SECURITY_CODE', '-1,1',
+      ASD_CB_QUOTES + '&pageNumber=' + p);
+    rows = rows.concat(part);
+    if (part.length < 500) break;
+  }
+  const today = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10);
+  return rows.map(r => {
+    const listing = String(r.LISTING_DATE || '').slice(0, 10);
+    const delist = String(r.DELIST_DATE || '').slice(0, 10);
+    return {
+      code: r.SECURITY_CODE, name: r.SECURITY_NAME_ABBR || r.SECURITY_NAME || '',
+      stockName: r.CONVERT_STOCK_NAME || '',
+      status: (delist && delist <= today) ? '已摘牌' : (listing && listing <= today) ? '交易中' : '未上市',
+      listing: listing, delist: delist,
+      convertPrice: r.CONVERT_PRICE, stockPrice: r.CONVERT_STOCK_PRICE,
+      bondPrice: r.CURRENT_BOND_PRICE, convValue: r.TRANSFER_VALUE,
+      premium: r.TRANSFER_PREMIUM_RATIO,
+    };
+  });
+}
+
+/* ---------- 工具包装器（问句 → 便签 + 数据表 + 给模型的 block） ---------- */
+const ASD_SRC_TXT = 'a-stock-data 移植 · 东财公开接口（免费、无 Key）';
+
+function asdTable(entity, head, rows, srcTxt) {
+  return { entity: entity, ts: false, note: '数据来源：' + (srcTxt || ASD_SRC_TXT) + '｜抓取于 ' + new Date().toLocaleString('zh-CN'), head: head, rows: rows };
+}
+function asdBlock(title, question, r, notes) {
+  return '【工具计算结果 · ' + title + '（a-stock-data 移植 · 免费公开接口）】\n'
+    + '用户原始问句：\n' + question + '\n'
+    + (notes || '') + '\n'
+    + '以下是接口真实返回（表头 + 数据行），禁止改动任何数字、禁止补充表里没有的内容：\n'
+    + qaTablesToText(r, 60) + '\n\n'
+    + '【回答要求（全文 900 字以内）】\n'
+    + '1. 用 Markdown 表格呈现，只列用户关心的列；表里没有的写「—」，不要臆造。\n'
+    + '2. 数据为抓取时点快照，结尾声明不构成投资建议。';
+}
+
+async function qaToolAsdZt(question) {
+  const date = asdDateFromQ(question);
+  const r = await asdZtPools(date);
+  const s = r.sentiment;
+  if (!s.zt && !s.zb && !s.dt) throw new Error('涨停板四池当日为空（' + date + '，可能是非交易日或接口改版）');
+  const tables = [];
+  if (r.zt.length) tables.push(asdTable('涨停池（' + r.zt.length + ' 只）',
+    ['代码', '名称', '现价', '涨幅%', '连板', '几天几板', '首封', '封板资金(亿)', '炸板次', '行业'],
+    r.zt.slice(0, 30).map(x => [x.code, x.name, x.price, x.pct, x.limitDays, x.ztStat, x.firstSeal,
+      x.sealFund == null ? '—' : Math.round(x.sealFund / 1e8 * 100) / 100, x.breakTimes || 0, x.industry])));
+  if (r.zb.length) tables.push(asdTable('炸板池（' + r.zb.length + ' 只）',
+    ['代码', '名称', '现价', '涨幅%', '涨停价', '炸板次', '几天几板', '行业'],
+    r.zb.slice(0, 20).map(x => [x.code, x.name, x.price, x.pct, x.limitPrice, x.breakTimes || 0, x.ztStat, x.industry])));
+  if (r.dt.length) tables.push(asdTable('跌停池（' + r.dt.length + ' 只）',
+    ['代码', '名称', '现价', '跌幅%', '连续跌停', '开板次', '行业'],
+    r.dt.slice(0, 20).map(x => [x.code, x.name, x.price, x.pct, x.dtDays || 0, x.openTimes || 0, x.industry])));
+  if (r.yz.length) tables.push(asdTable('昨涨停今日表现（' + r.yz.length + ' 只）',
+    ['代码', '名称', '现价', '今日涨幅%', '昨连板', '几天几板', '行业'],
+    r.yz.slice(0, 20).map(x => [x.code, x.name, x.price, x.pct, x.yLimitDays, x.ztStat, x.industry])));
+  const out = { tables: tables };
+  return {
+    icon: '🚦',
+    title: '涨停板四池与打板情绪已取回（' + date + '）',
+    lines: [
+      '涨停 ' + s.zt + ' · 炸板 ' + s.zb + '（炸板率 ' + s.breakRate + '%）· 跌停 ' + s.dt,
+      '最高连板 ' + s.maxHeight + ' 板 ｜ 连板梯队：' + s.ladder,
+      '数据来源：东财涨停板行情中心（免费、无 Key）· a-stock-data 移植',
+    ],
+    html: qaTableHtml(out, 20),
+    skills: [{ id: 'asd-zt', name: '涨停板四池 · 打板情绪', ms: 0 }],
+    block: asdBlock('涨停板四池 · 打板情绪', question, out,
+      '情绪速算（由四池计算）：涨停' + s.zt + ' 炸板' + s.zb + '（炸板率' + s.breakRate + '%）跌停' + s.dt
+      + '，最高' + s.maxHeight + '连板，连板梯队：' + s.ladder + '。'),
+  };
+}
+
+async function qaToolAsdThsZt(question) {
+  const date = asdDateFromQ(question);
+  const list = await asdThsZt(date);
+  if (!list.length) throw new Error('同花顺涨停揭秘当日为空（' + date + '）');
+  const out = { tables: [asdTable('涨停揭秘 · 原因题材（前 30，共 ' + list.length + '）',
+    ['代码', '名称', '现价', '涨幅%', '涨停原因', '板型', '封板率%', '炸板次', '几天几板', '首封时间'],
+    list.slice(0, 30).map(x => [x.code, x.name, x.price, x.pct, x.reason, x.boardType,
+      x.sealRate == null ? '—' : x.sealRate, x.breakTimes, x.highDays, x.firstTime]))] };
+  return {
+    icon: '🔥',
+    title: '涨停原因题材已取回（' + date + '）',
+    lines: [
+      '共 ' + list.length + ' 只涨停（沪深主板+创业板+科创板口径）',
+      '数据来源：同花顺涨停揭秘公开接口（免费、无 Key）· a-stock-data 移植',
+    ],
+    html: qaTableHtml(out, 20),
+    skills: [{ id: 'asd-thszt', name: '涨停揭秘 · 原因题材', ms: 0 }],
+    block: asdBlock('涨停揭秘 · 原因题材', question, out),
+  };
+}
+
+async function qaToolAsdLockup(question) {
+  const codes = await skillPickCodes(question, 1).catch(() => []);
+  if (!codes.length) throw new Error('没有从问句里认出股票（解禁查询需要指定个股），请带上股票名称或代码');
+  const code = codes[0];
+  const name = (state.stockDict[code] && state.stockDict[code].name) || code;
+  const r = await asdLockup(code, 90);
+  const rows = r.upcoming.map(u => [u.date, u.type, u.shares, u.ableShares, u.ratio == null ? '—' : u.ratio + '%']);
+  const out = { tables: [
+    asdTable(name + '（' + code + '）· 未来 90 天待解禁（' + r.upcoming.length + ' 次）',
+      ['解禁日', '解禁类型', '解禁股数(万股)', '实际可流通(万股)', '占总股本'],
+      rows.length ? rows : [['（未来 90 天无解禁）', '', '', '', '']]),
+    asdTable(name + '（' + code + '）· 解禁历史（最近 10 次）',
+      ['解禁日', '解禁类型', '解禁股数(万股)', '实际可流通(万股)', '占总股本'],
+      r.history.length ? r.history.map(u => [u.date, u.type, u.shares, u.ableShares, u.ratio == null ? '—' : u.ratio + '%'])
+        : [['（无历史记录）', '', '', '', '']]),
+  ] };
+  return {
+    icon: '🔓',
+    title: name + ' 限售解禁已取回',
+    lines: [
+      '未来 90 天解禁 ' + r.upcoming.length + ' 次；历史 ' + r.history.length + ' 次',
+      '数据来源：东财公开数据中心（免费、无 Key）· a-stock-data 移植',
+    ],
+    html: qaTableHtml(out, 20),
+    skills: [{ id: 'asd-lockup', name: '限售解禁', ms: 0 }],
+    block: asdBlock('限售解禁', question, out),
+  };
+}
+
+async function qaToolAsdDividend(question) {
+  const codes = await skillPickCodes(question, 1).catch(() => []);
+  if (!codes.length) throw new Error('没有从问句里认出股票（分红查询需要指定个股），请带上股票名称或代码');
+  const code = codes[0];
+  const name = (state.stockDict[code] && state.stockDict[code].name) || code;
+  const list = await asdDividend(code);
+  const out = { tables: [asdTable(name + '（' + code + '）· 分红送转历史（' + list.length + ' 次）',
+    ['除权除息日', '每股派息(税前,元)', '每10股送股', '每10股转增', '进度'],
+    list.length ? list.map(d => [d.date, d.bonusRmb == null ? '—' : d.bonusRmb, d.bonus == null ? '—' : d.bonus,
+      d.transfer == null ? '—' : d.transfer, d.progress]) : [['（无分红记录）', '', '', '', '']])] };
+  return {
+    icon: '💰',
+    title: name + ' 分红送转历史已取回',
+    lines: [
+      '共 ' + list.length + ' 条分红记录',
+      '数据来源：东财公开数据中心（免费、无 Key）· a-stock-data 移植',
+    ],
+    html: qaTableHtml(out, 20),
+    skills: [{ id: 'asd-dividend', name: '分红送转', ms: 0 }],
+    block: asdBlock('分红送转历史', question, out),
+  };
+}
+
+async function qaToolAsdForecast(question) {
+  const codes = await skillPickCodes(question, 1).catch(() => []);
+  const code = codes[0] || '';
+  const list = await asdForecast(code);
+  if (!list.length) throw new Error('业绩预告接口返回空（该股可能没有预告，或数据源临时不可用）');
+  const name = code ? ((state.stockDict[code] && state.stockDict[code].name) || code) : '全市场';
+  const out = { tables: [asdTable(
+    code ? name + '（' + code + '）· 业绩预告' : '全市场最新业绩预告（30 条）',
+    ['代码', '名称', '公告日', '报告期', '指标', '类型', '预计区间', '同比变动', '内容摘要'],
+    list.map(f => [f.code, f.name, f.noticeDate, f.reportDate, f.indicator, f.type, f.range || '—', f.chg || '—', f.content]))] };
+  return {
+    icon: '📢',
+    title: (code ? name + ' ' : '') + '业绩预告已取回（' + list.length + ' 条）',
+    lines: [
+      code ? '个股口径' : '全市场口径（按公告日倒序前 30 条）',
+      '数据来源：东财公开数据中心（免费、无 Key）· a-stock-data 移植',
+    ],
+    html: qaTableHtml(out, 20),
+    skills: [{ id: 'asd-forecast', name: '业绩预告', ms: 0 }],
+    block: asdBlock('业绩预告', question, out),
+  };
+}
+
+async function qaToolAsdLpr() {
+  const list = await asdLpr();
+  if (!list.length) throw new Error('LPR 接口返回空（数据源临时不可用）');
+  const out = { tables: [asdTable('LPR 贷款市场报价利率（最近 ' + list.length + ' 期）',
+    ['日期', '1 年 LPR(%)', '5 年以上 LPR(%)'],
+    list.map(x => [x.date, x.y1, x.y5]))] };
+  const last = list[list.length - 1];
+  return {
+    icon: '🏦',
+    title: 'LPR 已取回（最新 ' + last.date + '）',
+    lines: [
+      '最新：1 年 ' + last.y1 + '% ｜ 5 年以上 ' + last.y5 + '%',
+      '数据来源：东财公开数据中心（免费、无 Key）· a-stock-data 移植',
+    ],
+    html: qaTableHtml(out, 20),
+    skills: [{ id: 'asd-lpr', name: 'LPR 利率', ms: 0 }],
+    block: asdBlock('LPR 利率', 'LPR 利率历史', out),
+  };
+}
+
+async function qaToolAsdCb(question) {
+  const wantListed = !/摘牌|退市/.test(String(question || ''));
+  let list = await asdCb();
+  const total = list.length;
+  list = list.filter(b => wantListed ? b.status === '交易中' : true);
+  if (!list.length) throw new Error('可转债接口返回空（数据源临时不可用）');
+  /* 问句里点名了具体转债/正股 → 过滤 */
+  const kw = String(question || '').replace(/的可转债|转债|列出|看看|查询|哪些|什么/g, '').trim();
+  const hit = kw.length >= 2 ? list.filter(b => (b.name || '').indexOf(kw) >= 0 || (b.stockName || '').indexOf(kw) >= 0) : [];
+  const show = (hit.length ? hit : list).slice(0, 30);
+  const out = { tables: [asdTable(
+    (hit.length ? '命中「' + kw + '」的转债（' + hit.length + ' 只）' : '交易中可转债（按上市日倒序前 30，共约 ' + list.length + ' 只）'),
+    ['代码', '转债', '正股', '状态', '转股价', '正股价', '债价', '转股价值', '溢价率%', '上市日'],
+    show.map(b => [b.code, b.name, b.stockName, b.status, b.convertPrice == null ? '—' : b.convertPrice,
+      b.stockPrice == null ? '—' : b.stockPrice, b.bondPrice == null ? '—' : b.bondPrice,
+      b.convValue == null ? '—' : b.convValue, b.premium == null ? '—' : b.premium, b.listing]))] };
+  return {
+    icon: '💱',
+    title: '可转债已取回（' + (hit.length ? '命中 ' + hit.length : '交易中约 ' + list.length) + ' 只）',
+    lines: [
+      '接口共取回 ' + total + ' 只（最近上市约 1500 只口径，历史摘牌不全——如实标注）',
+      '数据来源：东财公开数据中心（免费、无 Key）· a-stock-data 移植',
+    ],
+    html: qaTableHtml(out, 20),
+    skills: [{ id: 'asd-cb', name: '可转债', ms: 0 }],
+    block: asdBlock('可转债', question, out,
+      '说明：行情类字段由东财服务端按最新报价填入（盘中实时、停牌为空）。转股价值 = 100 / 转股价 × 正股价；溢价率 = 债价 / 转股价值 − 1。'),
+  };
+}
+
 async function qaRunTools(question, box, holder) {
   if (!question || question.length > 500) return '';
   const convId = qaState.conversationId;      // 会话快照：切走后便签不插到别的会话
@@ -2566,6 +3051,10 @@ async function qaRunTools(question, box, holder) {
   if (!intent || intent.tool === 'none' || !intent.tool) return '';
   let res = null;
   try {
+    /* v3.9.13 审计：本轮问答触发的所有网络调用标上「智能问答·工具名」。
+       注意：不能写 res = await withCtx(...) —— withCtx 的返回值会把闭包内
+       对 res 的赋值覆盖成 undefined，工具结果就丢了。 */
+    await NetLog.withCtx('智能问答·' + intent.tool + '：' + String(question).slice(0, 24), async () => {
     if (intent.tool === 'screener') {
       const parsed = parseScreenQuery(question);
       // 「XX 板块/概念/指数成分股」这类问法没有数值条件 → 走免费的「板块/概念成分股」
@@ -2582,6 +3071,15 @@ async function qaRunTools(question, box, holder) {
     else if (intent.tool === 'review') res = await qaToolReview();
     else if (intent.tool === 'diag') res = await qaToolDiag(intent);
     else if (intent.tool === 'market') res = await qaToolMarketAuto(question);
+  /* v3.10.4 a-stock-data 移植技能：按开关放行，停用即交给模型（与技能中心开关真实联动） */
+    else if (intent.tool === 'asd-zt') res = skillEnabled('asd-zt') ? await qaToolAsdZt(question) : null;
+    else if (intent.tool === 'asd-thszt') res = skillEnabled('asd-thszt') ? await qaToolAsdThsZt(question) : null;
+    else if (intent.tool === 'asd-lockup') res = skillEnabled('asd-lockup') ? await qaToolAsdLockup(question) : null;
+    else if (intent.tool === 'asd-dividend') res = skillEnabled('asd-dividend') ? await qaToolAsdDividend(question) : null;
+    else if (intent.tool === 'asd-forecast') res = skillEnabled('asd-forecast') ? await qaToolAsdForecast(question) : null;
+    else if (intent.tool === 'asd-lpr') res = skillEnabled('asd-lpr') ? await qaToolAsdLpr() : null;
+    else if (intent.tool === 'asd-cb') res = skillEnabled('asd-cb') ? await qaToolAsdCb(question) : null;
+    });
   } catch (e) {
     return `【工具执行失败】${intent.tool}：${e && e.message || e}。请如实告诉用户该工具本次执行失败，建议稍后重试或去对应功能页操作。`;
   }
@@ -2781,7 +3279,7 @@ const MX_API_URL = 'https://mkapi2.dfcfs.com/finskillshub/api/claw/query';
 /* 妙想免费额度有 QPS 限制：实测 2 秒内连发两次会拿到 code 112。全局最小间隔串行排队，
    遇到 112 自动退避重试一次，上层调用不用关心限流细节。 */
 const MX_MIN_GAP = 1800;
-const SKILL_SEED_V = 1;   // 调整 SKILL_CATALOG 清单时 +1，老用户下次打开自动补装/清理
+const SKILL_SEED_V = 2;   // 调整 SKILL_CATALOG 清单时 +1，老用户下次打开自动补装/清理
 
 /* 本机存储兜底：隐私模式 / 测试环境（vm）里 localStorage 可能不存在 */
 const _memStore = {};
@@ -2813,6 +3311,29 @@ const SKILL_CATALOG = [
     desc: 'FIFO 买卖配对、交易行为评分、阶段总结。' },
   { id: 'em-risk', name: '组合风险', icon: '🛡', vendor: 'em', src: '本机持仓 + 腾讯公开行情（免费）',
     desc: '持仓集中度、相关性、Beta、压力测试。' },
+  // ---------- a-stock-data 移植 7 个（github.com/simonlin1212/a-stock-data，Apache-2.0；
+  // 浏览器 JS 直连同款免费接口，逻辑移植、来源照实标注） ----------
+  { id: 'asd-zt', name: '涨停板四池 · 打板情绪', icon: '🚦', vendor: 'asd',
+    src: '东财涨停板行情中心 push2ex（免费、无 Key）— 移植自开源项目 a-stock-data',
+    desc: '涨停 / 炸板 / 跌停 / 昨涨停四池 + 情绪速算（炸板率、最高连板、连板梯队）。「今日涨停池」「打板情绪」。「最高连板」。' },
+  { id: 'asd-thszt', name: '涨停揭秘 · 原因题材', icon: '🔥', vendor: 'asd',
+    src: '同花顺涨停揭秘公开接口（免费、无 Key）— 移植自 a-stock-data（浏览器跨域不确定，取不到会明示）',
+    desc: '涨停原因题材、板型（一字 / T字 / 换手板）、封板成功率、几天几板。「今天涨停的股票都是什么原因」。' },
+  { id: 'asd-lockup', name: '限售解禁', icon: '🔓', vendor: 'asd',
+    src: '东财公开数据中心 RPT_LIFT_STAGE（免费、无 Key）— 移植自 a-stock-data',
+    desc: '个股解禁历史 + 未来 90 天待解禁（股数 / 占总股本比）。「中兴通讯什么时候解禁」。' },
+  { id: 'asd-dividend', name: '分红送转', icon: '💰', vendor: 'asd',
+    src: '东财公开数据中心 RPT_SHAREBONUS_DET（免费、无 Key）— 移植自 a-stock-data',
+    desc: '分红送转历史：每股派息 / 送股 / 转增 / 进度。「茅台历年分红」。' },
+  { id: 'asd-forecast', name: '业绩预告', icon: '📢', vendor: 'asd',
+    src: '东财公开数据中心 RPT_PUBLIC_OP_NEWPREDICT（免费、无 Key）— 移植自 a-stock-data',
+    desc: '个股或全市场最新业绩预告（预增 / 预亏 / 净利润区间与同比）。「最近有哪些业绩预增」。' },
+  { id: 'asd-lpr', name: 'LPR 利率', icon: '🏦', vendor: 'asd',
+    src: '东财公开数据中心 RPTA_WEB_RATE（免费、无 Key）— 移植自 a-stock-data',
+    desc: 'LPR 1 年 / 5 年报价历史（最近 12 期）。「现在 LPR 多少」。' },
+  { id: 'asd-cb', name: '可转债', icon: '💱', vendor: 'asd',
+    src: '东财公开数据中心 RPT_BOND_CB_LIST（免费、无 Key）— 移植自 a-stock-data',
+    desc: '可转债条款 + 债价 / 正股价 / 转股价值 / 溢价率（最近上市约 1500 只，历史摘牌不全会如实标注）。' },
   // ---------- 妙想官方 6 个（与妙想 App 配额页一一对应；额度各自独立、按自然日刷新） ----------
   { id: 'mx-finance-data', name: '妙想 · 金融数据', icon: '📊', vendor: 'mx', quota: 150, support: 'full',
     src: '东方财富妙想 Skills（需 mkt_ Key，每日 150 次免费额度）',
@@ -2947,11 +3468,19 @@ async function mxQuery(question, o) {
       const code = (j && typeof j.code === 'number' && j.code !== 0) ? j.code : 0;
       if (code) {
         if (code === 112 && attempt < 1) { await new Promise(res => setTimeout(res, 4200)); continue; }
+        /* v3.9.13 审计：妙想调用失败明示（错误码 + 人话原因） */
+        NetLog.push('dc', '妙想技能 ' + String(question).slice(0, 20), false, Date.now() - t0,
+          '未获取到：' + mxErrText(code, j && j.message),
+          { url: MX_API_URL, req: 'toolQuery=' + String(question).slice(0, 120), err: 'code=' + code + ' ' + (j && j.message || '') });
         const e = new Error(mxErrText(code, j && j.message)); e.mxCode = code; throw e;
       }
       if (!j || j.success === false) throw new Error((j && (j.message || j.msg)) || '妙想接口返回失败');
       const norm = mxNormalize(j);
       norm.ms = Date.now() - t0;
+      /* v3.9.13 审计：妙想返回行数（空表也如实记 0 行） */
+      NetLog.push('dc', '妙想技能 ' + String(question).slice(0, 20), true, Date.now() - t0,
+        (norm.rows || []).length + ' 行',
+        { url: MX_API_URL, req: 'toolQuery=' + String(question).slice(0, 120), resp: (norm.rows || []).length + ' 行' });
       return norm;
     }
   });
@@ -3028,10 +3557,13 @@ const QA_SKILL_SRC = {
   'em-review': '本机记录', 'em-risk': '本机+公开行情',
   'em-实时行情': '腾讯行情', 'em-当日分时': '腾讯行情', 'em-财务': '东财数据中心', 'em-估值': '东财数据中心',
   'em-评级': '东财数据中心', 'em-公告': '东财公告接口', 'em-资讯': '东财资讯搜索',
+  'asd-zt': '东财打板池', 'asd-thszt': '同花顺涨停揭秘', 'asd-lockup': '东财数据中心',
+  'asd-dividend': '东财数据中心', 'asd-forecast': '东财数据中心', 'asd-lpr': '东财数据中心', 'asd-cb': '东财数据中心',
 };
 function qaSkillSrc(id) {
   if (QA_SKILL_SRC[id]) return QA_SKILL_SRC[id];
   if (String(id || '').indexOf('mx-') === 0) return '妙想Key';
+  if (String(id || '').indexOf('asd-') === 0) return 'a-stock-data 移植';
   if (String(id || '').indexOf('em-') === 0) return '免费公开数据';
   return '';
 }
@@ -3039,9 +3571,11 @@ function qaSkillSrc(id) {
 /* ---------- 问答页技能状态条（输入框上方一行小字，随技能/Key 变化刷新） ---------- */
 function qaSkillHintText() {
   const em = skillEnabledOfVendor('em').length;
+  const asd = skillEnabledOfVendor('asd').length;
   const mx = skillEnabledOfVendor('mx');
-  if (!em && !mx.length) return '取数技能：未启用任何技能，问答只用模型自身知识回答';
+  if (!em && !asd && !mx.length) return '取数技能：未启用任何技能，问答只用模型自身知识回答';
   let s = '取数技能：' + em + ' 个内置（免费公开数据，无需 Key）';
+  if (asd) s += ' ＋ ' + asd + ' 个 a-stock-data 移植（免费公开接口，无需 Key）';
   if (mx.length) s += ' ＋ ' + mx.length + ' 个妙想（' + (mxKeyGet() ? 'Key 已配置 ' + mxKeyMask() : '待配置 Key：设置 → 技能') + '）';
   return s;
 }
@@ -3086,8 +3620,10 @@ function renderSkillCenter() {
     if (offBlock) offBlock.hidden = !removed.length;
   }
   if (sum) {
-    const em = skillEnabledOfVendor('em').length, mx = skillEnabledOfVendor('mx').length;
-    sum.textContent = '已启用 ' + (em + mx) + ' 个技能：' + em + ' 个内置免费（无需 Key）+ ' + mx + ' 个妙想'
+    const em = skillEnabledOfVendor('em').length, asd = skillEnabledOfVendor('asd').length,
+      mx = skillEnabledOfVendor('mx').length;
+    sum.textContent = '已启用 ' + (em + asd + mx) + ' 个技能：' + em + ' 个内置免费（无需 Key）+ '
+      + asd + ' 个 a-stock-data 移植（免费公开接口，无需 Key）+ ' + mx + ' 个妙想'
       + (mx ? (mxKeyGet() ? '（Key 已配置）' : '（待配置 Key）') : '')
       + '。只有已启用的技能才会被问答调用；停用即真正关闭该能力。';
   }

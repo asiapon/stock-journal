@@ -15,7 +15,12 @@
    stock-journal-07300）并逐字复刻整套 7 表 / 15 函数云库。
    旧应用 stock-journal-84311、trade-journal-94951 及各自数据保持不变、互不影响 */
 const CLOUD_HOST = 'https://stock-journal-07300.app.workbuddy.host';
-const RPC_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:')
+/* v3.10.2 RPC 路由规则改为「本站相对路径优先」：
+   · file: 协议打开 → 云端绝对地址（维持旧行为，本地页面也能连云）
+   · 其余一律走本站相对路径 —— 云端托管时本站就是云端（与旧行为等价）；
+     自托管时（localhost / 局域网 IP / 自己的域名）自动命中自己的后端，前端零配置。
+   旧规则「localhost 一律连云端」会让自托管后端被绕过，故废弃。 */
+const RPC_BASE = (location.protocol === 'file:')
   ? CLOUD_HOST + '/.cloud/database/rest/rpc'
   : '/.cloud/database/rest/rpc';
 const ACCESS_KEY = 'wbpk_mtCmnoJVwocZG4iRlx6CMe_NtYKw83A5VMgiaYhXnfV80AIGKO1rMbm';
@@ -79,7 +84,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.9.11';
+const APP_VER = '3.10.4';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -422,23 +427,64 @@ function quoteMap() {
    v3.8.23 网络日志：所有网络调用（云RPC / 行情 / K线）统一记录
    内存环 + localStorage 持久化；「我的 → 数据管理」可下载 .log 文件
    ============================================================ */
+/* v3.9.13 网络日志升级为「审计级」：此前每条只有 kind/name/ms/detail，
+   看不出「哪个功能触发的、调了哪个接口、参数是什么、返回了什么」，
+   股票数据没法核对准确性。现在每条记录带：
+   src（触发来源：功能·操作，由 NetLog.withCtx 压栈自动带上）
+   url（请求地址）req（请求参数摘要）resp（返回摘要）err（失败原因）
+   取不到数据时如实记 FAIL + 原因，绝不静默编造。 */
 const NetLog = {
   buf: [],
   max: 800,
   _saveT: null,
+  _ctx: [],                                    // 触发来源栈（后进先出）
   load() { try { this.buf = JSON.parse(localStorage.getItem('sj_netlog') || '[]'); } catch (e) { this.buf = []; } },
-  push(kind, name, ok, ms, detail) {
-    const e = { t: new Date().toISOString(), kind, name, ok: !!ok, ms: Math.round(ms), detail: detail || '' };
+  /* withCtx('功能·操作', fn)：fn 同步或返回 Promise 均可，结束后恢复原栈。
+     并发交错时以最内层为准（恢复按快照，尽力而为）——本项目数据调用基本是用户顺序触发，够用。 */
+  withCtx(label, fn) {
+    const prev = this._ctx.slice();
+    this._ctx.push(label);
+    try {
+      const r = fn();
+      if (r && typeof r.then === 'function') return r.finally(() => { this._ctx = prev; });
+      this._ctx = prev;
+      return r;
+    } catch (e) { this._ctx = prev; throw e; }
+  },
+  curCtx() { return this._ctx[this._ctx.length - 1] || ''; },
+  _cut(s, n) { s = String(s == null ? '' : s); return s.length > n ? s.slice(0, n) + '…' : s; },
+  push(kind, name, ok, ms, detail, extra) {
+    const x = extra || {};
+    const e = {
+      t: new Date().toISOString(), kind, name, ok: !!ok, ms: Math.round(ms),
+      detail: this._cut(detail, 400),
+      src: this._cut(x.src != null ? x.src : this.curCtx(), 120),
+      url: this._cut(x.url, 400),
+      req: this._cut(x.req, 300),
+      resp: this._cut(x.resp, 300),
+      err: this._cut(x.err != null ? x.err : (ok ? '' : detail), 300),
+    };
     this.buf.unshift(e);
     if (this.buf.length > this.max) this.buf.length = this.max;
     clearTimeout(this._saveT);
     this._saveT = setTimeout(() => {
-      try { localStorage.setItem('sj_netlog', JSON.stringify(this.buf.slice(0, 300))); } catch (err) { /* 存储满则只在内存 */ }
+      try { localStorage.setItem('sj_netlog', JSON.stringify(this.buf.slice(0, 200))); } catch (err) { /* 存储满则只在内存 */ }
     }, 1500);
     if (!ok) console.warn('[net-fail]', kind, name, detail, Math.round(ms) + 'ms');
   },
+  /* 下载文本：一条一块、带标签行，缺的字段不输出（不像旧版挤在一行什么都要猜） */
   text() {
-    return this.buf.map(e => `${e.t} [${e.ok ? 'OK' : 'FAIL'}] ${e.kind} ${e.name} ${e.ms}ms${e.detail ? ' | ' + e.detail : ''}`).join('\n');
+    return this.buf.map((e, i) => {
+      const lines = [
+        `#${this.buf.length - i} ${e.t} [${e.ok ? 'OK' : 'FAIL 未获取到'}] ${e.kind} ${e.name} ${e.ms}ms`,
+      ];
+      if (e.src) lines.push('  触发：' + e.src);
+      if (e.url) lines.push('  请求：' + e.url);
+      if (e.req && e.req !== e.url) lines.push('  参数：' + e.req);
+      lines.push(e.ok ? ('  返回：' + (e.resp || e.detail || '(空)')) : ('  错误：' + (e.err || e.detail || '未知')));
+      if (e.ok && e.resp && e.detail && e.resp !== e.detail) lines.push('  摘要：' + e.detail);
+      return lines.join('\n');
+    }).join('\n');
   },
   clear() { this.buf = []; try { localStorage.removeItem('sj_netlog'); } catch (e) { /* */ } }
 };
@@ -510,10 +556,12 @@ const NetQuote = {
       }
       /* 东财快照不带时间戳字段，报价时间取本机当前时间（误差≈请求耗时） */
       if (out.size) qt = new Date().toTimeString().slice(0, 8);
-      NetLog.push('quote', '东财 push2.eastmoney.com', out.size > 0, Date.now() - t0, `${out.size}/${syms.length} 只`);
+      /* v3.9.13 审计：URL + 覆盖数；缺的票如实记「未返回」 */
+      NetLog.push('quote', '东财 push2.eastmoney.com', out.size > 0, Date.now() - t0, `${out.size}/${syms.length} 只`,
+        { url, resp: `${out.size}/${syms.length} 只` + (out.size < syms.length ? `（未返回 ${syms.length - out.size} 只）` : '') });
       return out.size ? { out, qt } : null;
     } catch (e) {
-      NetLog.push('quote', '东财 push2.eastmoney.com', false, Date.now() - t0, e.message || String(e));
+      NetLog.push('quote', '东财 push2.eastmoney.com', false, Date.now() - t0, e.message || String(e), { err: e.message || String(e) });
       return null;
     }
   },
@@ -521,7 +569,8 @@ const NetQuote = {
   async fetchTx(syms) {
     const t0 = Date.now();
     try {
-      const res = await fetch('https://qt.gtimg.cn/q=' + syms.join(','));
+      const url = 'https://qt.gtimg.cn/q=' + syms.join(',');
+      const res = await fetch(url);
       const buf = await res.arrayBuffer();
       const text = new TextDecoder('gbk').decode(buf);
       const out = new Map(); let qt = '';
@@ -535,10 +584,11 @@ const NetQuote = {
           prevClose: num(p[4]), open: num(p[5]), high: num(p[33]), low: num(p[34]) });
         if (p[30] && p[31]) qt = p[30].replace(/^(\d{4})(\d{2})(\d{2})$/, '$1-$2-$3') + ' ' + p[31];
       }
-      NetLog.push('quote', '腾讯 qt.gtimg.cn', out.size > 0, Date.now() - t0, `${out.size}/${syms.length} 只`);
+      NetLog.push('quote', '腾讯 qt.gtimg.cn', out.size > 0, Date.now() - t0, `${out.size}/${syms.length} 只`,
+        { url, resp: `${out.size}/${syms.length} 只` + (out.size < syms.length ? `（未返回 ${syms.length - out.size} 只）` : '') });
       return out.size ? { out, qt } : null;
     } catch (e) {
-      NetLog.push('quote', '腾讯 qt.gtimg.cn', false, Date.now() - t0, e.message || String(e));
+      NetLog.push('quote', '腾讯 qt.gtimg.cn', false, Date.now() - t0, e.message || String(e), { err: e.message || String(e) });
       return null;
     }
   },
@@ -586,8 +636,10 @@ const NetQuote = {
     };
     let out = null;
     if (Date.now() >= this.eastDeadUntil) {
-      try { out = await tryEast(); NetLog.push('quote', '东财 指数快照', out.size > 0, Date.now() - t0, `${out.size}/${this.INDEXES.length} 个`); }
-      catch (e) { NetLog.push('quote', '东财 指数快照', false, Date.now() - t0, e.message || String(e)); }
+      /* v3.9.13 审计：东财指数快照带 URL */
+      const idxUrl = 'https://push2.eastmoney.com/api/qt/ulist.np/get?secids=' + this.INDEXES.map(i => i.secid).join(',') + '&fields=f2,f3,f4,f12,f13,f14&fltt=2';
+      try { out = await tryEast(); NetLog.push('quote', '东财 指数快照', out.size > 0, Date.now() - t0, `${out.size}/${this.INDEXES.length} 个`, { url: idxUrl, resp: `${out.size}/${this.INDEXES.length} 个` }); }
+      catch (e) { NetLog.push('quote', '东财 指数快照', false, Date.now() - t0, e.message || String(e), { url: idxUrl, err: e.message || String(e) }); }
     }
     /* v3.8.62 从「主源全失败才切备源」改成「只要不满员就补齐」：
        原判据 `!out.size` 在指数只有 3 个时够用，扩到 6 个后就不牢靠了——
@@ -602,11 +654,13 @@ const NetQuote = {
           let filled = 0;
           for (const [k, v] of tx) if (!out.has(k)) { out.set(k, v); filled++; }
           NetLog.push('quote', '腾讯 指数快照', true, Date.now() - t1,
-            filled ? `补齐 ${filled} 个（腾讯共返回 ${tx.size} 个）` : '主源已完整，无需补齐');
+            filled ? `补齐 ${filled} 个（腾讯共返回 ${tx.size} 个）` : '主源已完整，无需补齐',
+            { url: 'https://qt.gtimg.cn/q=' + this.INDEXES.map(i => i.sym).join(','), resp: `腾讯返回 ${tx.size} 个，补齐 ${filled} 个` });
         } else {
-          NetLog.push('quote', '腾讯 指数快照', false, Date.now() - t1, `0/${this.INDEXES.length} 个`);
+          NetLog.push('quote', '腾讯 指数快照', false, Date.now() - t1, `0/${this.INDEXES.length} 个（未获取到）`,
+            { url: 'https://qt.gtimg.cn/q=' + this.INDEXES.map(i => i.sym).join(','), err: '未获取到' });
         }
-      } catch (e) { NetLog.push('quote', '腾讯 指数快照', false, Date.now() - t1, e.message || String(e)); }
+      } catch (e) { NetLog.push('quote', '腾讯 指数快照', false, Date.now() - t1, e.message || String(e), { err: e.message || String(e) }); }
     }
     if (out && out.size) { this.idx = out; this.idxTime = Date.now(); }
   },
@@ -663,8 +717,11 @@ const NetQuote = {
 };
 /* 拉一次行情并刷新相关页面（登录后 / 手动刷新时调用） */
 async function refreshQuotes(force = false) {
-  await NetQuote.refresh(force);
-  renderAll();
+  /* v3.9.13 审计：这一轮行情请求标上触发来源（含后台切回前台自动强刷） */
+  return NetLog.withCtx('总览/行情·刷新' + (force ? '(强刷)' : ''), async () => {
+    await NetQuote.refresh(force);
+    renderAll();
+  });
 }
 /* v3.8.23 页面从后台切回前台时自动强刷行情（数据不实时补偿） */
 document.addEventListener('visibilitychange', () => {
@@ -684,10 +741,13 @@ async function rpc(fn, params) {
     });
     if (r.status === 404 || r.status >= 500) throw new Error('服务不可用(' + r.status + ')');
     const j = await r.json();
-    NetLog.push('rpc', fn, !!(j && j.ok), Date.now() - t0, (j && !j.ok) ? (j.msg || '') : '');
+    /* v3.9.13 审计：RPC 记参数（脱敏 p_token）与返回；业务失败如实记 FAIL */
+    const dbg = Object.assign({}, params || {}); delete dbg.p_token;
+    NetLog.push('rpc', fn, !!(j && j.ok), Date.now() - t0, (j && !j.ok) ? (j.msg || '') : '',
+      { url: RPC_BASE + '/' + fn, req: JSON.stringify(dbg).slice(0, 280), resp: (j && j.ok) ? ('ok' + (Array.isArray(j.data) ? ` · ${j.data.length} 行` : '')) : '', err: (j && !j.ok) ? (j.msg || '') : '' });
     return j;
   } catch (e) {
-    NetLog.push('rpc', fn, false, Date.now() - t0, e.message || String(e));
+    NetLog.push('rpc', fn, false, Date.now() - t0, e.message || String(e), { url: RPC_BASE + '/' + fn, err: e.message || String(e) });
     throw e;
   }
 }
@@ -950,10 +1010,11 @@ async function customLlmStream(m, messages, opts) {
         } catch (e) { /* 忽略无法解析的行 */ }
       }
     }
-    NetLog.push('llm', '自定义模型 ' + m.model, true, Date.now() - t0, `${text.length} 字`);
+    NetLog.push('llm', '自定义模型 ' + m.model, true, Date.now() - t0, `${text.length} 字`,
+      { url: m.url || '', req: `${(messages || []).length} 条消息`, resp: `返回 ${text.length} 字` });
     return text;
   } catch (e) {
-    NetLog.push('llm', '自定义模型 ' + m.model, false, Date.now() - t0, e.message || String(e));
+    NetLog.push('llm', '自定义模型 ' + m.model, false, Date.now() - t0, e.message || String(e), { url: m.url || '', err: e.message || String(e) });
     throw e;
   }
 }
@@ -971,10 +1032,11 @@ async function llmComplete(messages, opts) {
       const d = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
       if (d && d.content) { text += d.content; if (opts && opts.onDelta) try { opts.onDelta(d.content); } catch (e) { /* */ } }
     }
-    NetLog.push('llm', '云端模型 ' + m.id, true, Date.now() - t0, `${text.length} 字`);
+    NetLog.push('llm', '云端模型 ' + m.id, true, Date.now() - t0, `${text.length} 字`,
+      { req: `${(messages || []).length} 条消息`, resp: `返回 ${text.length} 字` });
     return text;
   } catch (e) {
-    NetLog.push('llm', '云端模型 ' + m.id, false, Date.now() - t0, e.message || String(e));
+    NetLog.push('llm', '云端模型 ' + m.id, false, Date.now() - t0, e.message || String(e), { err: e.message || String(e) });
     throw e;
   }
 }
@@ -1281,6 +1343,13 @@ async function enterApp(user) {
     else { renderQaMessages(); renderQaHistory(); qaSyncSendState(); }
     if (typeof qaBoot === 'function') qaBoot().catch(() => { /* */ });
   }
+  /* v3.10.1 K线库每日自动入库：进入应用后后台静默增量（开关在 设置→数据管理→K线库，
+     仅当库已建立且缺最新交易日才拉，30 分钟节流；首次回补不自动跑）。失败不影响进入应用。 */
+  try {
+    if (typeof KLib !== 'undefined') KLib.autoSyncIfStale().then(r => {
+      if (r && !r.skipped && r.fetched) toast('K线库已自动同步：' + r.n + ' 只 · 最新 ' + r.targetDate);
+    }).catch(() => { /* */ });
+  } catch (e) { /* */ }
   if (cloudLlm) {
     /* 目录是异步拉的，拉到后 cur 可能从 null 变成实模型（savedId 二次解析），
        所以 reload 完成后必须再同步一次问答区文案，否则提示会停在旧状态。 */
@@ -2517,22 +2586,40 @@ function renderMe() {
   $('userMgmtCard').hidden = !admin;
   if (admin) loadUsers();
 }
-/* ---------- v3.8.23 网络日志摘要 ---------- */
+/* ---------- v3.8.23 网络日志摘要（v3.9.13 升级：审计级明细列表） ---------- */
 function renderNetLogUI() {
   const el = $('netLogSummary');
   if (!el) return;
-  if (!NetLog.buf.length) { el.textContent = '暂无网络日志（打开行情/交易页后会自动记录）'; return; }
+  if (!NetLog.buf.length) { el.textContent = '暂无网络日志（打开行情/交易页后会自动记录）'; $('netLogList').innerHTML = ''; return; }
   const fails = NetLog.buf.filter(e => !e.ok).length;
   const lastFail = NetLog.buf.find(e => !e.ok);
-  /* 按类别统计：行情/云端RPC/K线/字典/模型 */
-  const kinds = ['quote', 'rpc', 'kline', 'dict', 'llm'];
-  const KN = { quote: '行情', rpc: '云端', kline: 'K线', dict: '字典', llm: 'AI模型' };
+  /* 按类别统计：行情/云端RPC/K线/字典/模型/数据中心 */
+  const kinds = ['quote', 'rpc', 'kline', 'dict', 'llm', 'dc'];
+  const KN = { quote: '行情', rpc: '云端', kline: 'K线', dict: '字典', llm: 'AI模型', dc: '数据中心' };
   const parts = kinds.map(k => {
     const arr = NetLog.buf.filter(e => e.kind === k);
     return arr.length ? `${KN[k]} ${arr.filter(e => e.ok).length}/${arr.length}` : null;
   }).filter(Boolean).join(' · ');
   el.innerHTML = `共 ${NetLog.buf.length} 条（成功/总数：${parts || '—'}）· 失败 ${fails} 条`
     + (lastFail ? `<br>最近失败：${esc(lastFail.t.slice(11, 19))} ${esc(lastFail.kind)} ${esc(lastFail.name)} — ${esc(lastFail.detail)}` : '· 最近无失败');
+  /* v3.9.13 最近 60 条逐条明细：触发来源 / URL / 参数 / 返回，点开看全 */
+  const list = $('netLogList');
+  if (list) {
+    const KIND_CN = { quote: '行情', rpc: '云端', kline: 'K线', dict: '字典', llm: 'AI模型', dc: '数据中心' };
+    list.innerHTML = NetLog.buf.slice(0, 60).map(e => {
+      const t = e.t.slice(11, 19);
+      const head = `<span class="nl-t">${esc(t)}</span><span class="nl-badge ${e.ok ? 'ok' : 'fail'}">${e.ok ? 'OK' : 'FAIL'}</span>`
+        + `<span class="nl-kind">${esc(KIND_CN[e.kind] || e.kind)}</span><b class="nl-name">${esc(e.name)}</b><span class="nl-ms">${e.ms}ms</span>`;
+      const rows = [];
+      if (e.src) rows.push(['触发', e.src]);
+      if (e.url) rows.push(['请求', e.url]);
+      if (e.req && e.req !== e.url) rows.push(['参数', e.req]);
+      rows.push(e.ok ? ['返回', e.resp || e.detail || '(空)'] : ['错误', e.err || e.detail || '未知（未获取到数据）']);
+      return `<details class="nl-item${e.ok ? '' : ' nl-fail'}"><summary>${head}</summary>`
+        + rows.map(([k, v]) => `<div class="nl-row"><span class="nl-k">${k}</span><span class="nl-v">${esc(v)}</span></div>`).join('')
+        + `</details>`;
+    }).join('');
+  }
 }
 /* ---------- 费率编辑 ---------- */
 function renderLogs() {
@@ -3090,6 +3177,47 @@ function bindEvents() {
   });
   $('netLogClearBtn').addEventListener('click', () => { NetLog.clear(); renderNetLogUI(); toast('网络日志已清空'); });
 
+  /* v3.10.1 K线库：统计展示 + 自动同步开关 + 立即同步（设置 → 数据管理） */
+  async function renderKlibStatUI() {
+    const sum = $('klibStatSummary'), daily = $('klibStatDaily');
+    if (!sum) return;
+    const meta = (typeof KLib !== 'undefined') ? await KLib.metaGet().catch(() => ({})) : {};
+    let cloud = null;
+    try { if (typeof KLib !== 'undefined' && S.mode === 'cloud' && S.token) cloud = await KLib.cloudStats(); }
+    catch (e) { cloud = null; }
+    const st = (typeof KLib !== 'undefined') ? KLib.statRows(cloud, meta) : { summary: '—', rows: [] };
+    sum.textContent = st.summary;
+    if (!st.rows.length) { daily.innerHTML = '<p class="hint">云端还没有入库记录。</p>'; return; }
+    daily.innerHTML = '<div class="table-wrap"><table class="batch-table"><thead><tr>'
+      + '<th>交易日</th><th class="num">入库股票数</th><th class="num">K线根数</th><th class="num">覆盖度</th>'
+      + '</tr></thead><tbody>'
+      + st.rows.slice(0, 15).map(r => '<tr><td>' + esc(r.d) + '</td><td class="num">' + r.stocks
+        + '</td><td class="num">' + Number(r.bars).toLocaleString('zh-CN') + '</td><td class="num">'
+        + (r.pct == null ? '--' : r.pct + '%') + '</td></tr>').join('')
+      + '</tbody></table></div>'
+      + (st.rows.length > 15 ? '<p class="hint">仅显示最近 15 个交易日，共 ' + st.rows.length + ' 天有入库记录。</p>' : '');
+  }
+  $('klibAutoChk').checked = (typeof KLib !== 'undefined') ? KLib.autoOn() : true;
+  $('klibAutoChk').addEventListener('change', () => {
+    if (typeof KLib === 'undefined') return;
+    try { localStorage.setItem(KLib.AUTO_KEY, $('klibAutoChk').checked ? '1' : '0'); } catch (e) { /* */ }
+    toast($('klibAutoChk').checked ? '已开启：打开应用时自动增量同步' : '已关闭自动同步');
+  });
+  $('klibSyncBtn').addEventListener('click', async () => {
+    if (typeof KLib === 'undefined') return toast('K线库模块未加载');
+    const btn = $('klibSyncBtn');
+    btn.disabled = true; btn.textContent = '⏳ 同步中…';
+    try {
+      const r = await KLib.ensure(p => { btn.textContent = '⏳ ' + (p.stage || '同步中…').slice(0, 12); });
+      toast('K线库已同步：' + r.n + ' 只 · 最新 ' + r.targetDate + (r.failed ? '（失败 ' + r.failed + '）' : ''));
+    } catch (e) { toast('同步失败：' + (e && e.message || e)); }
+    btn.disabled = false; btn.textContent = '🔄 立即同步';
+    renderKlibStatUI();
+  });
+  /* 首次渲染必须等 kline-store.js 加载完（它在 app.js 之后执行）——同步调用时 KLib 必然
+     还是 undefined，摘要会落进 '—' 分支且再无重渲染时机，所以用宏任务推迟 */
+  setTimeout(renderKlibStatUI, 50);
+
   /* 我的：费率 */
   $('feeSaveBtn').addEventListener('click', saveFeeEditor);
   $('feeResetBtn').addEventListener('click', () => { S.settings.fee = null; delete S.settings.fee; renderFeeEditor(); toast('已恢复默认（记得保存生效）'); });
@@ -3461,20 +3589,23 @@ function secidOf(code) {
   return /^(6|5|9)/.test(code) ? '1.' + code : '0.' + code;
 }
 async function fetchKlineEast(code, klt, lmt) {
+  /* v3.10.0 fields2 增加 f57（成交额，元）—— K 线库需要逐日成交额做流动性门槛；
+     旧字段序列只有 OHLCV，K 线库的「成交额 ≥ 0.5 亿」只能用 收盘×量 近似 */
   const url = 'https://push2his.eastmoney.com/api/qt/stock/kline/get?secid=' + secidOf(code)
-    + '&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56&klt=' + klt + '&fqt=1&end=20500101&lmt=' + lmt;
+    + '&fields1=f1,f2,f3,f4,f5,f6&fields2=f51,f52,f53,f54,f55,f56,f57&klt=' + klt + '&fqt=1&end=20500101&lmt=' + lmt;
   const t0 = Date.now();
   try {
     const res = await fetch(url);
     const j = await res.json();
     const bars = ((j.data && j.data.klines) || []).map(s => {
       const a = s.split(',');
-      return { d: a[0], o: +a[1], c: +a[2], h: +a[3], l: +a[4], v: +a[5] || 0 };
+      return { d: a[0], o: +a[1], c: +a[2], h: +a[3], l: +a[4], v: +a[5] || 0, a: +a[6] || 0 };
     });
-    NetLog.push('kline', '东财 push2his', bars.length > 0, Date.now() - t0, `${code} klt=${klt} ${bars.length}根`);
+    NetLog.push('kline', '东财 push2his', bars.length > 0, Date.now() - t0, `${code} klt=${klt} ${bars.length}根`,
+      { url, resp: bars.length ? `${bars.length}根 末根 ${bars[bars.length - 1].d} 收${bars[bars.length - 1].c}` : '未获取到（0 根）', err: bars.length ? '' : '未获取到' });
     return { name: (j.data && j.data.name) || code, bars };
   } catch (e) {
-    NetLog.push('kline', '东财 push2his', false, Date.now() - t0, `${code} klt=${klt} ${e.message || e}`);
+    NetLog.push('kline', '东财 push2his', false, Date.now() - t0, `${code} klt=${klt} ${e.message || e}`, { url, err: e.message || String(e) });
     throw e;
   }
 }
@@ -3489,27 +3620,31 @@ async function fetchKlineTxRaw(code, period, lmt) {
   let sawBlock = false, last = { name: code, bars: [] };
   for (const mk of KL_URLS) {
     const t0 = Date.now();
+    const url = mk(sym, period, lmt);
     try {
-      const res = await fetch(mk(sym, period, lmt));
-      if (!res.ok) { sawBlock = true; NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} HTTP ${res.status}，换端点`); continue; }
+      const res = await fetch(url);
+      if (!res.ok) { sawBlock = true; NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} HTTP ${res.status}，换端点`, { url, err: 'HTTP ' + res.status }); continue; }
       const txt = await res.text();
-      if (!txt || txt.charCodeAt(0) === 60) { sawBlock = true; NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} 返回HTML(疑似WAF)，换端点`); continue; }
+      if (!txt || txt.charCodeAt(0) === 60) { sawBlock = true; NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} 返回HTML(疑似WAF)，换端点`, { url, err: '返回 HTML（疑似 WAF 拦截）' }); continue; }
       const j = JSON.parse(txt);
       const d = (j.data && j.data[sym]) || {};
       const arr = d[period] || d['qfq' + period] || [];
       const name = (d.qt && d.qt.data && d.qt.data[1]) || last.name;
       if (arr.length) {
-        NetLog.push('kline', '腾讯K线', true, Date.now() - t0, `${sym} ${period} ${arr.length}根`);
+        /* v3.9.13 审计：返回摘要带末根日期与收盘价，方便核对 K 线数据准确性 */
+        const lastBar = arr[arr.length - 1];
+        NetLog.push('kline', '腾讯K线', true, Date.now() - t0, `${sym} ${period} ${arr.length}根`,
+          { url, resp: `${arr.length}根 末根 ${lastBar[0]} 收${lastBar[2]}` });
         return {
           name: name, sawBlock: sawBlock,
           bars: arr.map(function (k) { return { d: k[0], o: +k[1], c: +k[2], h: +k[3], l: +k[4], v: +k[5] || 0 }; }),
         };
       }
-      NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} 空数据，换端点`);
+      NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} 空数据，换端点`, { url, err: '未获取到（空数据）' });
       last = { name: name, bars: [] };
     } catch (e) {
       sawBlock = true;
-      NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} ${e.message || e}，换端点`);
+      NetLog.push('kline', '腾讯K线', false, Date.now() - t0, `${sym} ${period} ${e.message || e}，换端点`, { url, err: e.message || String(e) });
     }
   }
   return { name: last.name, bars: last.bars, sawBlock: sawBlock };
@@ -4080,6 +4215,8 @@ async function diagnoseStock(forceCode) {
   btn.disabled = true; btn.textContent = '诊断中…';
   box.hidden = false;
   box.innerHTML = '<p class="hint">正在获取 K 线与行情、计算技术指标…</p>';
+  /* v3.9.13 审计：整段诊断里的网络调用都标上触发来源 */
+  return NetLog.withCtx('个股诊断·' + code, async () => {
   try {
     const [daily, weekly] = await Promise.all([fetchKline(code, 101, 260), fetchKline(code, 102, 180)]);
     if (!daily.bars.length || !weekly.bars.length) throw new Error('K 线数据不足，无法诊断');
@@ -4101,6 +4238,7 @@ async function diagnoseStock(forceCode) {
   } finally {
     btn.disabled = false; btn.textContent = '开始诊断';
   }
+  });
 }
 window.analyzeStockByCode = async function (code) {
   switchView('analysis');

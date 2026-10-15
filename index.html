@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.9.11">
+<link rel="stylesheet" href="style.css?v=3.10.4">
 </head>
 <body>
 
@@ -241,7 +241,10 @@
         <div class="card">
           <div class="card-title-row">
             <span class="card-title">🌡️ 市场热度</span>
-            <button id="heatRefreshBtn" class="btn primary sm" type="button">刷新行情</button>
+            <span class="title-actions">
+              <button id="heatDlBtn" class="btn sm" type="button" hidden title="导出本次分析的完整源数据：取数凭证 + 评分构成 + 三套口径涨跌家数 + 逐股明细 + 板块汇总 + 涨停复盘">⬇ 下载源数据</button>
+              <button id="heatRefreshBtn" class="btn primary sm" type="button">刷新行情</button>
+            </span>
           </div>
           <p class="hint">基于全市场实时快照（5500+ 只，约 3 秒，60 秒复用缓存）：涨跌家数、涨停/跌停、中位涨幅、赚钱效应、成交额、涨跌分布；板块热度榜；涨停复盘找当日主线。全部本地计算，不消耗 AI 额度。</p>
           <div id="heatBox"><p class="hint">切换到本页会自动拉取；也可以点右上角「刷新行情」</p></div>
@@ -294,22 +297,36 @@
         </div>
       </div>
 
-      <!-- 页签：动量筛选（v3.8.74） -->
+      <!-- 页签：动量筛选（v3.8.74；v3.10.0 接本地K线库，历史名次精确化） -->
       <div class="set-pane an-pane" data-anpane="mom" hidden>
         <div class="card">
           <div class="card-title-row">
-            <span class="card-title">🚀 连续强势 + 量能递增</span>
-            <button id="momRunBtn" class="btn primary sm" type="button">🔍 开始筛选</button>
+            <span class="card-title">🚀 动量筛选</span>
+            <span class="title-actions">
+              <button id="momSyncBtn" class="btn ghost sm" type="button">🔄 同步K线库</button>
+              <button id="momRunBtn" class="btn primary sm" type="button">🔍 开始筛选</button>
+            </span>
+          </div>
+          <div class="hint" id="momKlibStatus" style="margin-bottom:8px">💾 K 线库状态读取中…</div>
+          <div class="mom-conds">
+            连续 <input id="momN" class="inp num-in" type="number" value="3" min="1" max="10"> 日涨幅&gt;0，且每日名次 ≤
+            <input id="momTopN" class="inp num-in" type="number" value="1000" min="10" max="6000"> 名；
+            量能每天 ≥ 前一日 × <input id="momVolK" class="inp num-in" type="number" value="1.1" min="1" max="10" step="0.05">；
+            成交额 ≥ <input id="momAmt" class="inp num-in" type="number" value="0.5" min="0" step="0.1"> 亿
+          </div>
+          <div class="mom-conds">
+            RPS120 ≥ <input id="momRps" class="inp num-in" type="number" value="0" min="0" max="100">（0=不启用）；
+            距250日新高 ≥ <input id="momHigh" class="inp num-in" type="number" value="0" min="-100" max="0"> %（0=不启用，-10 = 回撤10%以内也行）；
+            <label class="chk"><input id="momMa" type="checkbox"> 均线多头（收&gt;MA5&gt;MA10&gt;MA20&gt;MA60）</label>
           </div>
           <p class="hint">
-            扫描两市全市场，筛出「<b>连续 3 日涨幅 &gt; 0 且都排在全市场前 1000 名</b>」并且「<b>成交量逐日放大、每天 ≥ 前一日 1.1 倍</b>」的股票。
-            已排除 ST、北交所与成交额不足 5000 万（0.5 亿）的票。结果按 3 日累计涨幅降序，可一键批量诊断。
+            v3.10.0 起筛选基于<b>本地 K 线库</b>（两市全市场 12 个月日K，存云端 + 本机缓存）：历史名次由每天对全市场逐日排序复算，
+            <b>100% 精确</b>（旧版只有当日名次是真实的）。首次使用自动回补（约 3-5 分钟），之后每天增量只补缺的一根，盘中同步存的是未收盘 bar，收盘后请重按「同步K线库」。
           </p>
           <p class="hint">
-            ⚠ 口径说明：腾讯涨幅榜只提供<b>当日</b>快照，所以只有最新一天的名次是榜单真实名次；前两天的名次由「当天涨幅在候选池内排序后折算到全市场」得到，
-            属于<b>估算值</b>（表中已标注）。条件都按「宁缺毋滥」设定 —— 普跌日命中数会自然收缩，这本身就是「逆势连涨放量」的信号。
+            排除 ST / 北交所 / 成交额不足门槛的票；名次分母含全市场（与行情软件「全 A 涨幅榜」同口径）。K 线库不可用时自动回退旧在线流程（名次含估算，会标注）。
           </p>
-          <div id="momBox"><p class="hint">点「开始筛选」扫描全市场（首次约 20 秒，之后快照命中 60 秒缓存会更快）。</p></div>
+          <div id="momBox"><p class="hint">点「开始筛选」扫描全市场（首次需先回补 K 线库，约 3-5 分钟；之后秒级出结果）。</p></div>
         </div>
       </div>
 
@@ -550,13 +567,27 @@
         </div>
       </div>
       <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">💾 K线库（动量筛选数据底座）</span>
+          <span class="title-actions"><button id="klibSyncBtn" class="btn ghost sm" type="button">🔄 立即同步</button></span>
+        </div>
+        <div class="hint" id="klibStatSummary" style="margin-bottom:8px">统计读取中…</div>
+        <label class="chk" style="display:inline-flex;align-items:center;gap:5px;cursor:pointer;margin-bottom:8px">
+          <input type="checkbox" id="klibAutoChk">
+          打开应用时自动增量同步（库已建立才会跑；缺最新交易日才拉，一般 1-2 分钟，后台静默）
+        </label>
+        <div id="klibStatDaily"></div>
+        <p class="hint" style="margin-top:8px">统计按「交易日」分组：该日入库的股票数与 K 线根数（首次回补一天约 5600 只，之后每日增量各补一根）。自动同步在打开应用时后台执行，也可随时点「立即同步」；首次建库请到「分析 → 动量筛选」触发。</p>
+      </div>
+      <div class="card">
         <div class="card-title">网络日志</div>
         <div class="hint" id="netLogSummary" style="margin-bottom:8px">—</div>
+        <div id="netLogList" style="margin-bottom:8px"></div>
         <div class="btn-row">
           <button class="btn ghost" id="netLogDlBtn" type="button">下载日志文件 (.log)</button>
           <button class="btn ghost" id="netLogClearBtn" type="button">清空日志</button>
         </div>
-        <div class="hint" style="margin-top:8px">记录所有网络调用：行情（新浪/腾讯）、K线、云端读写。获取失败会标 FAIL 并附原因，可用于排查“数据不准/不实时”。</div>
+        <div class="hint" style="margin-top:8px">审计级记录：哪个功能触发、调了哪个接口（URL）、参数、返回摘要。取不到数据会明示 FAIL 并附原因，绝不静默补数。点开任一条可看完整细节；也可下载 .log 逐条核对。</div>
       </div>
       </div>
 
@@ -789,11 +820,12 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.9.11"></script>
-<script src="analysis-extra.js?v=3.9.11"></script>
+<script src="app.js?v=3.10.4"></script>
+<script src="kline-store.js?v=3.10.4"></script>
+<script src="analysis-extra.js?v=3.10.4"></script>
 <!-- v3.9.7 智能问答工具层：选股 / 行情 / 财务 / 诊断 / 回测等取数能力。
      必须排在 analysis-extra.js 之后 —— 它直接复用后者挂在全局词法作用域上的
      state / fmtWan / parseJsonLoose / marketOf / qSnapshot / computePositions。 -->
-<script src="qa-tools.js?v=3.9.11"></script>
+<script src="qa-tools.js?v=3.10.4"></script>
 </body>
 </html>
