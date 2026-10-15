@@ -60,15 +60,15 @@ sudo -u postgres "${PG_BIN}/psql" -d "${DB_NAME}" -v ON_ERROR_STOP=1 \
   -f "${DEPLOY_DIR}/schema.sql" >/dev/null
 echo "  数据库 ${DB_NAME} 就绪（schema 已同步）"
 
-# 初始化管理员（默认 admin/admin，可用环境变量 ADMIN_USER/ADMIN_PASSWORD 覆盖；重装保留已有账号）
+# 初始化管理员（默认 admin/admin123；密码至少 6 位，可用环境变量 ADMIN_USER/ADMIN_PASSWORD 覆盖；重装保留已有账号）
 ADMIN_USER="${ADMIN_USER:-admin}"
-ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin}"
+ADMIN_PASSWORD="${ADMIN_PASSWORD:-admin123}"
 ADMIN_RESP="$(sudo -u postgres "${PG_BIN}/psql" -d "${DB_NAME}" -tAc \
   "SELECT public.app_setup_admin('${ADMIN_USER}', '${ADMIN_PASSWORD}');" 2>/dev/null || true)"
 if echo "$ADMIN_RESP" | grep -q '"ok" *: *true'; then
   echo "  ✅ 管理员 ${ADMIN_USER} 已创建（打开网页直接登录）"
 else
-  echo "  管理员已存在或创建失败（保留现有账号，可用网页「首次初始化」检查）"
+  echo "  管理员已存在或创建失败（保留现有账号，可用网页「首次初始化」检查；注意密码至少 6 位）"
 fi
 
 # ---------- 4. 后端依赖 ----------

@@ -113,16 +113,21 @@ if ("$existsDb".Trim() -ne "1") {
 & $psql -U postgres -h 127.0.0.1 -d $DbName -v ON_ERROR_STOP=1 -f (Join-Path $DeployDir "schema.sql") | Out-Null
 Write-Host "  数据库 $DbName 就绪（schema 已同步）"
 
-# 初始化管理员（默认 admin/admin，可自定义；重复安装时已有账号会被保留，不会覆盖）
+# 初始化管理员（默认 admin/admin123；密码至少 6 位，输错会重问；重复安装时已有账号会被保留）
 $adminUser = Read-Host "  管理员用户名（回车 = admin）"
 if (-not $adminUser) { $adminUser = "admin" }
-$adminPwd = Read-Host "  管理员密码（回车 = admin；登录后可再改）"
-if (-not $adminPwd) { $adminPwd = "admin" }
+$adminPwd = ""
+for ($i = 0; $i -lt 3 -and $adminPwd.Length -lt 6; $i++) {
+  if ($i -gt 0) { Write-Host "  ✗ 密码至少 6 位，请重新输入" -ForegroundColor Yellow }
+  $adminPwd = Read-Host "  管理员密码（回车 = admin123；登录后可再改）"
+  if (-not $adminPwd) { $adminPwd = "admin123" }
+}
+if ($adminPwd.Length -lt 6) { $adminPwd = "admin123"; Write-Host "  已使用默认密码 admin123" }
 $au = $adminUser.Replace("'", "''"); $ap = $adminPwd.Replace("'", "''")
 $r = & $psql -U postgres -h 127.0.0.1 -d $DbName -tAc "SELECT public.app_setup_admin('$au', '$ap');"
 if ("$r" -match '"ok"\s*:\s*true') { Write-Host "  ✅ 管理员 $adminUser 已创建（打开网页直接登录）" }
 elseif ("$r" -match '已初始化|已存在') { Write-Host "  管理员已存在，保留现有账号（未改动）" }
-else { Write-Host "  ⚠ 管理员创建返回：$r（可打开网页用「首次初始化」手动创建）" }
+else { Write-Host "  ⚠ 管理员创建返回：$r（可直接打开网页 http://localhost:$Port 用「首次初始化」创建）" }
 
 # ---------- 4. 后端依赖 + .env ----------
 Write-Host "--- [4/6] 后端依赖与配置"
