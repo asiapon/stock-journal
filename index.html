@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.12.9">
+<link rel="stylesheet" href="style.css?v=3.13.0">
 </head>
 <body>
 
@@ -400,11 +400,24 @@
           <div id="qaMessages" class="qa-messages"></div>
           <div class="qa-composer">
             <div id="qaExPanel" class="qa-ex-panel" hidden></div>
+            <div id="qaPlusMenu" class="qa-plus-menu" hidden>
+              <button type="button" class="qa-plus-item" data-act="attach"><span class="qa-plus-ic">📎</span>上传文件<span class="qa-plus-sub">txt / csv / md / json</span></button>
+              <button type="button" class="qa-plus-item" data-act="examples"><span class="qa-plus-ic">💡</span>示例问题<span class="qa-plus-sub">常用问法一键填入</span></button>
+              <button type="button" class="qa-plus-item" data-act="skills"><span class="qa-plus-ic">🧩</span>技能<span class="qa-plus-sub">搜索 / 启停 / 管理</span><span class="qa-plus-arrow">›</span></button>
+            </div>
+            <div id="qaSkillMenu" class="qa-skill-menu" hidden>
+              <div class="qa-skill-search"><input id="qaSkillSearch" class="search-input" placeholder="🔍 搜索技能" autocomplete="off"></div>
+              <div id="qaSkillPick" class="qa-skill-pick"></div>
+              <div class="qa-skill-foot">
+                <button type="button" class="qa-plus-item" data-act="skillLocal"><span class="qa-plus-ic">⬆</span>从本地添加技能</button>
+                <button type="button" class="qa-plus-item" data-act="skillManage"><span class="qa-plus-ic">⚙</span>管理技能</button>
+              </div>
+            </div>
             <div id="qaAttachChips" class="qa-attach-chips" hidden></div>
             <div class="qa-input-box">
               <textarea id="qaInput" rows="2" placeholder="随便问我什么都可以，比如：帮我看看这周操作有什么问题？或者聊聊别的也行～"></textarea>
               <div class="qa-toolbar">
-                <button id="qaExBtn" class="qa-tool-btn" title="示例问题（随时点开）" type="button">💡</button>
+                <button id="qaPlusBtn" class="qa-tool-btn qa-plus-btn" title="添加：文件 / 示例 / 技能" type="button">＋</button>
                 <button id="qaAttachBtn" class="qa-tool-btn" title="上传文件（txt / csv / md / json 等）" type="button">
                   <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05 12.25 20.2a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.49-8.48"/></svg>
                 </button>
@@ -869,12 +882,12 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.12.9"></script>
-<script src="kline-store.js?v=3.12.9"></script>
-<script src="analysis-extra.js?v=3.12.9"></script>
+<script src="app.js?v=3.13.0"></script>
+<script src="kline-store.js?v=3.13.0"></script>
+<script src="analysis-extra.js?v=3.13.0"></script>
 <!-- v3.9.7 智能问答工具层：选股 / 行情 / 财务 / 诊断 / 回测等取数能力。
      必须排在 analysis-extra.js 之后 —— 它直接复用后者挂在全局词法作用域上的
      state / fmtWan / parseJsonLoose / marketOf / qSnapshot / computePositions。 -->
-<script src="qa-tools.js?v=3.12.9"></script>
+<script src="qa-tools.js?v=3.13.0"></script>
 </body>
 </html>

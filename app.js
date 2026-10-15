@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.12.9';
+const APP_VER = '3.13.0';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5044,23 +5044,78 @@ function bindQaExamples() {
     if (!btn) return;
     qaUseExample(btn.dataset.q);
   });
-  /* v3.12.7 常驻示例入口：对话进行中也能随时打开示例面板（选完自动收起） */
-  const exBtn = $('qaExBtn'), panel = $('qaExPanel');
-  if (!exBtn || !panel || exBtn.dataset.exBound) return;
-  exBtn.dataset.exBound = '1';
-  exBtn.addEventListener('click', () => {
-    if (panel.hidden) {
-      if (!panel.innerHTML) panel.innerHTML = qaEmptyHtml();
-      panel.hidden = false;
-      panel.scrollTop = 0;
-    } else panel.hidden = true;
+  /* v3.13.0 「＋」弹出菜单（WorkBuddy 同款）：文件 / 示例 / 技能搜索列表 */
+  const plus = $('qaPlusBtn'), menu = $('qaPlusMenu'), skMenu = $('qaSkillMenu');
+  if (!plus || !menu || plus.dataset.plusBound) return;
+  plus.dataset.plusBound = '1';
+  const closeAll = () => { menu.hidden = true; skMenu.hidden = true; };
+  plus.addEventListener('click', e => {
+    e.stopPropagation();
+    const open = !menu.hidden;
+    closeAll();
+    if (open) return;
+    menu.hidden = false;
   });
-  panel.addEventListener('click', e => {
-    const btn = e.target.closest('.qa-ex-card');
-    if (!btn) return;
-    qaUseExample(btn.dataset.q);
-    panel.hidden = true;                      // 选完收起，不挡输入区
+  menu.addEventListener('click', e => {
+    const item = e.target.closest('.qa-plus-item');
+    if (!item) return;
+    const act = item.dataset.act;
+    if (act === 'attach') { closeAll(); $('qaFileInput').click(); }
+    else if (act === 'examples') { closeAll(); const p = $('qaExPanel'); if (!p.innerHTML) p.innerHTML = qaEmptyHtml(); p.hidden = false; }
+    else if (act === 'skills') { menu.hidden = true; skMenu.hidden = false; $('qaSkillSearch').value = ''; renderQaSkillPick(''); setTimeout(() => $('qaSkillSearch').focus(), 30); }
   });
+  skMenu.addEventListener('click', e => {
+    const item = e.target.closest('.qa-plus-item');
+    if (item) {
+      const act = item.dataset.act;
+      if (act === 'skillLocal' || act === 'skillManage') {
+        closeAll();
+        switchView('me'); switchSetPane('skill');
+      }
+      return;
+    }
+    const toggle = e.target.closest('.sk-toggle');
+    if (toggle) {
+      e.stopPropagation();
+      const id = toggle.dataset.sid;
+      const s = skillById(id);
+      const on = !(s && s.enabled === false);
+      skillSetEnabled(id, !on);          // 现在是开 → 点了变关
+      renderQaSkillPick($('qaSkillSearch').value);
+      return;
+    }
+    const row = e.target.closest('.qa-skill-row');
+    if (row) {
+      qaUseExample(row.dataset.q || row.dataset.name || '');
+      closeAll();
+    }
+  });
+  $('qaSkillSearch').addEventListener('input', e => renderQaSkillPick(e.target.value));
+  document.addEventListener('click', e => {
+    if (!menu.hidden && !menu.contains(e.target) && e.target !== plus && !plus.contains(e.target)) menu.hidden = true;
+    if (!skMenu.hidden && !skMenu.contains(e.target) && e.target !== plus && !plus.contains(e.target)) skMenu.hidden = true;
+  });
+  document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
+}
+/* 技能选择列表：搜索过滤 + 点击填触发问句 + 右侧启停开关 */
+function renderQaSkillPick(filter) {
+  const box = $('qaSkillPick');
+  if (!box) return;
+  const f = String(filter || '').trim().toLowerCase();
+  const list = skillListAll().filter(s => !f
+    || (s.name || '').toLowerCase().indexOf(f) >= 0
+    || (s.desc || '').toLowerCase().indexOf(f) >= 0
+    || (s.id || '').toLowerCase().indexOf(f) >= 0);
+  if (!list.length) { box.innerHTML = '<p class="hint" style="padding:8px 10px">没有匹配的技能</p>'; return; }
+  box.innerHTML = list.map(s => {
+    const on = s.enabled !== false && s.installed;
+    const sample = s.isUser && s.keywords && s.keywords.length ? s.keywords[0]
+      : (s.id === 'pnl' ? '持仓的票分析下' : (s.name || s.id));
+    return `<button type="button" class="qa-skill-row${on ? '' : ' sk-off'}" data-q="${esc(sample)}" data-name="${esc(s.name)}">`
+      + `<span class="sk-ic">${esc(s.icon || '🧩')}</span><span class="sk-name">${esc(s.name)}</span>`
+      + `<span class="sk-desc">${esc((s.desc || '').slice(0, 40))}</span>`
+      + `<span class="sk-toggle${on ? ' on' : ''}" data-sid="${esc(s.id)}" title="点击${on ? '停用' : '启用'}">${on ? '启用中' : '已停用'}</span></button>`;
+  }).join('');
 }
 function renderQaMessages() {
   const box = $('qaMessages');
