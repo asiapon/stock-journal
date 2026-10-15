@@ -1990,3 +1990,6 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
   border-radius: 10px; padding: 10px; background: var(--card, #fff);
   margin-bottom: 6px; box-shadow: 0 8px 24px rgba(15, 23, 42, .08);
 }
+/* v3.12.8 问答回答字体小一号：14px → 13px（用户消息保持 14px；标题同步 13.5px） */
+.msg.assistant { font-size: 13px; }
+.msg.assistant .qa-h { font-size: 13.5px; }
