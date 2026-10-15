@@ -48,7 +48,7 @@ const ALLOWED_FN = new Set([
 if (!DATABASE_URL) {
   console.warn('⚠ 未配置 DATABASE_URL（deploy/.env），RPC 将返回 500；静态页面仍可访问。');
 }
-const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 10 }) : null;
+const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 20 }) : null;
 if (pool) {
   pool.query('SELECT current_user AS u').then(r => {
     console.log('✓ 数据库自检: current_user =', r.rows[0].u, '| 连接串掩码:', DATABASE_URL.replace(/:[^:@/]+@/, ':***@'));

@@ -25,6 +25,29 @@ const { spawn } = require('child_process');
 const PACK_DIR = path.join(__dirname, 'packs');
 if (!fs.existsSync(PACK_DIR)) fs.mkdirSync(PACK_DIR, { recursive: true });
 
+/* 文件式运行器：随模块加载自动确保存在（卸载删 packs/ 后重装也能自动恢复） */
+const RUNNER_SRC = [
+  '# SKILL.md 技能包执行器（由 skillpack.js 自动维护）',
+  '# 用法：python _runner.py <pack名> <函数名> <args JSON> <结果输出文件>',
+  '# 结果写文件而非 stdout —— mootdx 等库的进度条会异步污染 stdout，任何标记法都不可靠。',
+  'import json, os, sys',
+  "sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))",
+  'import importlib',
+  'mod = importlib.import_module(sys.argv[1])',
+  'fn = getattr(mod, sys.argv[2], None)',
+  "assert fn, '函数不存在: ' + sys.argv[2]",
+  'args = json.loads(sys.argv[3]) if len(sys.argv) > 3 else {}',
+  'result = fn(**args)',
+  'out_path = sys.argv[4] if len(sys.argv) > 4 else os.path.join(os.path.dirname(os.path.abspath(__file__)), "_result.json")',
+  "with open(out_path, 'w', encoding='utf-8') as f:",
+  "    json.dump(result, f, ensure_ascii=False, default=str)",
+].join('\n');
+function ensureRunner() {
+  const p = path.join(PACK_DIR, '_runner.py');
+  if (!fs.existsSync(p)) fs.writeFileSync(p, RUNNER_SRC);
+}
+ensureRunner();
+
 function packPath(name) { return path.join(PACK_DIR, name); }
 function safeName(name) { return String(name || '').replace(/[^\w.-]/g, '_').slice(0, 40) || 'pack'; }
 
@@ -85,6 +108,7 @@ async function install(url, name) {
   const safe = safeName(name || 'askill');
   const mdTmp = packPath(safe + '.md.tmp');
   fs.writeFileSync(mdTmp, md);
+  ensureRunner();
   const meta = await new Promise((resolve, reject) => {
     const py = process.platform === 'win32' ? 'python' : 'python3';
     const p = spawn(py, [path.join(__dirname, 'synth.py'), mdTmp, packPath(safe + '.py')],
@@ -141,8 +165,27 @@ function remove(name) {
 }
 
 /* —— 执行：python 子进程调用模块内函数（文件式运行器 _runner.py；
-   结果写文件而非 stdout —— mootdx 等库的进度条会异步污染 stdout） —— */
+   结果写文件而非 stdout —— mootdx 等库的进度条会异步污染 stdout） ——
+   并发限流：每个 Python 子进程 import pandas/mootdx 约占 100-200MB 内存 + 1-2 秒启动，
+   不限并发的话一波请求就能把小服务器打爆 —— 最多同时跑 MAX_PY 个，其余排队。 */
+const MAX_PY = 3;
+let _pyRunning = 0;
+const _pyQueue = [];
+function _pySlot() {
+  return _pyRunning < MAX_PY ? Promise.resolve() : new Promise(r => _pyQueue.push(r));
+}
+function _pyRelease() {
+  _pyRunning -= 1;
+  const next = _pyQueue.shift();
+  if (next) next();
+}
 function runPython(pack, fn, args, timeoutMs) {
+  return _pySlot().then(() => {
+    _pyRunning += 1;
+    return _runPythonOnce(pack, fn, args, timeoutMs).finally(_pyRelease);
+  });
+}
+function _runPythonOnce(pack, fn, args, timeoutMs) {
   return new Promise((resolve, reject) => {
     const py = process.platform === 'win32' ? 'python' : 'python3';
     const resultFile = path.join(PACK_DIR, '_result.json');
