@@ -11,3 +11,4 @@ _shot*.html
 # 自托管部署：密钥与依赖不入库
 deploy/.env
 deploy/node_modules/
+deploy/packs/

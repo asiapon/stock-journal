@@ -15,14 +15,18 @@
    stock-journal-07300）并逐字复刻整套 7 表 / 15 函数云库。
    旧应用 stock-journal-84311、trade-journal-94951 及各自数据保持不变、互不影响 */
 const CLOUD_HOST = 'https://stock-journal-07300.app.workbuddy.host';
-/* v3.10.2 RPC 路由规则改为「本站相对路径优先」：
-   · file: 协议打开 → 云端绝对地址（维持旧行为，本地页面也能连云）
-   · 其余一律走本站相对路径 —— 云端托管时本站就是云端（与旧行为等价）；
-     自托管时（localhost / 局域网 IP / 自己的域名）自动命中自己的后端，前端零配置。
-   旧规则「localhost 一律连云端」会让自托管后端被绕过，故废弃。 */
+/* v3.12.0 混合模式：WorkBuddy 托管界面，数据/技能包跑在自己的服务器。
+   「后端服务器地址」（设置 → 技能 → 后端服务器地址，存 sj_backend_url）非空时，
+   RPC 全部指向它；留空 = 云端数据、同源相对路径，行为与之前完全一致。
+   注意：WorkBuddy 页面是 HTTPS，按浏览器混合内容规则，后端地址必须是 HTTPS
+   （纯 IP 无法签发受信证书 —— 建议挂一个免费域名 + Caddy 自动证书）。 */
+const BACKEND_URL = (() => {
+  try { return String(localStorage.getItem('sj_backend_url') || '').trim().replace(/\/+$/, ''); }
+  catch (e) { return ''; }
+})();
 const RPC_BASE = (location.protocol === 'file:')
-  ? CLOUD_HOST + '/.cloud/database/rest/rpc'
-  : '/.cloud/database/rest/rpc';
+  ? (BACKEND_URL || CLOUD_HOST) + '/.cloud/database/rest/rpc'
+  : (BACKEND_URL ? BACKEND_URL + '/.cloud/database/rest/rpc' : '/.cloud/database/rest/rpc');
 const ACCESS_KEY = 'wbpk_mtCmnoJVwocZG4iRlx6CMe_NtYKw83A5VMgiaYhXnfV80AIGKO1rMbm';
 /* 云端 LLM（免密钥）：模型目录 + 对话调用，与旧版 trade-manager 同一通道 */
 let cloudLlm = null;
@@ -84,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.10.4';
+const APP_VER = '3.12.1';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -2878,7 +2882,10 @@ function bindEvents() {
       toast(s && skillEnabled(id) ? '已启用「' + s.name + '」' : '已停用「' + (s && s.name || id) + '」');
     } else if (act === 'del') {
       const s = skillById(id);
-      if (!confirm('卸载「' + (s && s.name || id) + '」？卸载后问答不再调用它，可在「可添加的技能」里随时装回来。')) return;
+      const isUser = String(id).indexOf('user-') === 0;
+      if (!confirm(isUser
+        ? '删除自定义技能「' + (s && s.name || id) + '」？删除后需重新创建（不可恢复）。'
+        : '卸载「' + (s && s.name || id) + '」？卸载后问答不再调用它，可在「可添加的技能」里随时装回来。')) return;
       skillUninstall(id);
     } else if (act === 'add') {
       const s = skillById(id);
@@ -2889,6 +2896,59 @@ function bindEvents() {
   };
   $('skillListOn').addEventListener('click', onSkillListClick);
   $('skillListOff').addEventListener('click', onSkillListClick);
+
+  /* v3.11.0 自定义技能：表单保存（名称/触发词/报表/排序/列映射 → 本机注册 → 立即可对话调用） */
+  $('uskSaveBtn').addEventListener('click', () => {
+    const name = $('uskName').value.trim();
+    const kws = $('uskKeywords').value.split(/[,，、\s]+/).map(s => s.trim()).filter(Boolean);
+    const report = $('uskReport').value.trim().toUpperCase();
+    const msg = $('uskMsg');
+    if (!name || !kws.length || !report) { msg.textContent = '✗ 名称 / 触发关键词 / 报表名 都是必填'; return; }
+    if (!/^RPT[A-Z0-9_]*$/.test(report)) { msg.textContent = '✗ 报表名应以 RPT 开头（东财数据中心命名），如 RPT_LIFT_STAGE'; return; }
+    const cols = $('uskCols').value.split(/[,，]+/).map(s => s.trim()).filter(Boolean)
+      .map(pair => { const m = pair.split('=').map(x => x.trim()); return { f: m[0], t: m[1] || m[0] }; });
+    userSkillSaveRec({
+      id: 'user-' + Date.now(),
+      name: name,
+      icon: '🧩',
+      keywords: kws,
+      report: report,
+      sortCol: $('uskSortCol').value.trim().toUpperCase(),
+      sortTypes: $('uskSortDir').value === '1' ? 1 : -1,
+      size: Math.min(200, Math.max(1, parseInt($('uskSize').value, 10) || 30)),
+      stock: $('uskStock').checked,
+      cols: cols,
+      enabled: true,
+    });
+    $('uskName').value = ''; $('uskKeywords').value = ''; $('uskReport').value = ''; $('uskCols').value = '';
+    msg.textContent = '✅ 已保存并启用，去问答里用触发词试试（如「' + kws[0] + '」）';
+    renderSkillCenter(); qaRefreshSkillHint();
+    toast('自定义技能「' + name + '」已创建');
+  });
+
+  /* v3.12.0 SKILL.md 技能包：运行时地址 + 整包安装（a-stock-data 等）
+     pkRuntime 读写 sj_backend_url —— 它同时是数据 RPC 的后端地址（混合模式总开关） */
+  $('pkRuntime').value = BACKEND_URL;
+  $('pkSaveRuntimeBtn').addEventListener('click', () => {
+    try { localStorage.setItem('sj_backend_url', $('pkRuntime').value.trim().replace(/\/+$/, '')); } catch (e) { /* */ }
+    $('pkMsg').textContent = '✅ 后端服务器地址已保存，刷新页面后生效（数据与技能包都会指向它；清空并刷新 = 回到 WorkBuddy 云端）';
+    toast('后端服务器地址已更新');
+  });
+  $('pkInstallBtn').addEventListener('click', async () => {
+    if (typeof skillPackInstall !== 'function') return;
+    const btn = $('pkInstallBtn'), msg = $('pkMsg');
+    btn.disabled = true; msg.textContent = '⏳ 正在下载 SKILL.md 并合成 Python 模块…';
+    try {
+      const r = await skillPackInstall($('pkUrl').value.trim(), /a-stock-data/i.test($('pkUrl').value) ? 'askill' : undefined);
+      msg.textContent = '✅ 已安装「' + r.name + '」（' + r.functions + ' 个函数），表格里可启停，问答里模型会自动调用';
+      toast('技能包「' + r.name + '」已安装');
+      renderSkillCenter(); qaRefreshSkillHint();
+    } catch (e) {
+      msg.textContent = '✗ ' + (e.message || e);
+      toast('技能包安装失败', 'warn');
+    }
+    btn.disabled = false;
+  });
 
   /* 设置：分类页签切换 */
   $('setTabs').addEventListener('click', e => {
@@ -4677,6 +4737,161 @@ async function qaLlmStream(messages, { signal, onDelta } = {}) {
   return text;
 }
 
+/* ============================================================
+   v3.11.1 Agentic 工具回路（模型自主决定调用哪个技能）
+   ------------------------------------------------------------
+   之前：规则路由命中才取数，没命中就让模型裸答 —— 模型没有"自己查"的能力
+   （用户截图：「当我的持仓，截至目前的浮动盈亏」→ 只能说"没取到实时行情"）。
+   现在：规则路由没命中时，走 OpenAI function calling 循环 —— 把技能清单以
+   tools 发给模型，模型返回 tool_calls → 本地真实执行 → 结果回传 → 模型继续，
+   最多 4 轮后强制作答。模型不支持 tools（HTTP 400/422）时自动回退纯流式。
+   ============================================================ */
+/* 工具清单（发给模型 的 tools 参数）。call_skill 是通用口子：一个工具覆盖全部内置技能。 */
+function qaAgentTools() {
+  const skillList = (typeof SKILL_CATALOG !== 'undefined')
+    ? SKILL_CATALOG.filter(s => s.vendor !== 'mx').map(s => s.id).join('|') : '';
+  const tools = [
+    { type: 'function', function: {
+      name: 'get_holdings_pnl',
+      description: '获取用户当前持仓的实时浮动盈亏（逐股 + 合计：数量/成本/现价/市值/盈亏/盈亏%/今日涨跌）。凡用户问持仓赚亏、浮动盈亏、市值，优先用它。',
+      parameters: { type: 'object', properties: {} },
+    } },
+    { type: 'function', function: {
+      name: 'get_realtime_quotes',
+      description: '批量获取股票实时行情（现价/涨跌幅/成交额）。用户问到具体股票的当前价格时用。',
+      parameters: { type: 'object', properties: {
+        codes: { type: 'array', items: { type: 'string' }, description: '6 位股票代码数组，如 ["000063","600519"]，最多 30 只' },
+      }, required: ['codes'] },
+    } },
+    { type: 'function', function: {
+      name: 'call_skill',
+      description: '调用内置数据技能查公开数据（涨停板四池/涨停原因/限售解禁/分红/业绩预告/LPR/可转债/条件选股/板块成分/股东/行情财务/技术分析等）。可用 skill 值：' + skillList,
+      parameters: { type: 'object', properties: {
+        skill: { type: 'string', description: '技能 id，见描述中的清单' },
+        question: { type: 'string', description: '具体化的取数指令（含股票名称/代码与条件，如「中兴通讯最新行情」「今日涨停池」）' },
+      }, required: ['question'] },
+    } },
+  ];
+  /* v3.12.0 已安装 SKILL.md 技能包 → 追加 askill 工具（Python 执行于自托管后端） */
+  if (typeof skillPacks === 'function') {
+    const packs = skillPacks().filter(p => p.enabled !== false && (p.functions || []).length);
+    if (packs.length) {
+      tools.push({ type: 'function', function: {
+        name: 'askill',
+        description: '调用已安装的 SKILL.md 技能包函数（Python 数据端点，a-stock-data 等）。'
+          + packs.map(p => '技能包「' + p.packName + '」可用函数：' + p.functions.map(f => f.name || f).join('、')).join('；')
+          + '。参数 args 按函数签名传（对象键值）。',
+        parameters: { type: 'object', properties: {
+          pack: { type: 'string', description: '技能包名，如 askill' },
+          fn: { type: 'string', description: '要调用的函数名，如 em_zt_pool' },
+          args: { type: 'object', description: '函数参数键值对，如 {"date":"20261015"}' },
+        }, required: ['pack', 'fn'] },
+      } });
+    }
+  }
+  return tools;
+}
+/* 技能 id → 具体取数函数（call_skill 的分发表） */
+function qaAgentSkillFn() {
+  return {
+    'em-screen': q => qaToolScreen(q),
+    'em-board': q => qaToolBoard(q),
+    'em-holder': q => qaToolHolder(q),
+    'em-market': q => qaToolMarketAuto(q),
+    'asd-zt': q => qaToolAsdZt(q),
+    'asd-thszt': q => qaToolAsdThsZt(q),
+    'asd-lockup': q => qaToolAsdLockup(q),
+    'asd-dividend': q => qaToolAsdDividend(q),
+    'asd-forecast': q => qaToolAsdForecast(q),
+    'asd-lpr': () => qaToolAsdLpr(),
+    'asd-cb': q => qaToolAsdCb(q),
+  };
+}
+async function qaAgentExec(name, args, question) {
+  if (name === 'get_holdings_pnl') return (await qaToolPnl(question)).block;
+  if (name === 'get_realtime_quotes') {
+    const codes = (args.codes || []).map(c => String(c).replace(/\D/g, '')).filter(c => /^\d{6}$/.test(c)).slice(0, 30);
+    if (!codes.length) throw new Error('codes 必须是 6 位股票代码数组');
+    const qs = await emQuotes(codes);
+    if (!qs.length) throw new Error('行情接口未返回数据');
+    return '实时行情（抓取时点快照）：\n' + qs.map(q =>
+      q.code + ' ' + (q.name || '') + '：现价 ' + q.price + '，涨跌幅 ' + q.pct + '%'
+      + (q.amount != null ? '，成交额 ' + (q.amount / 1e8).toFixed(2) + ' 亿' : '')).join('\n');
+  }
+  if (name === 'call_skill') {
+    const q = String(args.question || question || '');
+    const map = qaAgentSkillFn();
+    const fn = map[args.skill];
+    if (!fn) throw new Error('未知技能 ' + args.skill + '。可用：' + Object.keys(map).join('、'));
+    const r = await fn(q);
+    return (r && r.block) || '技能无返回';
+  }
+  /* v3.12.0 SKILL.md 技能包函数（Python 执行于自托管后端） */
+  if (name === 'askill') {
+    const out = await skillPackExec('pack-' + (args.pack || 'askill'), args.fn, args.args || {});
+    return '技能包函数 ' + args.fn + ' 返回（JSON）：\n' + JSON.stringify(out).slice(0, 6000);
+  }
+  throw new Error('未知工具 ' + name);
+}
+/* 非流式对话（带 tools），返回 assistant message（含 content / tool_calls） */
+async function qaLlmChat(messages, { tools, signal } = {}) {
+  const m = ModelMgr.cur;
+  if (!m) throw new Error('尚未选择模型');
+  const body = { model: m.custom ? m.model : m.id, messages };
+  if (tools && tools.length) body.tools = tools;
+  if (m.custom) {
+    let url = m.baseUrl.replace(/\/+$/, '');
+    if (!/\/chat\/completions$/.test(url)) url += '/chat/completions';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + m.apiKey },
+      body: JSON.stringify(body),
+      signal,
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      throw new Error('自定义模型请求失败 HTTP ' + res.status + (t ? '：' + t.slice(0, 160) : ''));
+    }
+    const j = await res.json();
+    return (j.choices && j.choices[0] && j.choices[0].message) || {};
+  }
+  if (!cloudLlm) throw new Error('云端模型服务不可用');
+  const llm = cloudLlm.llm || cloudLlm;
+  const resp = await llm.chat.completions.create(Object.assign({ stream: false }, body));
+  return (resp.choices && resp.choices[0] && resp.choices[0].message) || {};
+}
+async function qaAgentLoop(baseMsgs, { signal, onNote, onDelta } = {}) {
+  const msgs = baseMsgs.slice();
+  const lastUser = (() => { for (let i = baseMsgs.length - 1; i >= 0; i--) if (baseMsgs[i].role === 'user') return baseMsgs[i].content; return ''; })();
+  for (let round = 0; round < 4; round++) {
+    const msg = await qaLlmChat(msgs, { tools: qaAgentTools(), signal });
+    const tcs = msg.tool_calls || [];
+    if (!tcs.length) {
+      const c = msg.content || '';
+      if (c) return c;
+      /* 部分小模型 / 云网关会返回"空消息且无 tool_calls"（截图反馈的「本轮未生成回答」）。
+         不能把空串当答案返回 → 追问一句，逼模型下一轮给出内容（受轮次上限保护）。 */
+      msgs.push({ role: 'user', content: '（系统提示：你上一条回复是空的。请直接回答用户的问题；'
+        + '需要数据就调用工具，取不到的如实说明，不要输出空回复。）' });
+      continue;
+    }
+    msgs.push({ role: 'assistant', content: msg.content || '', tool_calls: tcs });
+    for (const tc of tcs) {
+      let args = {};
+      try { args = JSON.parse((tc.function && tc.function.arguments) || '{}'); } catch (e) { /* */ }
+      const fnName = (tc.function && tc.function.name) || '';
+      let out;
+      try { out = await qaAgentExec(fnName, args, lastUser); }
+      catch (e) { out = '工具执行失败：' + (e.message || e) + '。请如实告知用户该数据本次未能取到，不要编造。'; }
+      msgs.push({ role: 'tool', tool_call_id: tc.id, content: String(out).slice(0, 8000) });
+    }
+    if (onNote) try { onNote(tcs.map(t => t.function && t.function.name).join('、')); } catch (e) { /* */ }
+  }
+  /* 轮次上限 → 强制作答（不带 tools，避免模型继续要调用） */
+  msgs.push({ role: 'user', content: '（系统提示：工具调用轮次已达上限，请基于以上工具结果直接回答；取不到的数据如实说明。）' });
+  return qaLlmStream(msgs, { signal, onDelta });
+}
+
 /* ---------- 问答上下文：把持仓 / 自选 / 近期交易喂给模型 ----------
    v3.9.8 持仓不再自己算，改走 computeHoldings() —— 那是「总览 / 持仓 / 复盘」页面显示的
    **同一个**引擎。旧写法有两条独立缺陷，叠在一起会让问答把「有仓位」说成「空仓」：
@@ -4799,12 +5014,14 @@ function renderQaMessages() {
   const cid = qaState.conversationId;
   const busy = !!qaState.busyConvs[cid];
   if (!qaState.messages.length && !busy) { box.innerHTML = qaEmptyHtml(); return; }
+  let uidx = 0;
   let html = qaState.messages.map(m => {
     /* v3.9.7 工具结果便签：qa-tools.js 的 qaRunTools 会往消息流里塞一条 role:'tool' 的
        记录（icon/title/lines/html/chart/skills），它不是对话内容而是「本轮取到了哪些数据」
        的凭证，所以单独走 toolNoteHtml 渲染，并用 .msg.note 的居中浅绿气泡样式区分开。 */
     if (m.role === 'tool') return `<div class="msg note">${toolNoteHtml(m)}</div>`;
     if (m.role === 'assistant') return `<div class="msg assistant">${qaMdToHtml(m.content)}</div>`;
+    if (m.role === 'user') { uidx += 1; return `<div class="msg ${m.role}" data-uidx="${uidx - 1}">${esc(m.content)}</div>`; }
     return `<div class="msg ${m.role}">${esc(m.content)}</div>`;
   }).join('');
   /* 正在生成的会话补一个流式气泡：切走再切回来，已生成的部分接着显示
@@ -4815,6 +5032,47 @@ function renderQaMessages() {
   }
   box.innerHTML = html;
   box.scrollTop = box.scrollHeight;
+  renderQaJump();
+}
+
+/* ---------- v3.12.1 右侧「本会话提问」快速导航（类似 WorkBuddy 的历史问题列表） ---------- */
+function qaJumpCollapsed() {
+  try { return localStorage.getItem('sj_qa_jump') === '0'; } catch (e) { return false; }
+}
+function renderQaJump() {
+  const list = $('qaJumpList'), panel = $('qaJumpPanel'), layout = document.querySelector('.qa-layout');
+  if (!list) return;
+  const collapsed = qaJumpCollapsed();
+  if (layout) layout.classList.toggle('no-jump', collapsed);
+  if (panel) panel.classList.toggle('collapsed', collapsed);
+  const btn = $('qaJumpToggle');
+  if (btn) btn.textContent = collapsed ? '«' : '»';
+  const qs = (qaState.messages || []).filter(m => m.role === 'user');
+  const shown = qs.slice(-80);
+  list.innerHTML = shown.length
+    ? shown.map((m, i) => {
+        const idx = qs.length - shown.length + i;
+        const t = m.content.split('\n')[0].replace(/📎.*$/, '').trim() || '（附件提问）';
+        return `<button type="button" class="qa-jump-item" data-uidx="${idx}" title="${esc(t)}">${esc(t.length > 42 ? t.slice(0, 42) + '…' : t)}</button>`;
+      }).join('')
+      : '<div class="qa-jump-item" style="cursor:default">本会话还没有提问</div>';
+}
+function bindQaJump() {
+  const list = $('qaJumpList'), toggle = $('qaJumpToggle');
+  if (list) list.addEventListener('click', e => {
+    const b = e.target.closest('.qa-jump-item[data-uidx]');
+    if (!b) return;
+    const el = document.querySelector(`#qaMessages .msg.user[data-uidx="${b.dataset.uidx}"]`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    el.classList.add('flash');
+    setTimeout(() => el.classList.remove('flash'), 1200);
+  });
+  if (toggle) toggle.addEventListener('click', () => {
+    try { localStorage.setItem('sj_qa_jump', qaJumpCollapsed() ? '1' : '0'); } catch (e) { /* */ }
+    renderQaJump();
+  });
+  renderQaJump();
 }
 
 /* ---------- 渲染：左侧历史列表 ---------- */
@@ -5005,15 +5263,16 @@ async function sendQa() {
     const history = myMsgs
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-9, -1).map(m => ({ role: m.role, content: m.content }));
-    answer = await qaLlmStream(
-      [{ role: 'system', content: sys }, ...history, { role: 'user', content: fullQuestion }],
-      {
-        signal: controller.signal,
+    const baseMsgs = [{ role: 'system', content: sys }, ...history, { role: 'user', content: fullQuestion }];
+    if (toolBlock) {
+      /* 规则路由命中 → 原单轮流式（快路径，不受模型能力影响） */
+      answer = await qaLlmStream(baseMsgs, {
+        signal,
         onDelta: (d) => {
           streamed += d;
-          qaState.stream[convId] = streamed;    // 缓存：切走再切回来能看到已生成的部分
+          qaState.stream[convId] = streamed;
           const h = streamEl();
-          if (!h) return;                        // 该会话不在视图上 → 只累积，不碰 DOM
+          if (!h) return;
           const now = Date.now();
           if (!lastPaint || now - lastPaint > 90) {
             lastPaint = now;
@@ -5022,7 +5281,47 @@ async function sendQa() {
           }
         },
       });
-    answer = answer || streamed;
+      answer = answer || streamed;
+    } else {
+      /* v3.11.1 规则路由没命中 → Agentic 回路：模型自己决定调用哪个技能，
+         本地真实执行后回传，最多 4 轮，再流式/直接作答。
+         模型不支持 function calling（HTTP 400/422）→ 自动回退纯上下文流式。 */
+      const onDeltaAg = (d) => {
+        streamed += d;
+        qaState.stream[convId] = streamed;
+        const h = streamEl();
+        if (!h) return;
+        const now = Date.now();
+        if (!lastPaint || now - lastPaint > 90) {
+          lastPaint = now;
+          h.innerHTML = qaMdToHtml(streamed);
+          if (box) box.scrollTop = box.scrollHeight;
+        }
+      };
+      try {
+        answer = await qaAgentLoop(baseMsgs, {
+          signal,
+          onDelta: onDeltaAg,
+          onNote: nm => {
+            const h = streamEl();
+            if (h && onScreen()) {
+              h.innerHTML = '<span class="hint">🔧 模型自主调用技能：' + esc(nm) + ' …</span>';
+              if (box) box.scrollTop = box.scrollHeight;
+            }
+          },
+        });
+        /* 模型坚持回空串 → 不带 tools 的纯流式兜底（保证用户总能拿到一句回复） */
+        if (!answer) {
+          answer = await qaLlmStream(baseMsgs, { signal, onDelta: onDeltaAg });
+          answer = answer || streamed;
+        }
+      } catch (eAg) {
+        if (eAg && eAg.name === 'AbortError') throw eAg;
+        NetLog.push('llm', 'agentic 回路回退', false, 0, eAg.message || String(eAg));
+        answer = await qaLlmStream(baseMsgs, { signal, onDelta: onDeltaAg });
+        answer = answer || streamed;
+      }
+    }
     const h = streamEl();
     if (h) h.innerHTML = qaMdToHtml(answer);
     }
@@ -5125,6 +5424,8 @@ function initQa() {
   qaRefreshSkillHint();
   /* v3.9.2 快捷提问卡片：事件委托绑在 #qaMessages（卡片本身随渲染重建） */
   bindQaExamples();
+  /* v3.12.1 右侧「本会话提问」快速导航：一次性绑定（委托在容器上，列表随渲染重建） */
+  bindQaJump();
 
   $('newChatBtn').addEventListener('click', () => {
     qaAttach(qaNewId());

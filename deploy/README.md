@@ -73,3 +73,26 @@ schema.sql 幂等，重跑不会动已有数据；后端 `systemctl restart stoc
 - 数据库密码随机生成并写入 `deploy/.env`（脚本输出会提示），`.env` 已在 git 忽略范围内的话请自行保管好；
 - 公网部署：建议改 `REQUIRE_KEY=1` + 自定义 `ACCESS_KEY`，并套一层 Caddy/Nginx 上 HTTPS；
 - 备份：`pg_dump -U stockjournal stockjournal > backup.sql` 一条命令全量备份。
+
+## 两种客户端的访问方式（混合模式）
+
+部署到自己的服务器后，有两个入口，共用同一个后端和数据库：
+
+**客户端 1：自托管前端（同源，最简单）**
+- 浏览器直接打开 `http://服务器IP:3000`（局域网/本机），一切功能同源直连，零配置。
+
+**客户端 2：WorkBuddy 托管的前端（它就是你的"域名"）**
+- WorkBuddy 托管的页面是 HTTPS，按浏览器混合内容规则，它**不能**调用 `http://IP` 的接口 —— 后端必须是 HTTPS。纯 IP 签不了受信证书，推荐零成本方案：注册一个免费二级域名（如 DuckDNS），解析到你服务器 IP，再用 Caddy 反代自动签证书：
+
+  ```
+  # Caddyfile（服务器上装 Caddy 后直接运行）
+  api.你的名字.duckdns.org {
+      reverse_proxy localhost:3000
+  }
+  ```
+
+- 然后在 WorkBuddy 托管的页面里：**设置 → 技能 → 「后端服务器地址」填 `https://api.你的名字.duckdns.org` → 保存 → 刷新页面**。此后数据、账号、技能包全部走你自己的服务器；清空该地址并刷新 = 随时切回 WorkBuddy 云端，两边互不干扰。
+
+**未来微信小程序**：小程序的 request 合法域名要求「备案过的 HTTPS 域名」，纯 IP 不允许 —— 所以上面那个域名建议尽早转正（买个便宜域名做备案），后端 API 完全复用。
+
+**数据迁移**：WorkBuddy 云端「设置 → 数据管理 → 导出 JSON 备份」→ 自托管站同位置「导入」；K 线库在新站点一次「同步K线库」即可重建。

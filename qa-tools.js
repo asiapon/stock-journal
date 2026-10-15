@@ -1918,6 +1918,15 @@ function qaRouteByRule(q) {
   if (!t || t.length > 500) return null;
   const has = re => re.test(t);
   let tool = '';
+  /* v3.11.0 技能管理对话安装：最高优先级 —— 「安装涨停板技能」里也有涨停板，
+     不先判会被 asd-zt/market 吃掉。动词 + 「技能」同现即入（直接短路返回，
+     下面的 if/else if 链会覆盖先行赋值）。 */
+  if (/安装|添加|加装|卸载|删除|删掉|移除|启用|开启|停用|禁用|关闭|列出|清单|列表/.test(t) && /技能/.test(t)) return { tool: 'skillmgr' };
+  /* v3.11.0 用户自定义技能：触发词字面命中即路由（用户自定义优先于内置 —— 自己装的自己说了算） */
+  {
+    const us = userSkills().filter(u => u.enabled !== false && u.keywords && u.keywords.length);
+    for (const u of us) { if (userSkillHit(u, t)) return { tool: u.id }; }
+  }
   // 选股优先级最高：这类问句里常同时出现"诊断""分析"（如"筛选…再做综合诊断"），必须先判
   const listIntent = has(SCREEN_LIST_INTENT_RE) && (has(SCREEN_NOUN_RE) || has(SCREEN_SCOPE_WORD_RE))
     && !/我的(持仓|自选|股票|账户|组合)|我持有|持仓股/.test(t);
@@ -1940,6 +1949,9 @@ function qaRouteByRule(q) {
        既多花一次调用、也可能被误判成市场取数；这里的附加条件是 resolveStockCode 认得出来，
        所以「创业板里站上 MA60 的股票」这类全市场问句不受影响（它已被上面的 screener 接走）。 */
     || (has(/\bMA\s*\d+/i) && !!resolveStockCode(t))) tool = 'tech';
+  /* v3.11.1 持仓实时盈亏：截图反馈的「当我的持仓，截至目前的浮动盈亏」此前无工具命中。
+     放在 review / risk 之后（「复盘我的盈亏」仍走复盘），market 之前。 */
+  else if (has(/浮动盈亏|持仓盈亏|浮盈|浮亏|盈亏|亏损|赚了多少|亏了多少|赚多少|亏多少/)) tool = 'pnl';
   /* v3.10.4 a-stock-data 移植技能：优先级在 market 之前（market 的关键词表里有「分红」，
      不先判会被吃掉）。涨停类两分支：问原因/封板质量走同花顺揭秘，其余走东财四池；
      负向守卫排除「涨停了吗 / 涨停价」这类个股行情问句（继续走 market/tech）。 */
@@ -1956,8 +1968,10 @@ function qaRouteByRule(q) {
   // 组合级 / 全市场级工具无需标的。v3.10.4 起asd-* 七个工具也免标的：
   // 涨停四池 / 揭秘 / LPR / 可转债 / 业绩预告本来就是全市场口径；解禁 / 分红
   // 由包装器内 skillPickCodes 用全市场字典解析（认不出会明示报错，不静默）。
+  // v3.11.0：skillmgr 与用户自定义技能同样免标的（技能管理/自定义执行器自己解析）。
   if (tool === 'review' || tool === 'risk' || tool === 'screener' || tool === 'sim'
-    || tool.indexOf('asd-') === 0) return { tool };
+    || tool.indexOf('asd-') === 0 || tool === 'skillmgr' || tool.indexOf('user-') === 0
+    || tool === 'pnl') return { tool };
   // 主题（公告 / 财务 / 综合）在拿到标的之前就能判，先算出来备用
   const topic = /公告|分红|减持|增持|回购|研报|评级|目标价|新闻|资讯|消息|动态/.test(t) ? 'notice'
     : /财务|营收|收入|净利润|利润|ROE|净资产收益|毛利率|业绩|年报|半年报|季报|每股收益/.test(t) ? 'finance' : 'all';
@@ -3040,6 +3054,62 @@ async function qaToolAsdCb(question) {
   };
 }
 
+/* ---------- v3.11.1 持仓实时盈亏（本地路由直达；也是 agent 回路的 get_holdings_pnl） ----------
+   截图反馈的问句「当我的持仓，截至目前的浮动盈亏」此前无工具命中：
+   上下文里的持仓小抄用的是 S.quotes（可能陈旧），模型只能诚实说"没取到实时行情"。
+   现在：computeHoldings()（页面同一引擎）+ emQuotes() 实时行情 → 逐股与合计浮动盈亏。 */
+async function qaToolPnl(question) {
+  if (typeof computeHoldings !== 'function') throw new Error('持仓引擎不可用');
+  const hs = computeHoldings().filter(h => h.qty > 0);
+  if (!hs.length) throw new Error('当前无持仓（还没有买入记录，或已全部卖出）');
+  const qs = await emQuotes(hs.map(h => h.code));
+  const qm = new Map(qs.map(q => [q.code, q]));
+  let totMv = 0, totCost = 0, miss = [];
+  const rows = hs.map(h => {
+    const q = qm.get(h.code);
+    const px = q && q.price != null ? q.price : null;
+    const costW = h.costValue / h.qty;
+    const mv = px != null ? h.qty * px : null;
+    const pnl = mv != null ? mv - h.costValue : null;
+    const pnlPct = pnl != null && h.costValue > 0 ? pnl / h.costValue * 100 : null;
+    const dayPct = q && q.pct != null ? q.pct : null;
+    if (mv != null) { totMv += mv; totCost += h.costValue; } else miss.push(h.code);
+    return [h.name || h.code, h.code, h.qty, costW.toFixed(3),
+      px == null ? '—' : px,
+      mv == null ? '—' : mv.toFixed(2),
+      pnl == null ? '—' : (pnl >= 0 ? '+' : '') + pnl.toFixed(2),
+      pnlPct == null ? '—' : (pnlPct >= 0 ? '+' : '') + pnlPct.toFixed(2) + '%',
+      dayPct == null ? '—' : (dayPct >= 0 ? '+' : '') + dayPct.toFixed(2) + '%'];
+  });
+  const totPnl = totMv - totCost;
+  rows.push(['合计', '—', '—', '—', '—', totMv.toFixed(2),
+    (totPnl >= 0 ? '+' : '') + totPnl.toFixed(2),
+    totCost > 0 ? (totPnl >= 0 ? '+' : '') + (totPnl / totCost * 100).toFixed(2) + '%' : '—', '—']);
+  const out = { tables: [asdTable('持仓实时浮动盈亏（' + hs.length + ' 只' + (miss.length ? '，' + miss.length + ' 只未取到行情' : '') + '）',
+    ['名称', '代码', '数量', '加权成本', '现价', '市值', '浮动盈亏', '盈亏%', '今日涨跌'],
+    rows, '腾讯公开行情 + 本机持仓引擎（免费、无 Key）')] };
+  const srcLabel = qaSkillSrc('pnl');
+  return {
+    icon: '💼',
+    title: '持仓浮动盈亏已取回（合计 ' + (totPnl >= 0 ? '+' : '') + totPnl.toFixed(2) + ' 元）',
+    lines: [
+      '市值 ' + totMv.toFixed(2) + ' 元 · 成本 ' + totCost.toFixed(2) + ' 元 · 浮动盈亏 '
+        + (totPnl >= 0 ? '+' : '') + totPnl.toFixed(2) + ' 元（' + (totCost > 0 ? (totPnl / totCost * 100).toFixed(2) : '0') + '%）',
+      (miss.length ? '⚠ ' + miss.join('、') + ' 未取到实时行情，已标「—」' : '全部持仓均取到实时行情')
+        + ' · 数据来源：腾讯公开行情（免费、无 Key）',
+    ],
+    html: qaTableHtml(out, 20),
+    skills: [{ id: 'pnl', name: '持仓实时盈亏', ms: 0 }],
+    block: '【工具计算结果 · 持仓实时浮动盈亏（持仓引擎 computeHoldings + 腾讯实时行情，免费）】\n'
+      + '用户原始问句：\n' + question + '\n'
+      + (miss.length ? '注意：' + miss.join('、') + ' 未取到行情（表中为「—」），请如实说明这部分缺失。\n' : '')
+      + '以下是逐股与合计的真实数字，禁止改动任何数字：\n'
+      + qaTablesToText(out, 40) + '\n\n'
+      + '【回答要求（全文 600 字以内）】先给合计浮动盈亏与收益率，再用 Markdown 表格列逐股明细；'
+      + '结尾声明：数据为抓取时点快照，不构成投资建议。',
+  };
+}
+
 async function qaRunTools(question, box, holder) {
   if (!question || question.length > 500) return '';
   const convId = qaState.conversationId;      // 会话快照：切走后便签不插到别的会话
@@ -3079,6 +3149,11 @@ async function qaRunTools(question, box, holder) {
     else if (intent.tool === 'asd-forecast') res = skillEnabled('asd-forecast') ? await qaToolAsdForecast(question) : null;
     else if (intent.tool === 'asd-lpr') res = skillEnabled('asd-lpr') ? await qaToolAsdLpr() : null;
     else if (intent.tool === 'asd-cb') res = skillEnabled('asd-cb') ? await qaToolAsdCb(question) : null;
+  /* v3.11.0 技能管理（对话安装/卸载/启停）与用户自定义技能 */
+    else if (intent.tool === 'skillmgr') res = await qaToolSkillManage(question);
+    else if (String(intent.tool).indexOf('user-') === 0) res = await runUserSkill(intent.tool, question);
+  /* v3.11.1 持仓实时盈亏 */
+    else if (intent.tool === 'pnl') res = await qaToolPnl(question);
     });
   } catch (e) {
     return `【工具执行失败】${intent.tool}：${e && e.message || e}。请如实告诉用户该工具本次执行失败，建议稍后重试或去对应功能页操作。`;
@@ -3384,16 +3459,339 @@ function skillReg() {
   return d;
 }
 function skillRegSave() { sjStoreSet(SKILL_STORE, JSON.stringify(_skillReg || skillReg())); }
-function skillById(id) { return SKILL_CATALOG.find(s => s.id === id) || null; }
-function skillEnabled(id) { const e = skillReg().installed[id]; return !!(e && e.enabled && skillById(id)); }
+
+/* ============================================================
+   v3.11.0 用户自定义技能（表格化管理 + 对话安装/卸载/启停）
+   ------------------------------------------------------------
+   内置目录（SKILL_CATALOG）是随应用发版的；用户还想自己「装」新技能 ——
+   形态：一张声明式配置（名称 + 触发关键词 + 东财数据中心报表名 + 列映射），
+   存本机 sj_user_skills_v1，由通用执行器 runUserSkill 执行。
+   为什么是「东财报表 + 列映射」而不是任意代码：浏览器不可能执行安装来的
+   代码（安全），而 a-stock-data 的 54 个端点里一大半正是这种「报表+过滤+
+   排序+选列」的形态 —— 声明式已经覆盖最高频的安装需求，且零风险。
+   ============================================================ */
+const USER_SKILL_STORE = 'sj_user_skills_v1';
+function userSkills() {
+  try { const l = JSON.parse(sjStoreGet(USER_SKILL_STORE) || '[]'); return Array.isArray(l) ? l : []; }
+  catch (e) { return []; }
+}
+function userSkillsSave(list) { sjStoreSet(USER_SKILL_STORE, JSON.stringify(list)); }
+function userSkillById(id) { return userSkills().find(u => u.id === id) || null; }
+function userSkillSaveRec(rec) {
+  const l = userSkills();
+  const i = l.findIndex(u => u.id === rec.id);
+  if (i >= 0) l[i] = rec; else l.push(rec);
+  userSkillsSave(l);
+}
+function userSkillDelete(id) { userSkillsSave(userSkills().filter(u => u.id !== id)); }
+function userSkillEnabled(id) {
+  const u = userSkillById(id);
+  return !!(u && u.enabled !== false);
+}
+
+/* ---------- v3.12.0 SKILL.md 技能包（整包安装，Python 执行在自托管后端） ----------
+   浏览器跑不了 Python，所以「安装完整技能包」= 后端装包 + 前端调用执行端点。
+   运行时地址 sj_runtime_url：空 = 同源（自托管整站）；填 http(s)://服务器 = 混合模式
+   （WorkBuddy 托管界面与数据，自己服务器只跑技能包）。 */
+const PACK_STORE = 'sj_skill_packs_v1';
+const RUNTIME_KEY = 'sj_runtime_url';
+const A_STOCK_URL = 'https://cdn.jsdelivr.net/gh/simonlin1212/a-stock-data@main/SKILL.md';
+/* 运行时地址：显式配置优先；否则跟随「后端服务器地址」（sj_backend_url，混合模式）；
+   都没有 = 同源（自托管整站）。 */
+function runtimeBase() {
+  const explicit = String(sjStoreGet(RUNTIME_KEY) || '').trim().replace(/\/+$/, '');
+  if (explicit) return explicit;
+  try { return String(localStorage.getItem('sj_backend_url') || '').trim().replace(/\/+$/, ''); }
+  catch (e) { return ''; }
+}
+function skillPacks() {
+  try { const l = JSON.parse(sjStoreGet(PACK_STORE) || '[]'); return Array.isArray(l) ? l : []; }
+  catch (e) { return []; }
+}
+function skillPacksSave(l) { sjStoreSet(PACK_STORE, JSON.stringify(l)); }
+function skillPackById(id) { return skillPacks().find(p => p.id === id) || null; }
+function skillPackSaveRec(rec) {
+  const l = skillPacks();
+  const i = l.findIndex(p => p.id === rec.id);
+  if (i >= 0) l[i] = rec; else l.push(rec);
+  skillPacksSave(l);
+}
+function skillPackDelete(id) { skillPacksSave(skillPacks().filter(p => p.id !== id)); }
+/* 安装：调运行时后端下载/合成/注册，成功后本机记一条（供表格与 agent 工具用） */
+async function skillPackInstall(url, name) {
+  const base = runtimeBase();
+  if (!base) throw new Error('未配置技能运行时地址：自托管整站填「同源」即可；WorkBuddy 托管版请到 设置 → 技能 → 技能包运行时 填你服务器的地址（需 HTTPS）');
+  const res = await fetch(base + '/api/pack/install', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ url: url || A_STOCK_URL, name: name || 'askill' }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.ok) throw new Error(j.msg || ('安装失败 HTTP ' + res.status));
+  skillPackSaveRec({
+    id: 'pack-' + j.name, name: '技能包 · ' + j.name, icon: '📦', enabled: true,
+    packName: j.name, url: url, functions: j.list || [],
+    at: Date.now(),
+  });
+  return j;
+}
+/* 执行：pack 内任意函数，结果 JSON 文本回传给 agent 回路 */
+async function skillPackExec(packId, fn, args) {
+  const p = skillPackById(packId);
+  const base = runtimeBase();
+  if (!base) throw new Error('未配置技能运行时地址（设置 → 技能 → 技能包运行时）');
+  if (p && p.functions && fn && !p.functions.some(f => f.name === fn || f === fn)) {
+    /* 未在清单里也放行（清单是安装时快照），但给个提示词头 */
+  }
+  const res = await fetch(base + '/api/pack/execute', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ pack: (p && p.packName) || String(packId).replace(/^pack-/, ''), fn: fn, args: args || {} }),
+  });
+  const j = await res.json().catch(() => ({}));
+  if (!res.ok || !j.ok) throw new Error(j.msg || ('执行失败 HTTP ' + res.status));
+  return j.data;
+}
+/* 触发词 → 安全正则：只做「关键词字面包含」，不解析用户输入的正则（防注入/防呆） */
+function userSkillHit(u, text) {
+  return (u.keywords || []).some(kw => kw && String(text || '').indexOf(kw) >= 0);
+}
+/* 全部技能视图（内置目录 + 用户自建 + 技能包），供表格渲染 / 对话安装匹配 */
+function skillListAll() {
+  const cat = SKILL_CATALOG.map(s => Object.assign({ isUser: false,
+    installed: !!skillReg().installed[s.id],
+    enabled: skillEnabled(s.id) }, s));
+  const usr = userSkills().map(u => Object.assign({ isUser: true, vendor: 'user',
+    installed: true, enabled: u.enabled !== false,
+    src: '自定义 · 东财数据中心 ' + u.report + '（免费、无 Key）',
+    desc: '触发词：' + (u.keywords || []).join('、') + (u.stock ? ' ｜ 需指定个股' : ' ｜ 全市场'),
+    icon: u.icon || '🧩' }, u));
+  const packs = skillPacks().map(p => Object.assign({ isPack: true, vendor: 'pack',
+    installed: true, enabled: p.enabled !== false,
+    src: 'SKILL.md 技能包（Python 执行于自托管后端）· ' + (p.url || ''),
+    desc: (p.functions || []).length + ' 个函数端点：' + (p.functions || []).slice(0, 12).map(f => f.name || f).join('、')
+      + ((p.functions || []).length > 12 ? ' 等' : ''),
+    icon: p.icon || '📦' }, p));
+  return cat.concat(usr).concat(packs);
+}
+
+/* 通用执行器：报表 + 过滤(可选个股) + 排序 + 列映射 → 便签 + 数据表 */
+async function runUserSkill(id, question) {
+  const u = userSkillById(id);
+  if (!u) throw new Error('技能不存在（可能已被删除）');
+  let filter = '';
+  let stockName = '';
+  if (u.stock) {
+    const codes = await skillPickCodes(question, 1).catch(() => []);
+    if (!codes.length) throw new Error('「' + u.name + '」需要指定个股，但问句里没有认出股票，请带上股票名称或代码');
+    filter = '(SECURITY_CODE="' + codes[0] + '")';
+    stockName = (state.stockDict[codes[0]] && state.stockDict[codes[0]].name) || codes[0];
+  }
+  const rows = await asdDc(u.report, filter, u.size || 30, u.sortCol || '', u.sortTypes == null ? -1 : u.sortTypes);
+  if (!rows.length) throw new Error('「' + u.name + '」接口返回空（无记录 / 非交易日 / 报表名可能写错）');
+  const cols = (u.cols || []).filter(c => c && c.f);
+  const head = cols.length ? cols.map(c => c.t || c.f)
+    : Object.keys(rows[0]).filter(k => k !== 'SECUCODE').slice(0, 8);
+  const tableRows = rows.slice(0, 30).map(r => cols.length
+    ? cols.map(c => (r[c.f] == null ? '—' : r[c.f]))
+    : head.map(h => (r[h] == null ? '—' : r[h])));
+  const entity = (u.stock ? stockName + '（' + (rows[0].SECURITY_CODE || '') + '）· ' : '') + u.name
+    + '（' + rows.length + ' 行' + (rows.length > 30 ? '，示前 30' : '') + '）';
+  const out = { tables: [asdTable(entity, head, tableRows,
+    '自定义技能「' + u.name + '」· 东财数据中心 ' + u.report + '（免费、无 Key）')] };
+  const srcLabel = qaSkillSrc(id) || '自定义技能';
+  return {
+    icon: u.icon || '🧩',
+    title: '「' + u.name + '」已取回（' + rows.length + ' 行）',
+    lines: [
+      entity,
+      '数据来源：东财数据中心 ' + u.report + '（免费、无 Key）· 自定义技能',
+    ],
+    html: qaTableHtml(out, 20),
+    skills: [{ id: id, name: u.name, ms: 0 }],
+    block: '【工具计算结果 · ' + u.name + '（自定义技能 · 东财数据中心 ' + u.report + ' · 免费公开接口）】\n'
+      + '用户原始问句：\n' + question + '\n'
+      + '以下是接口真实返回（表头 + 数据行），禁止改动任何数字、禁止补充表里没有的内容；\n'
+      + '字段名是东财原始列名（如无列映射），请按常识解释（如 PRETAX_BONUS_RMB=每股税前派息）。\n'
+      + qaTablesToText(out, 60) + '\n\n'
+      + '【回答要求（全文 900 字以内）】用 Markdown 表格呈现；结尾声明数据为抓取时点快照，不构成投资建议。',
+  };
+}
+
+/* ---------- 对话安装 / 卸载 / 启停（本地执行，模型只负责路由，绝不靠模型编造结果） ---------- */
+/* 从问句里匹配目标技能：把「安装/技能/一下…」等动词虚词剥掉，剩下的词去技能名里找包含关系 */
+function matchSkillFromQ(q) {
+  const cleaned = String(q || '')
+    .replace(/[，。！？、？?！.]/g, ' ')
+    .replace(/给我|帮我|麻烦|请|一下|这个|那个|把|将|的|了|吗|呢|技能|安装|加装|添加|卸载|删除|删掉|移除|停用|禁用|关闭|关掉|启用|开启|打开|打开|列出|清单|列表|哪些|看看|查询/g, ' ')
+    .trim();
+  const terms = cleaned.split(/\s+/).filter(w => w.length >= 2);
+  if (!terms.length) return null;
+  let best = null;
+  for (const s of skillListAll()) {
+    for (const w of terms) {
+      if (s.name.indexOf(w) >= 0 && (!best || s.name.length > best.name.length)) { best = s; break; }
+    }
+  }
+  return best;
+}
+async function qaToolSkillManage(question) {
+  const q = String(question || '');
+  const isDel = /卸载|删除|移除|删掉/.test(q);
+  const isOff = /停用|禁用|关闭|关掉/.test(q);
+  const isOn = /启用|开启/.test(q);
+  const isList = /列表|清单|有哪些|都装了|装了哪些|列出/.test(q);
+  const isAdd = /安装|添加|加装/.test(q);
+  const isHow = /怎么|如何|能不能|可以.*吗|怎么弄/.test(q);
+
+  if (isList || (!isAdd && !isDel && !isOff && !isOn)) {
+    /* 列表 / 或只是泛泛问技能管理 → 给全表 + 操作指引 */
+    const all = skillListAll();
+    const out = { tables: [{ entity: '技能清单（内置 ' + SKILL_CATALOG.length + ' + 自定义 ' + userSkills().length + '）',
+      ts: false, note: '数据来源：本机技能注册表｜' + new Date().toLocaleString('zh-CN'),
+      head: ['技能', '类别', '状态', '说明'],
+      rows: all.map(s => [s.icon + ' ' + s.name, s.isUser ? '自定义' : s.vendor === 'mx' ? '妙想' : s.vendor === 'asd' ? 'a-stock-data 移植' : '内置',
+        s.enabled ? '启用中' : s.installed ? '已停用' : '未安装', s.desc]) }] };
+    return {
+      icon: '🧩',
+      title: '技能清单（' + all.filter(s => s.enabled).length + ' 个启用中 / 共 ' + all.length + ' 个）',
+      lines: [
+        '对话可直接说：「安装涨停板四池技能」「卸载分红技能」「停用LPR技能」',
+        '新建自定义技能（接任意东财报表）：设置 → 技能 → ➕ 新建自定义技能',
+      ],
+      html: qaTableHtml(out, 40),
+      skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+      block: '【技能管理结果】\n技能清单如上表（本机注册表真实状态）。\n'
+        + '可执行的对话操作：安装/卸载/启用/停用某个技能（例如「安装涨停板四池技能」）；'
+        + '新建自定义技能请到 设置 → 技能 → ➕ 新建自定义技能（表单式，接任意东财公开报表）。\n'
+        + '请按上表如实回答用户当前装了什么、启用了什么。',
+    };
+  }
+
+  const target = matchSkillFromQ(q);
+  /* v3.12.0 技能包（SKILL.md / a-stock-data）对话安装：调运行时后端整包装入 */
+  if (!target && /a-stock-data|技能包|SKILL/i.test(q)) {
+    const mUrl = /(https?:\/\/\S+\.md)/i.exec(q);
+    try {
+      const r = await skillPackInstall(mUrl ? mUrl[1] : A_STOCK_URL, /a-stock-data/i.test(q) ? 'askill' : undefined);
+      try { renderSkillCenter(); qaRefreshSkillHint(); } catch (e) { /* */ }
+      return {
+        icon: '📦',
+        title: '技能包「' + r.name + '」已整包安装（' + r.functions + ' 个函数端点）',
+        lines: [
+          '函数清单：' + (r.list || []).slice(0, 20).join('、') + ((r.list || []).length > 20 ? ' 等' : ''),
+          '问答里已可调用（agentic 回路会自动带上 askill 工具）；如执行报缺依赖，到服务器上 pip install requests pandas',
+        ],
+        html: '',
+        skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+        block: '【技能管理结果 · 本机已执行】已整包安装 SKILL.md 技能包「' + r.name + '」（' + r.functions
+          + ' 个函数）。之后遇到相关数据问题可调用 askill 工具（pack=' + r.name + '，函数见清单）。请如实转告用户。',
+      };
+    } catch (e) {
+      return {
+        icon: '📦',
+        title: '技能包安装失败：' + (e.message || e),
+        lines: [
+          '整包安装（Python 执行）需要自托管后端：设置 → 技能 → 「技能包运行时」填你服务器地址（需 HTTPS）',
+          'WorkBuddy 托管版没有 Python 运行时，只能用内置的 a-stock-data 移植技能（7 个常用端点）',
+        ],
+        html: '',
+        skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+        block: '【技能管理结果】技能包安装失败：' + (e.message || e)
+          + '。请如实告知用户：整包安装需要自托管后端（deploy/），并到 设置 → 技能 配置「技能包运行时」地址；不要假装安装成功。',
+      };
+    }
+  }
+  if (!target) {
+    const names = skillListAll().map(s => s.icon + s.name).join('、');
+    return {
+      icon: '🧩',
+      title: '没有从问句里认出要操作哪个技能',
+      lines: [
+        '内置 + 已装技能：' + names,
+        '想装目录里没有的？设置 → 技能 → ➕ 新建自定义技能（接任意东财公开报表）',
+      ],
+      html: '',
+      skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+      block: '【技能管理结果】用户想' + (isDel ? '卸载' : isAdd ? '安装' : isOn ? '启用' : '停用')
+        + '技能，但问句里认不出具体是哪个技能。请把上面列出的可用技能名单告诉用户，让 ta 说得具体一点'
+        + '（或到 设置 → 技能 里操作）。不要假装安装成功。',
+    };
+  }
+
+  if (isHow) {
+    return {
+      icon: '🧩',
+      title: '技能管理方式说明',
+      lines: [
+        '对话安装：直接说「安装' + target.name + '」即可（本机执行，立即生效）',
+        '表格管理：设置 → 技能（每行有 停用/启用/卸载 按钮）',
+      ],
+      html: '',
+      skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+      block: '【技能管理说明】技能用两种方式管理：① 对话直接说「安装/卸载/停用/启用 某技能」；'
+        + '② 设置 → 技能 的表格里逐行操作。新建接东财报表的自定义技能：设置 → 技能 → ➕ 新建自定义技能。',
+    };
+  }
+
+  /* 执行（改完必须 renderSkillCenter 才能反映到设置页；由调用方 qaRunTools 外层刷新） */
+  let msg = '';
+  if (isAdd) {
+    if (target.isUser) { userSkillSaveRec(Object.assign({}, userSkillById(target.id), { enabled: true })); msg = '自定义技能「' + target.name + '」已启用'; }
+    else if (target.installed && target.enabled) msg = '「' + target.name + '」本来就装着且启用中，无需重复安装';
+    else if (target.installed) { skillSetEnabled(target.id, true); msg = '「' + target.name + '」已重新启用'; }
+    else { skillInstall(target.id); msg = '「' + target.name + '」已安装并启用'; }
+  } else if (isDel) {
+    if (target.isUser) { userSkillDelete(target.id); msg = '自定义技能「' + target.name + '」已删除（如需再用请在设置 → 技能 里重新创建）'; }
+    else { skillUninstall(target.id); msg = '「' + target.name + '」已卸载（可在 设置 → 技能 的「可添加的技能」里装回来）'; }
+  } else if (isOff) {
+    if (target.isUser) userSkillSaveRec(Object.assign({}, userSkillById(target.id), { enabled: false }));
+    else skillSetEnabled(target.id, false);
+    msg = '「' + target.name + '」已停用（问答不再调用它）';
+  } else if (isOn) {
+    if (target.isUser) userSkillSaveRec(Object.assign({}, userSkillById(target.id), { enabled: true }));
+    else skillInstall(target.id);
+    msg = '「' + target.name + '」已启用';
+  }
+  /* 同步设置页与状态条 */
+  try { renderSkillCenter(); qaRefreshSkillHint(); } catch (e) { /* 不在设置页时元素不存在，忽略 */ }
+  return {
+    icon: '🧩',
+    title: msg,
+    lines: [msg, '当前启用 ' + skillListAll().filter(s => s.enabled).length + ' 个技能；表格管理在 设置 → 技能'],
+    html: '',
+    skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+    block: '【技能管理结果 · 本机已执行】' + msg + '\n'
+      + '请把这句话如实转告用户。注意：这是本机注册表的真实操作结果，不是模拟。',
+  };
+}
+
+function skillById(id) {
+  if (String(id).indexOf('user-') === 0) return userSkillById(id);
+  if (String(id).indexOf('pack-') === 0) return skillPackById(id);
+  return SKILL_CATALOG.find(s => s.id === id) || null;
+}
+function skillEnabled(id) {
+  if (String(id).indexOf('user-') === 0) return userSkillEnabled(id);
+  if (String(id).indexOf('pack-') === 0) { const p = skillPackById(id); return !!(p && p.enabled !== false); }
+  const e = skillReg().installed[id]; return !!(e && e.enabled && skillById(id));
+}
 function skillEnabledOfVendor(vendor) { return SKILL_CATALOG.filter(s => s.vendor === vendor && skillEnabled(s.id)); }
 function skillSetEnabled(id, on) {
+  if (String(id).indexOf('user-') === 0) { const u = userSkillById(id); if (u) { u.enabled = !!on; userSkillSaveRec(u); } return; }
+  if (String(id).indexOf('pack-') === 0) { const p = skillPackById(id); if (p) { p.enabled = !!on; skillPackSaveRec(p); } return; }
   const r = skillReg();
   if (!r.installed[id]) r.installed[id] = { at: Date.now() };
   r.installed[id].enabled = !!on;
   skillRegSave();
 }
 function skillUninstall(id) {
+  if (String(id).indexOf('user-') === 0) { userSkillDelete(id); return; }
+  if (String(id).indexOf('pack-') === 0) {
+    const p = skillPackById(id);
+    skillPackDelete(id);
+    /* 后端文件也一并移除（尽力而为；跨域失败不阻断本机记录删除） */
+    if (p) fetch(runtimeBase() + '/api/pack/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: p.packName }) }).catch(() => { });
+    return;
+  }
   const r = skillReg();
   delete r.installed[id];
   // 记一笔「用户主动卸载过」：目录升级补装时要跳过，不能把人家卸掉的又塞回来
@@ -3401,6 +3799,8 @@ function skillUninstall(id) {
   skillRegSave();
 }
 function skillInstall(id) {
+  if (String(id).indexOf('user-') === 0) { const u = userSkillById(id); if (u) { u.enabled = true; userSkillSaveRec(u); } return; }
+  if (String(id).indexOf('pack-') === 0) { const p = skillPackById(id); if (p) { p.enabled = true; skillPackSaveRec(p); } return; }
   const r = skillReg();
   r.installed[id] = { enabled: true, at: Date.now() };
   r.removed = (r.removed || []).filter(x => x !== id);
@@ -3559,10 +3959,15 @@ const QA_SKILL_SRC = {
   'em-评级': '东财数据中心', 'em-公告': '东财公告接口', 'em-资讯': '东财资讯搜索',
   'asd-zt': '东财打板池', 'asd-thszt': '同花顺涨停揭秘', 'asd-lockup': '东财数据中心',
   'asd-dividend': '东财数据中心', 'asd-forecast': '东财数据中心', 'asd-lpr': '东财数据中心', 'asd-cb': '东财数据中心',
+  'pnl': '腾讯行情 + 持仓引擎', 'skillmgr': '本机技能注册表',
 };
 function qaSkillSrc(id) {
   if (QA_SKILL_SRC[id]) return QA_SKILL_SRC[id];
   if (String(id || '').indexOf('mx-') === 0) return '妙想Key';
+  if (String(id || '').indexOf('user-') === 0) {
+    const u = userSkillById(id);
+    return u ? '自定义 · 东财 ' + u.report : '自定义技能';
+  }
   if (String(id || '').indexOf('asd-') === 0) return 'a-stock-data 移植';
   if (String(id || '').indexOf('em-') === 0) return '免费公开数据';
   return '';
@@ -3572,10 +3977,12 @@ function qaSkillSrc(id) {
 function qaSkillHintText() {
   const em = skillEnabledOfVendor('em').length;
   const asd = skillEnabledOfVendor('asd').length;
+  const usr = userSkills().filter(u => u.enabled !== false).length;
   const mx = skillEnabledOfVendor('mx');
-  if (!em && !asd && !mx.length) return '取数技能：未启用任何技能，问答只用模型自身知识回答';
+  if (!em && !asd && !usr && !mx.length) return '取数技能：未启用任何技能，问答只用模型自身知识回答';
   let s = '取数技能：' + em + ' 个内置（免费公开数据，无需 Key）';
   if (asd) s += ' ＋ ' + asd + ' 个 a-stock-data 移植（免费公开接口，无需 Key）';
+  if (usr) s += ' ＋ ' + usr + ' 个自定义';
   if (mx.length) s += ' ＋ ' + mx.length + ' 个妙想（' + (mxKeyGet() ? 'Key 已配置 ' + mxKeyMask() : '待配置 Key：设置 → 技能') + '）';
   return s;
 }
@@ -3610,27 +4017,50 @@ function renderSkillCenter() {
   const offBox = document.getElementById('skillListOff');
   const offBlock = document.getElementById('skillOffBlock');
   const sum = document.getElementById('skillSummary');
+  /* v3.11.0 表格化管理：每行 = 技能｜来源｜状态｜操作（按钮沿用 data-sk 委托协议） */
+  const catBadge = s => (s.vendor === 'mx' && !mxKeyGet() ? '<span class="sk-badge warn">待配置凭据</span>' : '')
+    + (s.isUser ? '<span class="sk-badge">自定义</span>'
+    : s.vendor === 'mx' ? '<span class="sk-badge mx">妙想 Key</span>'
+    : s.vendor === 'asd' ? '<span class="sk-badge">a-stock-data</span>' : '');
+  const skRow = s => {
+    const on = s.enabled;
+    const actions = s.installed
+      ? '<button type="button" class="btn ghost sm" data-sk="toggle" data-sid="' + s.id + '">' + (on ? '⏸ 停用' : '▶ 启用') + '</button> '
+        + '<button type="button" class="btn ghost sm" data-sk="del" data-sid="' + s.id + '">' + (s.isUser ? '🗑 删除' : '卸载') + '</button>'
+      : '<button type="button" class="btn primary sm" data-sk="add" data-sid="' + s.id + '">＋ 安装</button>';
+    return '<tr' + (s.installed && !on ? ' class="qa-dim"' : '') + '>'
+      + '<td>' + s.icon + ' ' + esc(s.name) + ' ' + catBadge(s) + '</td>'
+      + '<td>' + esc(s.desc) + '<br><span style="color:var(--ink-3)">数据来源：' + esc(s.src) + '</span></td>'
+      + '<td>' + (s.installed ? (on ? '✅ 启用中' : '⏸ 已停用') : '— 未安装 —') + '</td>'
+      + '<td style="white-space:nowrap">' + actions + '</td></tr>';
+  };
+  const skTable = list => '<div class="table-wrap"><table class="qa-tbl"><thead><tr>'
+    + '<th>技能</th><th>说明 / 来源</th><th>状态</th><th>操作</th></tr></thead><tbody>'
+    + (list.length ? list.map(skRow).join('') : '<tr><td colspan="4">（无）</td></tr>')
+    + '</tbody></table></div>';
   if (onBox) {
-    const installed = SKILL_CATALOG.filter(s => skillReg().installed[s.id]);
-    onBox.innerHTML = installed.map(s => skillCardHtml(s, true)).join('');
+    const installed = skillListAll().filter(s => s.installed);
+    onBox.innerHTML = skTable(installed);
   }
   if (offBox) {
-    const removed = SKILL_CATALOG.filter(s => !skillReg().installed[s.id]);
-    offBox.innerHTML = removed.map(s => skillCardHtml(s, false)).join('');
+    const removed = skillListAll().filter(s => !s.installed);
+    offBox.innerHTML = skTable(removed);
     if (offBlock) offBlock.hidden = !removed.length;
   }
   if (sum) {
+    const all = skillListAll();
+    const enabledCnt = all.filter(s => s.enabled).length;
     const em = skillEnabledOfVendor('em').length, asd = skillEnabledOfVendor('asd').length,
-      mx = skillEnabledOfVendor('mx').length;
-    sum.textContent = '已启用 ' + (em + asd + mx) + ' 个技能：' + em + ' 个内置免费（无需 Key）+ '
-      + asd + ' 个 a-stock-data 移植（免费公开接口，无需 Key）+ ' + mx + ' 个妙想'
+      mx = skillEnabledOfVendor('mx').length, usr = all.filter(s => s.isUser && s.enabled).length;
+    sum.textContent = '已启用 ' + enabledCnt + ' / ' + all.length + ' 个技能：' + em + ' 个内置免费（无需 Key）+ '
+      + asd + ' 个 a-stock-data 移植（免费公开接口，无需 Key）+ ' + usr + ' 个自定义 + ' + mx + ' 个妙想'
       + (mx ? (mxKeyGet() ? '（Key 已配置）' : '（待配置 Key）') : '')
-      + '。只有已启用的技能才会被问答调用；停用即真正关闭该能力。';
+      + '。对话里也可以直接说「安装/卸载/停用 某技能」；只有已启用的技能才会被问答调用。';
   }
   const tbl = document.getElementById('skillSrcTbl');
   if (tbl) {
     tbl.innerHTML = '<table class="qa-tbl"><thead><tr><th>技能</th><th>数据来源</th><th>说明</th></tr></thead><tbody>'
-      + SKILL_CATALOG.map(s => '<tr><td>' + s.icon + ' ' + esc(s.name) + '</td><td>' + esc(s.src) + '</td><td>' + esc(s.desc) + '</td></tr>').join('')
+      + skillListAll().map(s => '<tr><td>' + s.icon + ' ' + esc(s.name) + '</td><td>' + esc(s.src) + '</td><td>' + esc(s.desc) + '</td></tr>').join('')
       + '</tbody></table>';
   }
   const st = document.getElementById('mxKeyStatus');

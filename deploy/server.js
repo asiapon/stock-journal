@@ -67,9 +67,41 @@ async function fnArgs(fn) {
 }
 
 const app = express();
+const skillpack = require('./skillpack');   // v3.12.0 SKILL.md 技能包运行时
 app.use(express.json({ limit: '16mb' }));          // kline_upsert 单批约 1.6MB，留足余量
+/* CORS 必须在所有路由之前（含 RPC）—— 混合模式下 WorkBuddy 托管的前端会跨域调本服务 */
+app.use((req, res, next) => {
+  res.setHeader('Access-Control-Allow-Origin', '*');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-wb-webapp-access-key');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
 app.get('/healthz', (req, res) => res.json({ ok: true, ts: Date.now() }));
+app.get('/api/pack/list', (req, res) => res.json({ ok: true, packs: skillpack.list() }));
+app.post('/api/pack/install', async (req, res) => {
+  try {
+    const { url, name } = req.body || {};
+    if (!url) return res.status(400).json({ ok: false, msg: '缺少 url（SKILL.md 地址）' });
+    const r = await skillpack.install(String(url), name);
+    console.log('[pack] 已安装', r.name, '(', r.functions, '个函数 )');
+    res.json(Object.assign({ ok: true }, r));
+  } catch (e) { res.status(500).json({ ok: false, msg: e.message || String(e) }); }
+});
+app.post('/api/pack/execute', async (req, res) => {
+  try {
+    const { pack, fn, args } = req.body || {};
+    if (!pack || !fn) return res.status(400).json({ ok: false, msg: '缺少 pack / fn' });
+    const r = await skillpack.runPython(pack, fn, args || {});
+    res.json({ ok: true, data: r });
+  } catch (e) { res.status(500).json({ ok: false, msg: e.message || String(e) }); }
+});
+app.post('/api/pack/remove', (req, res) => {
+  const { name } = req.body || {};
+  if (!name) return res.status(400).json({ ok: false, msg: '缺少 name' });
+  res.json(Object.assign({ ok: true }, skillpack.remove(name)));
+});
 
 /* RPC 兼容层：body 键 = 函数命名参数，缺省补 NULL（如 kline_all 不传 p_since） */
 app.post('/.cloud/database/rest/rpc/:fn', async (req, res) => {

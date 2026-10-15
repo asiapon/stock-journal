@@ -21,13 +21,13 @@ echo "=== 股票日记一键部署（$(date '+%F %T')）==="
 echo "仓库: $ROOT_DIR"
 
 # ---------- 1. 基础依赖 ----------
-echo "--- [1/6] 系统依赖"
+echo "--- [1/7] 系统依赖"
 export DEBIAN_FRONTEND=noninteractive
 apt-get update -qq
 apt-get install -y -qq curl ca-certificates gnupg >/dev/null
 
 # ---------- 2. Node.js >= 18 ----------
-echo "--- [2/6] Node.js"
+echo "--- [2/7] Node.js"
 if command -v node >/dev/null 2>&1 && [ "$(node -p 'parseInt(process.versions.node)')" -ge 18 ]; then
   echo "  已有 node $(node -v)，跳过"
 else
@@ -37,7 +37,7 @@ else
 fi
 
 # ---------- 3. PostgreSQL ----------
-echo "--- [3/6] PostgreSQL"
+echo "--- [3/7] PostgreSQL"
 if ! command -v psql >/dev/null 2>&1; then
   apt-get install -y -qq postgresql postgresql-contrib >/dev/null
 fi
@@ -61,13 +61,20 @@ sudo -u postgres "${PG_BIN}/psql" -d "${DB_NAME}" -v ON_ERROR_STOP=1 \
 echo "  数据库 ${DB_NAME} 就绪（schema 已同步）"
 
 # ---------- 4. 后端依赖 ----------
-echo "--- [4/6] npm 依赖"
+echo "--- [4/7] npm 依赖 + Python（SKILL.md 技能包运行时）"
 cd "$DEPLOY_DIR"
 npm install --omit=dev --no-fund --no-audit >/dev/null 2>&1
 echo "  node_modules 就绪"
+# Python：整包安装 SKILL.md 技能包（a-stock-data 等）需要
+if ! command -v python3 >/dev/null 2>&1; then
+  apt-get install -y -qq python3 python3-pip >/dev/null
+fi
+python3 -m pip install --quiet --break-system-packages requests pandas stockstats mootdx baostock xlrd openpyxl 2>/dev/null \
+  || python3 -m pip install --quiet requests pandas stockstats mootdx baostock xlrd openpyxl 2>/dev/null \
+  || echo "  ⚠ Python 依赖自动安装失败，请手动执行: python3 -m pip install requests pandas stockstats mootdx baostock xlrd openpyxl"
 
 # ---------- 5. .env ----------
-echo "--- [5/6] 配置"
+echo "--- [5/7] 配置"
 if [ ! -f .env ]; then
   cat > .env <<EOF
 PORT=${PORT}
@@ -84,7 +91,7 @@ fi
 [ "$GENERATED_PW" = 1 ] && echo "  （随机生成的数据库密码已写入 .env，无需记忆）"
 
 # ---------- 6. systemd 服务 ----------
-echo "--- [6/6] systemd 服务"
+echo "--- [6/7] systemd 服务"
 cat > /etc/systemd/system/stock-journal.service <<EOF
 [Unit]
 Description=Stock Journal (股票日记) self-hosted server

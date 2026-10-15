@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.10.4">
+<link rel="stylesheet" href="style.css?v=3.12.1">
 </head>
 <body>
 
@@ -422,6 +422,13 @@
             <input type="file" id="qaFileInput" hidden multiple accept=".txt,.csv,.md,.json,.log,image/*">
           </div>
         </div>
+        <aside class="qa-right" id="qaJumpPanel">
+          <div class="qa-jump-head">
+            <span>本会话提问</span>
+            <button id="qaJumpToggle" class="btn ghost sm" type="button" title="收起 / 展开">»</button>
+          </div>
+          <div id="qaJumpList" class="qa-jump-list"></div>
+        </aside>
       </div>
     </section>
 
@@ -628,17 +635,56 @@
         <div class="rate-block">
           <div class="card-title-row" style="margin-top:4px">
             <span class="card-title" style="font-size:14px">已安装技能</span>
-            <span class="hint">停用即真正关闭该能力；问答只调用已启用的技能</span>
+            <span class="hint">停用即真正关闭该能力；问答只调用已启用的技能；对话里也可以直接说「安装/卸载/停用 某技能」</span>
           </div>
-          <div id="skillListOn" class="skill-list"></div>
+          <div id="skillListOn"></div>
         </div>
 
         <div class="rate-block" id="skillOffBlock" hidden>
-          <div class="card-title-row" style="margin-top:4px">
-            <span class="card-title" style="font-size:14px">可添加的技能</span>
-          </div>
-          <div id="skillListOff" class="skill-list"></div>
+          <details class="cm-details">
+            <summary>📚 浏览可安装的技能（卸载的会出现在这里，可随时装回）</summary>
+            <div id="skillListOff" style="margin-top:8px"></div>
+          </details>
         </div>
+
+        <details class="cm-details" id="skillPackBlock">
+          <summary>📦 安装 SKILL.md 技能包（整包安装，如 a-stock-data 全部 54 端点）</summary>
+          <p class="hint" style="margin-top:6px">
+            整包安装 = 把整个技能（内嵌 Python）装到<b>你的服务器</b>上执行。前提：已部署自托管后端（deploy/），并安装 Python 与依赖（<code>pip install requests pandas</code>）。
+            WorkBuddy 云端托管没有 Python 运行时，只能用内置的 a-stock-data 移植技能（7 个常用端点）。混合模式：界面与数据继续用 WorkBuddy 托管，技能包跑在你自己的服务器上（运行时地址需 HTTPS）。
+          </p>
+          <div class="quick-input-row"><input id="pkRuntime" type="text" class="search-input" placeholder="后端服务器地址（如 https://api.你的域名；留空 = 数据与技能都走 WorkBuddy 云端）" maxlength="200"></div>
+          <div class="quick-input-row"><input id="pkUrl" type="text" class="search-input" placeholder="SKILL.md 地址" value="https://cdn.jsdelivr.net/gh/simonlin1212/a-stock-data@main/SKILL.md" maxlength="300"></div>
+          <div class="form-actions">
+            <button id="pkInstallBtn" class="btn primary sm" type="button">📦 安装技能包</button>
+            <button id="pkSaveRuntimeBtn" class="btn ghost sm" type="button">保存运行时地址</button>
+            <span class="hint" id="pkMsg"></span>
+          </div>
+        </details>
+
+        <details class="cm-details" id="skillUserBlock">
+          <summary>➕ 新建自定义技能（接任意东财公开报表，免 Key）</summary>
+          <p class="hint" style="margin-top:6px">
+            填一张表就能把「东财数据中心」的任意公开报表变成问答技能：给几个<b>触发关键词</b>（对话里出现就自动调用）、
+            报表名（如 RPT_LIFT_STAGE）和想看的列。取数走免费公开接口，与内置技能同一套审计日志。
+            报表名与字段可在 <a href="https://data.eastmoney.com/" target="_blank" rel="noreferrer">东财数据中心</a>
+            各列表页的接口里查到，开源项目 <a href="https://github.com/simonlin1212/a-stock-data" target="_blank" rel="noreferrer">a-stock-data</a> 的 SKILL.md 里有现成清单。
+          </p>
+          <div class="quick-input-row"><input id="uskName" type="text" class="search-input" placeholder="技能名称（必填，如：限售解禁）" maxlength="20"></div>
+          <div class="quick-input-row"><input id="uskKeywords" type="text" class="search-input" placeholder="触发关键词（必填，逗号分隔，如：解禁,限售,解禁日历）" maxlength="60"></div>
+          <div class="quick-input-row"><input id="uskReport" type="text" class="search-input" placeholder="东财报表名（必填，如 RPT_LIFT_STAGE）" maxlength="60"></div>
+          <div class="quick-input-row">
+            <input id="uskSortCol" type="text" class="search-input" placeholder="排序字段（可选，如 FREE_DATE）" maxlength="60" style="flex:2">
+            <select id="uskSortDir" style="flex:1"><option value="-1">降序</option><option value="1">升序</option></select>
+            <input id="uskSize" type="number" class="search-input" placeholder="行数" value="30" min="1" max="200" style="flex:1">
+          </div>
+          <div class="quick-input-row"><label style="display:flex;align-items:center;gap:5px"><input type="checkbox" id="uskStock"> 需要指定个股（按问句里的股票过滤 SECURITY_CODE）</label></div>
+          <div class="quick-input-row"><input id="uskCols" type="text" class="search-input" placeholder="显示列（可选，格式：字段=表头，多个用逗号分隔；留空显示原始前 8 列）" maxlength="300"></div>
+          <div class="form-actions">
+            <button id="uskSaveBtn" class="btn primary sm" type="button">保存并启用</button>
+            <span class="hint" id="uskMsg"></span>
+          </div>
+        </details>
 
         <details class="cm-details">
           <summary>📋 各技能的数据来源一览（问答里的数字从哪来）</summary>
@@ -820,12 +866,12 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.10.4"></script>
-<script src="kline-store.js?v=3.10.4"></script>
-<script src="analysis-extra.js?v=3.10.4"></script>
+<script src="app.js?v=3.12.1"></script>
+<script src="kline-store.js?v=3.12.1"></script>
+<script src="analysis-extra.js?v=3.12.1"></script>
 <!-- v3.9.7 智能问答工具层：选股 / 行情 / 财务 / 诊断 / 回测等取数能力。
      必须排在 analysis-extra.js 之后 —— 它直接复用后者挂在全局词法作用域上的
      state / fmtWan / parseJsonLoose / marketOf / qSnapshot / computePositions。 -->
-<script src="qa-tools.js?v=3.10.4"></script>
+<script src="qa-tools.js?v=3.12.1"></script>
 </body>
 </html>

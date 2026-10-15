@@ -1,4 +1,4 @@
-# ============================================================================
+﻿# ============================================================================
 # 股票日记 · Windows 一键部署脚本（v3.10.2）
 # 用法（管理员 PowerShell）：
 #   cd deploy
@@ -31,7 +31,7 @@ function Test-Admin {
 if (-not (Test-Admin)) { Write-Host "✗ 请用管理员身份运行 PowerShell" -ForegroundColor Red; exit 1 }
 
 # ---------- 1. Node.js >= 18 ----------
-Write-Host "--- [1/5] Node.js"
+Write-Host "--- [1/6] Node.js"
 $nodeOk = $false
 try { $v = (& node -v) 2>$null; if ($v -match '^v(\d+)') { if ([int]$Matches[1] -ge 18) { $nodeOk = $true; Write-Host "  已有 node $v，跳过" } } } catch {}
 if (-not $nodeOk) {
@@ -49,7 +49,7 @@ if (-not $nodeOk) {
 }
 
 # ---------- 2. PostgreSQL ----------
-Write-Host "--- [2/5] PostgreSQL"
+Write-Host "--- [2/6] PostgreSQL"
 $pgBin = $null
 if (Test-Path "C:\Program Files\PostgreSQL") {
   $ver = (Get-ChildItem "C:\Program Files\PostgreSQL" | Sort-Object Name -Descending | Select-Object -First 1).Name
@@ -72,7 +72,7 @@ if (-not $PgSuperPassword) {
 $env:PGPASSWORD = $PgSuperPassword
 
 # ---------- 3. 角色 / 数据库 / schema ----------
-Write-Host "--- [3/5] 数据库初始化"
+Write-Host "--- [3/6] 数据库初始化"
 if (-not $DbPassword) {
   $bytes = New-Object byte[] 15; (New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes($bytes)
   $DbPassword = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '').Substring(0, 20)
@@ -90,7 +90,22 @@ if ("$existsDb".Trim() -ne "1") {
 Write-Host "  数据库 $DbName 就绪（schema 已同步）"
 
 # ---------- 4. 后端依赖 + .env ----------
-Write-Host "--- [4/5] 后端依赖与配置"
+Write-Host "--- [4/6] 后端依赖与配置"
+# Python：整包安装 SKILL.md 技能包（a-stock-data 等）需要
+$pyOk = $false
+try { $pv = (& python --version) 2>$null; if ($pv -match '^Python 3') { $pyOk = $true; Write-Host "  已有 $pv，跳过安装" } } catch {}
+if (-not $pyOk) {
+  $winget = Get-Command winget -ErrorAction SilentlyContinue
+  if ($winget) {
+    winget install -e --id Python.Python.3.12 --accept-source-agreements --accept-package-agreements | Out-Null
+    $env:Path = [Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [Environment]::GetEnvironmentVariable("Path", "User")
+    Write-Host "  已安装 $(& python --version)"
+  } else {
+    Write-Host "  ⚠ 未装 Python 且无 winget —— SKILL.md 技能包不可用，其余功能不受影响" -ForegroundColor Yellow
+  }
+}
+& python -m pip install --quiet requests pandas stockstats mootdx baostock xlrd openpyxl 2>$null
+if ($LASTEXITCODE -ne 0) { Write-Host "  ⚠ Python 依赖安装失败，请手动: python -m pip install requests pandas stockstats mootdx baostock xlrd openpyxl" -ForegroundColor Yellow }
 Push-Location $DeployDir
 & npm install --omit=dev --no-fund --no-audit 2>$null | Out-Null
 Pop-Location
@@ -109,7 +124,9 @@ ACCESS_KEY=
 }
 
 # ---------- 5. 启动脚本 + 可选自启 ----------
-Write-Host "--- [5/5] 启动方式"
+Write-Host "--- [5/6] 启动方式 + 防火墙"
+netsh advfirewall firewall add rule name="StockJournal3000" dir=in action=allow protocol=TCP localport=$Port | Out-Null
+Write-Host "  已放行入站端口 $Port"
 $bat = Join-Path $DeployDir "start-windows.bat"
 @"
 @echo off

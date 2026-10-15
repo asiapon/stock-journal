@@ -1698,7 +1698,27 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
    v3.9.7 起 .qa-skill-tag / .qa-chart / .qa-spark / .qa-tbl* 已随工具层一并补齐，
    见本段下方的「v3.9.7 智能问答工具层」注释块。
    ============================================================ */
-.qa-layout { display: grid; grid-template-columns: 260px 1fr; gap: 16px; height: 640px; }
+.qa-layout { display: grid; grid-template-columns: 260px minmax(0, 1fr) 230px; gap: 16px; height: 640px; }
+.qa-layout.no-jump { grid-template-columns: 260px minmax(0, 1fr); }
+.qa-right { display: flex; flex-direction: column; gap: 8px; overflow: hidden; border-radius: var(--card-r, 12px); background: var(--card, #fff); padding: 10px; }
+.qa-right.collapsed { display: none; }
+.qa-layout.no-jump .qa-right { display: none; }
+.qa-jump-head { display: flex; align-items: center; justify-content: space-between; font-size: 12px; font-weight: 700; color: var(--ink-2, #475569); }
+.qa-jump-list { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 2px; }
+.qa-jump-item {
+  text-align: left; border: 0; background: transparent; padding: 7px 8px; border-radius: 7px;
+  font-size: 12px; color: var(--ink-2, #475569); cursor: pointer;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.qa-jump-item:hover { background: var(--bg, #f1f5f9); color: var(--ink); }
+.qa-jump-item.flash { background: var(--bg, #f1f5f9); }
+.qa-right-toggle { position: absolute; right: -10px; top: -10px; display: none; }
+.qa-layout.no-jump .qa-right-toggle { display: inline-block; }
+/* 窄屏：右面板直接隐藏（布局已变单列） */
+@media (max-width: 1080px) {
+  .qa-layout, .qa-layout.no-jump { grid-template-columns: 260px minmax(0, 1fr); }
+  .qa-right { display: none; }
+}
 .qa-side { display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
 .qa-history { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
 .qa-hist-item {
@@ -1961,3 +1981,4 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 .mom-conds .chk { display: inline-flex; align-items: center; gap: 4px; cursor: pointer; }
 .mom-exact { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
   color: #15803d; background: rgba(21, 128, 61, .12); margin-left: 8px; }
+.msg.user.flash { box-shadow: 0 0 0 2px var(--up, #d93a2b) inset; border-radius: 8px; transition: box-shadow .4s; }
