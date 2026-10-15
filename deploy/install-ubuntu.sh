@@ -53,6 +53,8 @@ fi
 # 角色 / 库（幂等）
 sudo -u postgres "${PG_BIN}/psql" -tAc "SELECT 1 FROM pg_roles WHERE rolname='${DB_USER}'" | grep -q 1 \
   || sudo -u postgres "${PG_BIN}/psql" -qc "CREATE ROLE ${DB_USER} LOGIN PASSWORD '${DB_PASSWORD}'"
+# 角色已存在（上次安装）时，把密码同步成本次的——否则重装后 .env 里的密码与角色旧密码不一致，认证必失败
+sudo -u postgres "${PG_BIN}/psql" -qc "ALTER ROLE ${DB_USER} WITH LOGIN PASSWORD '${DB_PASSWORD}'"
 sudo -u postgres "${PG_BIN}/psql" -tAc "SELECT 1 FROM pg_database WHERE datname='${DB_NAME}'" | grep -q 1 \
   || sudo -u postgres "${PG_BIN}/psql" -qc "CREATE DATABASE ${DB_NAME} OWNER ${DB_USER}"
 # schema（幂等；以属主角色执行，函数/表归它所有）
