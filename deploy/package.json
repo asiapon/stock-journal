@@ -2,7 +2,7 @@
   "name": "stock-journal-server",
   "version": "1.0.0",
   "private": true,
-  "description": "股票日记 自托管后端：静态托管 + RPC 兼容层（PostgreSQL）",
+  "description": "操作日记 自托管后端：静态托管 + RPC 兼容层（PostgreSQL）",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"

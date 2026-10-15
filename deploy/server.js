@@ -1,5 +1,5 @@
 /* ============================================================
-   股票日记 · 自托管后端（v3.10.2）
+   操作日记 · 自托管后端（v3.10.2）
    ------------------------------------------------------------
    职责两件事：
    1) 静态托管应用本体（仓库根目录：index.html / app.js / kline-store.js / 字典…）
@@ -188,7 +188,7 @@ if (pool) {
 }
 
 const server = app.listen(PORT, () => {
-  console.log(`✓ 股票日记自托管后端已启动: http://localhost:${PORT}`);
+  console.log(`✓ 操作日记自托管后端已启动: http://localhost:${PORT}`);
   console.log(`  静态根目录: ${ROOT}`);
   console.log(`  数据库: ${DATABASE_URL ? DATABASE_URL.replace(/:[^:@/]+@/, ':***@') : '(未配置!)'}`);
 });

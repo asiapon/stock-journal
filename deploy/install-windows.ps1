@@ -1,5 +1,5 @@
 ﻿# ============================================================================
-# 股票日记 · Windows 一键部署脚本（v3.10.2）
+# 操作日记 · Windows 一键部署脚本（v3.10.2）
 # 用法（管理员 PowerShell）：
 #   cd deploy
 #   powershell -ExecutionPolicy Bypass -File .\install-windows.ps1
@@ -21,7 +21,7 @@ $DbName = "stockjournal"
 $DbUser = "stockjournal"
 $Port = 3000
 
-Write-Host "=== 股票日记一键部署（Windows）===" -ForegroundColor Cyan
+Write-Host "=== 操作日记一键部署（Windows）===" -ForegroundColor Cyan
 Write-Host "仓库: $RootDir"
 
 function Test-Admin {

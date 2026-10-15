@@ -1,5 +1,5 @@
 /* ============================================================
-   股票日记 · SKILL.md 技能包管理（deploy/skillpack.js，v3.12.0）
+   操作日记 · SKILL.md 技能包管理（deploy/skillpack.js，v3.12.0）
    ------------------------------------------------------------
    目的：让用户「整包安装」任意符合 a-stock-data 形态的 SKILL.md
    （单文件 Markdown + 内嵌 Python 函数，如 github.com/simonlin1212/a-stock-data）。

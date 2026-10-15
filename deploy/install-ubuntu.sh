@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================================
-# 股票日记 · Ubuntu/Debian 一键部署脚本（v3.10.2）
+# 操作日记 · Ubuntu/Debian 一键部署脚本（v3.10.2）
 # 用法：  sudo bash install-ubuntu.sh
 # 可选环境变量：
 #   DB_PASSWORD=xxx    数据库角色 stockjournal 的密码（缺省随机生成，见输出）
@@ -17,7 +17,7 @@ DB_PASSWORD="${DB_PASSWORD:-}"
 PORT="${PORT:-3000}"
 
 [ "$(id -u)" -eq 0 ] || { echo "✗ 请用 sudo 运行"; exit 1; }
-echo "=== 股票日记一键部署（$(date '+%F %T')）==="
+echo "=== 操作日记一键部署（$(date '+%F %T')）==="
 echo "仓库: $ROOT_DIR"
 
 # ---------- 1. 基础依赖 ----------
@@ -94,7 +94,7 @@ fi
 echo "--- [6/7] systemd 服务"
 cat > /etc/systemd/system/stock-journal.service <<EOF
 [Unit]
-Description=Stock Journal (股票日记) self-hosted server
+Description=Stock Journal (操作日记) self-hosted server
 After=network.target postgresql.service
 Wants=postgresql.service
 

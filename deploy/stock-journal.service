@@ -4,7 +4,7 @@
 #   sudo cp stock-journal.service /etc/systemd/system/
 #   sudo systemctl daemon-reload && sudo systemctl enable --now stock-journal
 [Unit]
-Description=Stock Journal (股票日记) self-hosted server
+Description=Stock Journal (操作日记) self-hosted server
 After=network.target postgresql.service
 Wants=postgresql.service
 

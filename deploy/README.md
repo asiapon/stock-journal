@@ -1,4 +1,4 @@
-# 股票日记 · 自托管部署包
+# 操作日记 · 自托管部署包
 
 把自己的服务器（Ubuntu / Windows）变成运行环境：Node.js 后端 + PostgreSQL，与 WorkBuddy 云端**同协议同构**，前端零改动。
 
