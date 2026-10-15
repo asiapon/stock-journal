@@ -3110,8 +3110,24 @@ async function qaToolPnl(question) {
   };
 }
 
-async function qaRunTools(question, box, holder) {
+/* v3.12.4 工具取数中断守卫：fn 执行期间每次 fetch 前检查 signal.aborted，
+   命中即抛 AbortError（sendQa 的 catch 会按「已停止生成」处理）。结束恢复原 fetch。 */
+function qaWithFetchGuard(signal, fn) {
+  const chk = () => {
+    if (signal && signal.aborted) throw Object.assign(new Error('已中断'), { name: 'AbortError' });
+  };
+  const g = (typeof window !== 'undefined') ? window : globalThis;   // Node 测试环境（qa_lib）也兼容
+  const orig = g.fetch;
+  g.fetch = function () { chk(); return orig.apply(this, arguments); };
+  return Promise.resolve().then(fn).finally(function () { g.fetch = orig; });
+}
+
+async function qaRunTools(question, box, holder, signal) {
   if (!question || question.length > 500) return '';
+  /* v3.12.4 停止按钮修复：工具取数阶段（可能数分钟）也要能中断——
+     用 fetch 守卫包裹：每次发起网络请求前检查 abort，命中即抛 AbortError。
+     （此前 signal 从未传入工具层，停止按钮在取数阶段完全无效。） */
+  if (signal && signal.aborted) throw Object.assign(new Error('已中断'), { name: 'AbortError' });
   const convId = qaState.conversationId;      // 会话快照：切走后便签不插到别的会话
   // 先用本地规则路由：命中就不用再花一次模型调用做意图识别（显著降低首字延迟与额度消耗）
   let intent = qaRouteByRule(question);
@@ -3123,8 +3139,10 @@ async function qaRunTools(question, box, holder) {
   try {
     /* v3.9.13 审计：本轮问答触发的所有网络调用标上「智能问答·工具名」。
        注意：不能写 res = await withCtx(...) —— withCtx 的返回值会把闭包内
-       对 res 的赋值覆盖成 undefined，工具结果就丢了。 */
+       对 res 的赋值覆盖成 undefined，工具结果就丢了。
+       v3.12.4：整个工具阶段包上 fetch 中断守卫（停止按钮可随时打断取数）。 */
     await NetLog.withCtx('智能问答·' + intent.tool + '：' + String(question).slice(0, 24), async () => {
+      await qaWithFetchGuard(signal, async () => {
     if (intent.tool === 'screener') {
       const parsed = parseScreenQuery(question);
       // 「XX 板块/概念/指数成分股」这类问法没有数值条件 → 走免费的「板块/概念成分股」
@@ -3154,8 +3172,11 @@ async function qaRunTools(question, box, holder) {
     else if (String(intent.tool).indexOf('user-') === 0) res = await runUserSkill(intent.tool, question);
   /* v3.11.1 持仓实时盈亏 */
     else if (intent.tool === 'pnl') res = await qaToolPnl(question);
+      });
     });
   } catch (e) {
+    /* 中断要向上抛（sendQa 才能真正停），不能当成工具失败吞掉 */
+    if (e && e.name === 'AbortError') throw e;
     return `【工具执行失败】${intent.tool}：${e && e.message || e}。请如实告诉用户该工具本次执行失败，建议稍后重试或去对应功能页操作。`;
   }
   if (!res || !res.block) return '';

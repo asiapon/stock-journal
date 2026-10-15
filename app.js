@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.12.4';
+const APP_VER = '3.12.5';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -4872,9 +4872,12 @@ async function qaLlmChat(messages, { tools, signal } = {}) {
   return (resp.choices && resp.choices[0] && resp.choices[0].message) || {};
 }
 async function qaAgentLoop(baseMsgs, { signal, onNote, onDelta } = {}) {
+  /* v3.12.4 轮间 + 工具执行阶段的可中断性（此前取数阶段停止无效） */
+  const chkStop = () => { if (signal && signal.aborted) throw Object.assign(new Error('已中断'), { name: 'AbortError' }); };
   const msgs = baseMsgs.slice();
   const lastUser = (() => { for (let i = baseMsgs.length - 1; i >= 0; i--) if (baseMsgs[i].role === 'user') return baseMsgs[i].content; return ''; })();
   for (let round = 0; round < 4; round++) {
+    chkStop();
     const msg = await qaLlmChat(msgs, { tools: qaAgentTools(), signal });
     const tcs = msg.tool_calls || [];
     if (!tcs.length) {
@@ -4888,6 +4891,7 @@ async function qaAgentLoop(baseMsgs, { signal, onNote, onDelta } = {}) {
     }
     msgs.push({ role: 'assistant', content: msg.content || '', tool_calls: tcs });
     for (const tc of tcs) {
+      chkStop();
       let args = {};
       try { args = JSON.parse((tc.function && tc.function.arguments) || '{}'); } catch (e) { /* */ }
       const fnName = (tc.function && tc.function.name) || '';
@@ -5212,6 +5216,10 @@ async function sendQa() {
   qaState.busyConvs[convId] = true;
   const controller = new AbortController();
   qaState.controllers[convId] = controller;
+  /* v3.12.4 关键修复：signal 此前从未定义（v3.11.1 回路重构遗漏）——停止按钮 abort
+     了没人监听的控制器，工具取数阶段完全停不了；且取数完成后走流式必抛
+     ReferenceError → 全部显示「回答失败」。现在正确接线。 */
+  const signal = controller.signal;
   myMsgs.push({ role: 'user', content: question + attachNote });
   qaState.stream[convId] = '';
   qaLocalSet(convId, question || (files.length ? '附件提问' : ''));
@@ -5269,7 +5277,11 @@ async function sendQa() {
        把它接到 system 末尾，模型就必须引用其中的真实数字，而不是凭记忆编造。
        工具层任何失败都不影响正常问答（异常吞掉，退化为原来的纯上下文问答）。 */
     let toolBlock = '';
-    try { toolBlock = await qaRunTools(question, box, holder); } catch (e) { toolBlock = ''; }
+    try { toolBlock = await qaRunTools(question, box, holder, signal); } catch (e) {
+      /* 中断向上传递（不能当「工具失败」吞掉继续问模型） */
+      if (e && e.name === 'AbortError') throw e;
+      toolBlock = '';
+    }
     const sys = qaSysPrompt() + qaBuildContext() + (toolBlock ? '\n\n' + toolBlock : '');
     const history = myMsgs
       .filter(m => m.role === 'user' || m.role === 'assistant')
