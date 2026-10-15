@@ -167,12 +167,16 @@ if ($AutoStart) {
   Write-Host "  已注册登录自启（计划任务 StockJournal）"
 }
 
-# 试启动并健康检查（后台 5 秒）
+# 试启动并健康检查（通过则保持运行，不再停止 —— 装完即可访问）
 $proc = Start-Process -FilePath "node" -ArgumentList (Join-Path $DeployDir "server.js") -WorkingDirectory $DeployDir -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds 3
 $health = "✗ 健康检查未通过（端口 $Port 可能被占用）"
-try { $r = Invoke-RestMethod "http://localhost:$Port/healthz" -TimeoutSec 3; if ($r.ok) { $health = "✓ 健康检查通过" } } catch {}
-if ($proc -and -not $proc.HasExited) { Stop-Process -Id $proc.Id -Force }
+try { $r = Invoke-RestMethod "http://localhost:$Port/healthz" -TimeoutSec 3; if ($r.ok) { $health = "✓ 健康检查通过，服务保持运行中" } } catch {}
+if ($proc -and -not $proc.HasExited -and $health -notlike '*✗*') {
+  Write-Host "  服务已保持运行（如需停止：任务管理器结束 node.exe，或直接关机重启后用计划任务/bat 启动）"
+} elseif ($proc -and -not $proc.HasExited) {
+  Stop-Process -Id $proc.Id -Force
+}
 
 Write-Host ""
 Write-Host "==================== 部署完成 ====================" -ForegroundColor Green
