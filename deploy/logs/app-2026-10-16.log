@@ -55,3 +55,8 @@
 2026-10-15T22:18:52.575Z | web | kline | 东财 push2his | FAIL | 91ms | 600519 klt=101 Failed to fetch
 2026-10-15T22:18:52.575Z | web | kline | K线库不可用，回退在线流程 | FAIL | 0ms | Failed to fetch
 2026-10-15T22:18:52.575Z | web | quote | 腾讯涨幅榜 | FAIL | 0ms | offset=0 Failed to fetch
+2026-10-15T22:19:47.823Z | rpc | kline_all | kline_all | OK | 7394ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T22:19:52.886Z | web | rpc | kline_all | OK | 9781ms | 
+2026-10-15T22:19:52.886Z | web | kline | 东财 push2his | FAIL | 92ms | 600519 klt=101 Failed to fetch
+2026-10-15T22:19:52.886Z | web | kline | K线库不可用，回退在线流程 | FAIL | 0ms | Failed to fetch
+2026-10-15T22:19:52.886Z | web | quote | 腾讯涨幅榜 | FAIL | 0ms | offset=0 Failed to fetch
