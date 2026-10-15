@@ -1982,3 +1982,5 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 .mom-exact { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
   color: #15803d; background: rgba(21, 128, 61, .12); margin-left: 8px; }
 .msg.user.flash { box-shadow: 0 0 0 2px var(--up, #d93a2b) inset; border-radius: 8px; transition: box-shadow .4s; }
+/* v3.12.4 服务器日志 tail 显示 */
+.srv-log { font: 11px/1.6 Consolas, monospace; white-space: pre-wrap; word-break: break-all; background: var(--bg); padding: 8px 10px; border-radius: 8px; max-height: 420px; overflow: auto; }

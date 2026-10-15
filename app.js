@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.12.1';
+const APP_VER = '3.12.4';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -470,11 +470,31 @@ const NetLog = {
     };
     this.buf.unshift(e);
     if (this.buf.length > this.max) this.buf.length = this.max;
+    this._outbox.push(e);
     clearTimeout(this._saveT);
     this._saveT = setTimeout(() => {
       try { localStorage.setItem('sj_netlog', JSON.stringify(this.buf.slice(0, 200))); } catch (err) { /* 存储满则只在内存 */ }
     }, 1500);
     if (!ok) console.warn('[net-fail]', kind, name, detail, Math.round(ms) + 'ms');
+    this._scheduleUpload();
+  },
+  /* v3.12.4 上报：把每次调用批量发到自托管后端，落 logs/app-YYYYMMDD.log。
+     云端托管版没有该端点（404）→ 本次会话静默停用；file:// 同理跳过。 */
+  _outbox: [],
+  _upDisabled: false,
+  _upT: null,
+  _scheduleUpload() {
+    clearTimeout(this._upT);
+    this._upT = setTimeout(() => this.flushToServer(), 2500);
+  },
+  flushToServer() {
+    if (this._upDisabled || location.protocol === 'file:') return;
+    if (!this._outbox.length) return;
+    const entries = this._outbox.splice(0, this._outbox.length);
+    fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ entries: entries.map(x => ({ t: x.t, kind: x.kind, name: x.name, ok: x.ok, ms: x.ms, detail: x.detail, src: x.src })) }) })
+      .then(r => { if (!r.ok) this._upDisabled = true; })
+      .catch(() => { this._upDisabled = true; });
   },
   /* 下载文本：一条一块、带标签行，缺的字段不输出（不像旧版挤在一行什么都要猜） */
   text() {
@@ -1313,6 +1333,13 @@ async function enterApp(user) {
   if (user) S.user = user;
   $('authView').hidden = true;
   $('appView').hidden = false;
+  /* v3.12.4 顶栏显示当前连接的后端地址（自托管=本机/域名；混合模式=填的地址；云端托管=WorkBuddy 云） */
+  const bb = $('backendBadge');
+  if (bb) {
+    if (BACKEND_URL) { bb.textContent = '后端 ' + BACKEND_URL.replace(/^https?:\/\//, ''); bb.title = '当前连接的后端服务器：' + BACKEND_URL + '（设置 → 技能 → 后端服务器地址 可切换）'; }
+    else if (location.hostname.endsWith('workbuddy.host')) { bb.textContent = 'WorkBuddy 云端'; bb.title = '数据存 WorkBuddy 云数据库；如需切换到自托管服务器，到 设置 → 技能 → 后端服务器地址 填地址'; }
+    else { bb.textContent = '后端 ' + (location.host || '本机'); bb.title = '当前连接的后端服务器：' + location.host; }
+  }
   if (S.mode === 'cloud') {
     $('modeBadge').textContent = '云端';
     $('modeBadge').classList.remove('local');
@@ -2590,40 +2617,18 @@ function renderMe() {
   $('userMgmtCard').hidden = !admin;
   if (admin) loadUsers();
 }
-/* ---------- v3.8.23 网络日志摘要（v3.9.13 升级：审计级明细列表） ---------- */
+/* ---------- v3.12.4 日志页：改为只读服务器日志文件（页面不再实时展示网络日志） ---------- */
 function renderNetLogUI() {
   const el = $('netLogSummary');
   if (!el) return;
-  if (!NetLog.buf.length) { el.textContent = '暂无网络日志（打开行情/交易页后会自动记录）'; $('netLogList').innerHTML = ''; return; }
-  const fails = NetLog.buf.filter(e => !e.ok).length;
-  const lastFail = NetLog.buf.find(e => !e.ok);
-  /* 按类别统计：行情/云端RPC/K线/字典/模型/数据中心 */
-  const kinds = ['quote', 'rpc', 'kline', 'dict', 'llm', 'dc'];
-  const KN = { quote: '行情', rpc: '云端', kline: 'K线', dict: '字典', llm: 'AI模型', dc: '数据中心' };
-  const parts = kinds.map(k => {
-    const arr = NetLog.buf.filter(e => e.kind === k);
-    return arr.length ? `${KN[k]} ${arr.filter(e => e.ok).length}/${arr.length}` : null;
-  }).filter(Boolean).join(' · ');
-  el.innerHTML = `共 ${NetLog.buf.length} 条（成功/总数：${parts || '—'}）· 失败 ${fails} 条`
-    + (lastFail ? `<br>最近失败：${esc(lastFail.t.slice(11, 19))} ${esc(lastFail.kind)} ${esc(lastFail.name)} — ${esc(lastFail.detail)}` : '· 最近无失败');
-  /* v3.9.13 最近 60 条逐条明细：触发来源 / URL / 参数 / 返回，点开看全 */
   const list = $('netLogList');
-  if (list) {
-    const KIND_CN = { quote: '行情', rpc: '云端', kline: 'K线', dict: '字典', llm: 'AI模型', dc: '数据中心' };
-    list.innerHTML = NetLog.buf.slice(0, 60).map(e => {
-      const t = e.t.slice(11, 19);
-      const head = `<span class="nl-t">${esc(t)}</span><span class="nl-badge ${e.ok ? 'ok' : 'fail'}">${e.ok ? 'OK' : 'FAIL'}</span>`
-        + `<span class="nl-kind">${esc(KIND_CN[e.kind] || e.kind)}</span><b class="nl-name">${esc(e.name)}</b><span class="nl-ms">${e.ms}ms</span>`;
-      const rows = [];
-      if (e.src) rows.push(['触发', e.src]);
-      if (e.url) rows.push(['请求', e.url]);
-      if (e.req && e.req !== e.url) rows.push(['参数', e.req]);
-      rows.push(e.ok ? ['返回', e.resp || e.detail || '(空)'] : ['错误', e.err || e.detail || '未知（未获取到数据）']);
-      return `<details class="nl-item${e.ok ? '' : ' nl-fail'}"><summary>${head}</summary>`
-        + rows.map(([k, v]) => `<div class="nl-row"><span class="nl-k">${k}</span><span class="nl-v">${esc(v)}</span></div>`).join('')
-        + `</details>`;
-    }).join('');
-  }
+  const isSelf = !(location.hostname.endsWith('workbuddy.host')) && location.protocol !== 'file:';
+  if (!isSelf) { el.textContent = '云端托管版没有日志文件；数据调用明细仅自托管后端有（deploy/logs/app-日期.log）。'; if (list) list.innerHTML = ''; return; }
+  el.textContent = '日志文件：deploy/logs/app-' + new Date().toISOString().slice(0, 10) + '.log（每 2.5 秒批量上报一次调用明细）';
+  if (list) list.textContent = '加载中…';
+  fetch('/api/logs/tail?n=200').then(r => r.json()).then(j => {
+    if (list) list.innerHTML = '<pre class="srv-log">' + esc((j.lines || []).join('\n') || '(空)') + '</pre>';
+  }).catch(e => { if (list) list.textContent = '读取失败：' + (e.message || e); });
 }
 /* ---------- 费率编辑 ---------- */
 function renderLogs() {
@@ -2891,6 +2896,17 @@ function bindEvents() {
       const s = skillById(id);
       skillInstall(id);
       toast('已添加「' + (s && s.name || id) + '」');
+    } else if (act === 'upd') {
+      /* v3.12.2 技能包更新：幂等重装（重新下载 SKILL.md 覆盖），报告函数增删 */
+      const s = skillById(id);
+      if (!s || !s.isPack) return;
+      toast('正在更新「' + s.name + '」…');
+      skillPackInstall(s.url, s.packName).then(r => {
+        const diffTxt = (r.added && r.added.length ? '，新增 ' + r.added.length : '') + (r.removed && r.removed.length ? '，移除 ' + r.removed.length : '');
+        toast('✅ 已更新「' + s.name + '」（' + r.functions + ' 个函数' + diffTxt + '）');
+        renderSkillCenter(); qaRefreshSkillHint();
+      }).catch(e => { toast('更新失败：' + (e.message || e), 'warn'); renderSkillCenter(); });
+      return;
     }
     renderSkillCenter(); qaRefreshSkillHint();
   };
@@ -3227,15 +3243,10 @@ function bindEvents() {
 
   /* v3.8.23 网络日志：下载 / 清空 */
   $('netLogDlBtn').addEventListener('click', () => {
-    const blob = new Blob([NetLog.text()], { type: 'text/plain;charset=utf-8' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'stock-journal-netlog-' + nowLocalInput().slice(0, 10) + '.log';
-    a.click();
-    setTimeout(() => URL.revokeObjectURL(a.href), 3000);
-    toast('日志文件已下载');
+    if (location.hostname.endsWith('workbuddy.host') || location.protocol === 'file:') return toast('云端托管版没有日志文件（仅自托管后端有）', 'warn');
+    location.href = '/api/logs/download';
   });
-  $('netLogClearBtn').addEventListener('click', () => { NetLog.clear(); renderNetLogUI(); toast('网络日志已清空'); });
+  $('netLogClearBtn').addEventListener('click', () => { renderNetLogUI(); });
 
   /* v3.10.1 K线库：统计展示 + 自动同步开关 + 立即同步（设置 → 数据管理） */
   async function renderKlibStatUI() {

@@ -1921,7 +1921,7 @@ function qaRouteByRule(q) {
   /* v3.11.0 技能管理对话安装：最高优先级 —— 「安装涨停板技能」里也有涨停板，
      不先判会被 asd-zt/market 吃掉。动词 + 「技能」同现即入（直接短路返回，
      下面的 if/else if 链会覆盖先行赋值）。 */
-  if (/安装|添加|加装|卸载|删除|删掉|移除|启用|开启|停用|禁用|关闭|列出|清单|列表/.test(t) && /技能/.test(t)) return { tool: 'skillmgr' };
+  if (/安装|添加|加装|卸载|删除|删掉|移除|启用|开启|停用|禁用|关闭|列出|清单|列表|更新|升级/.test(t) && /技能/.test(t)) return { tool: 'skillmgr' };
   /* v3.11.0 用户自定义技能：触发词字面命中即路由（用户自定义优先于内置 —— 自己装的自己说了算） */
   {
     const us = userSkills().filter(u => u.enabled !== false && u.keywords && u.keywords.length);
@@ -3517,22 +3517,28 @@ function skillPackSaveRec(rec) {
   skillPacksSave(l);
 }
 function skillPackDelete(id) { skillPacksSave(skillPacks().filter(p => p.id !== id)); }
-/* 安装：调运行时后端下载/合成/注册，成功后本机记一条（供表格与 agent 工具用） */
+/* 安装：调运行时后端下载/合成/注册，成功后本机记一条（供表格与 agent 工具用）。
+   重复安装 = 升级（幂等覆盖同名模块）；返回带 added/removed 函数清单对比。 */
 async function skillPackInstall(url, name) {
   const base = runtimeBase();
   if (!base) throw new Error('未配置技能运行时地址：自托管整站填「同源」即可；WorkBuddy 托管版请到 设置 → 技能 → 技能包运行时 填你服务器的地址（需 HTTPS）');
+  const prev = skillPacks().find(p => p.packName === (name || 'askill'));
+  const prevFns = prev ? (prev.functions || []).map(f => f.name || f) : null;
   const res = await fetch(base + '/api/pack/install', {
     method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ url: url || A_STOCK_URL, name: name || 'askill' }),
   });
   const j = await res.json().catch(() => ({}));
   if (!res.ok || !j.ok) throw new Error(j.msg || ('安装失败 HTTP ' + res.status));
+  const newFns = j.list || [];
+  const added = prevFns ? newFns.filter(f => prevFns.indexOf(f) < 0) : [];
+  const removed = prevFns ? prevFns.filter(f => newFns.indexOf(f) < 0) : [];
   skillPackSaveRec({
     id: 'pack-' + j.name, name: '技能包 · ' + j.name, icon: '📦', enabled: true,
-    packName: j.name, url: url, functions: j.list || [],
+    packName: j.name, url: url, functions: newFns,
     at: Date.now(),
   });
-  return j;
+  return Object.assign({ added: added, removed: removed, prevCount: prevFns ? prevFns.length : null }, j);
 }
 /* 执行：pack 内任意函数，结果 JSON 文本回传给 agent 回路 */
 async function skillPackExec(packId, fn, args) {
@@ -3636,6 +3642,7 @@ function matchSkillFromQ(q) {
 async function qaToolSkillManage(question) {
   const q = String(question || '');
   const isDel = /卸载|删除|移除|删掉/.test(q);
+  const isUpd = /更新|升级/.test(q);
   const isOff = /停用|禁用|关闭|关掉/.test(q);
   const isOn = /启用|开启/.test(q);
   const isList = /列表|清单|有哪些|都装了|装了哪些|列出/.test(q);
@@ -3668,6 +3675,51 @@ async function qaToolSkillManage(question) {
 
   const target = matchSkillFromQ(q);
   /* v3.12.0 技能包（SKILL.md / a-stock-data）对话安装：调运行时后端整包装入 */
+  /* v3.12.2 技能包更新：更新/升级 + 技能包（或点名 a-stock-data）→ 重新安装（幂等覆盖=升级），报告函数增删 */
+  if (isUpd && !target && /a-stock-data|技能包|SKILL/i.test(q)) {
+    const mUrl = /(https?:\/\/\S+\.md)/i.exec(q);
+    const prev = skillPacks().find(p => /a-stock-data|askill/i.test(p.packName));
+    try {
+      const r = await skillPackInstall(mUrl ? mUrl[1] : (prev ? prev.url : A_STOCK_URL), prev ? prev.packName : 'askill');
+      try { renderSkillCenter(); qaRefreshSkillHint(); } catch (e) { /* */ }
+      const diffTxt = (r.added.length ? '，新增 ' + r.added.length + ' 个函数' : '') + (r.removed.length ? '，移除 ' + r.removed.length + ' 个' : '');
+      return {
+        icon: '📦',
+        title: '技能包「' + r.name + '」已更新（' + r.functions + ' 个函数' + diffTxt + '）',
+        lines: [
+          '升级方式：直接重新安装即可（幂等覆盖），无需先卸载',
+          '函数清单：' + (r.list || []).slice(0, 15).join('、') + ((r.list || []).length > 15 ? ' 等' : ''),
+        ],
+        html: '',
+        skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+        block: '【技能管理结果 · 本机已执行】技能包「' + r.name + '」已更新到最新版（' + r.functions
+          + ' 个函数' + diffTxt + '）。升级 = 幂等重装，无需先卸载。请如实转告用户。',
+      };
+    } catch (e) {
+      return {
+        icon: '📦',
+        title: '技能包更新失败：' + (e.message || e),
+        lines: ['更新需自托管后端在线（设置 → 技能 → 后端服务器地址）'],
+        html: '',
+        skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+        block: '【技能管理结果】技能包更新失败：' + (e.message || e) + '。请如实转告用户。',
+      };
+    }
+  }
+  /* 内置技能（asd 与 em 系列）的「更新」= 应用升级，说明即可（不可谎称已单独升级） */
+  if (isUpd && target && !target.isUser && !target.isPack && target.vendor !== 'mx') {
+    return {
+      icon: '🧩',
+      title: '「' + target.name + '」是内置技能，随应用一起升级',
+      lines: [
+        '内置技能的代码编译在应用里，升级 = 应用升级（服务器 git pull 后重跑安装脚本 / WorkBuddy 版由我发版）',
+        '如果只是想停用它：对话说「停用' + target.name + '」或在表格里点 ⏸',
+      ],
+      html: '',
+      skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+      block: '【技能管理说明】' + target.name + ' 是内置技能，代码随应用发布。升级方式 = 应用升级（自托管：git pull + 重跑安装脚本；WorkBuddy 托管版：由维护者发布新版本）。不要谎称已单独升级该技能。',
+    };
+  }
   if (!target && /a-stock-data|技能包|SKILL/i.test(q)) {
     const mUrl = /(https?:\/\/\S+\.md)/i.exec(q);
     try {
@@ -3697,6 +3749,34 @@ async function qaToolSkillManage(question) {
         skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
         block: '【技能管理结果】技能包安装失败：' + (e.message || e)
           + '。请如实告知用户：整包安装需要自托管后端（deploy/），并到 设置 → 技能 配置「技能包运行时」地址；不要假装安装成功。',
+      };
+    }
+  }
+  /* 技能包目标 + 更新 → 幂等重装并报告函数增删 */
+  if (isUpd && target && target.isPack) {
+    try {
+      const r = await skillPackInstall(target.url, target.packName);
+      try { renderSkillCenter(); qaRefreshSkillHint(); } catch (e) { /* */ }
+      const diffTxt = (r.added.length ? '，新增 ' + r.added.length + ' 个函数' : '') + (r.removed.length ? '，移除 ' + r.removed.length + ' 个' : '');
+      return {
+        icon: '📦',
+        title: '技能包「' + r.name + '」已更新（' + r.functions + ' 个函数' + diffTxt + '）',
+        lines: [
+          '升级方式：直接重新安装即可（幂等覆盖），无需先卸载',
+          '函数清单：' + (r.list || []).slice(0, 15).join('、') + ((r.list || []).length > 15 ? ' 等' : ''),
+        ],
+        html: '',
+        skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+        block: '【技能管理结果 · 本机已执行】技能包「' + r.name + '」已更新（' + r.functions + ' 个函数' + diffTxt + '）。请如实转告用户。',
+      };
+    } catch (e) {
+      return {
+        icon: '📦',
+        title: '技能包更新失败：' + (e.message || e),
+        lines: ['更新需自托管后端在线（设置 → 技能 → 后端服务器地址）'],
+        html: '',
+        skills: [{ id: 'skillmgr', name: '技能管理', ms: 0 }],
+        block: '【技能管理结果】技能包更新失败：' + (e.message || e) + '。请如实转告用户。',
       };
     }
   }
@@ -4026,6 +4106,7 @@ function renderSkillCenter() {
     const on = s.enabled;
     const actions = s.installed
       ? '<button type="button" class="btn ghost sm" data-sk="toggle" data-sid="' + s.id + '">' + (on ? '⏸ 停用' : '▶ 启用') + '</button> '
+        + (s.isPack ? '<button type="button" class="btn ghost sm" data-sk="upd" data-sid="' + s.id + '" title="重新下载 SKILL.md 并覆盖安装">🔄 更新</button> ' : '')
         + '<button type="button" class="btn ghost sm" data-sk="del" data-sid="' + s.id + '">' + (s.isUser ? '🗑 删除' : '卸载') + '</button>'
       : '<button type="button" class="btn primary sm" data-sk="add" data-sid="' + s.id + '">＋ 安装</button>';
     return '<tr' + (s.installed && !on ? ' class="qa-dim"' : '') + '>'

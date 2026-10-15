@@ -2367,6 +2367,19 @@ const KIND_LABEL = { stock: ['个股诊断', 'k-diag'], batch: ['批量诊断', 
   on('btBasketBtn', runBtBasket);
   on('batchDiagBtn', () => runBatchDiagnose());
   on('momRunBtn', runMomentumScan);   // v3.8.74 动量筛选（手动触发，不自动跑）
+  /* v3.12.3 快捷预设：一键填条件（volK=0 表示不检查量能，纯排名） */
+  [
+    ['momPreset1', { n: 3, topN: 1000, volK: 1.1, amt: 0.5 }],
+    ['momPreset2', { n: 5, topN: 1000, volK: 0, amt: 0 }],
+    ['momPreset3', { n: 5, topN: 2000, volK: 0, amt: 0 }],
+  ].forEach(([id, p]) => {
+    on(id, () => {
+      document.getElementById('momN').value = p.n;
+      document.getElementById('momTopN').value = p.topN;
+      document.getElementById('momVolK').value = p.volK;
+      document.getElementById('momAmt').value = p.amt;
+    });
+  });
   /* v3.10.0 K 线库状态行 + 手动同步按钮（进场时显示缓存状态，不自动联网） */
   (function initMomKlib() {
     const el = document.getElementById('momKlibStatus');
@@ -2627,7 +2640,7 @@ function momComputeLocal(data, o) {
     /* 量能递增 */
     for (let k = 1; k < o.n; k++) {
       const i = L - o.n + k;
-      if (!(b[i][5] >= b[i - 1][5] * o.volK)) { pass = false; break; }
+      if (o.volK > 0 && !(b[i][5] >= b[i - 1][5] * o.volK)) { pass = false; break; }
     }
     if (!pass) continue;
     /* RPS 门槛 */
@@ -2670,7 +2683,8 @@ function readMomOpts() {
   };
   momOpts.n = Math.round(num('momN', 3, 1, 10));
   momOpts.topN = Math.round(num('momTopN', 1000, 10, 6000));
-  momOpts.volK = num('momVolK', 1.1, 1, 10);
+  /* v3.12.3 量能系数：留空或 0 = 不检查量能（纯排名模式）；min 放宽到 0 */
+  momOpts.volK = num('momVolK', 1.1, 0, 10);
   momOpts.minAmountYi = num('momAmt', 0.5, 0, 1e4);
   momOpts.rpsMin = num('momRps', 0, 0, 100);
   momOpts.nearHighPct = num('momHigh', 0, -100, 0);
@@ -2816,7 +2830,7 @@ function renderMomView() {
     const extra = momState.items.map(r => ({ code: r.code, name: r.name }));
     if (!extra.length) return toast('没有可诊断的股票');
     switchAnalysisTab('diag');                       // 先切到诊断页，结果才看得见
-    runBatchDiagnose(extra, MOM.n + '日强势 · 量能递增（' + extra.length + ' 只）');
+    runBatchDiagnose(extra, MOM.n + '日强势' + (MOM.volK > 0 ? ' · 量能递增' : ' · 纯排名') + '（' + extra.length + ' 只）');
     const pane = document.getElementById('batchBox');
     if (pane) pane.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
   };

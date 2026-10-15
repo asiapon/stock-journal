@@ -176,13 +176,19 @@ async function syncAll(opts) {
       const i = next++;
       if (i >= stale.length) return;
       const code = stale[i];
+      const t1 = Date.now();
       try {
         const k = await fetcher(code, lmt);
+        if (opts.log) opts.log('fetch', code, !!(k.bars && k.bars.length), Date.now() - t1,
+          (k.bars && k.bars.length ? k.bars.length + '根 末根' + k.bars[k.bars.length - 1][0] : '空数据') + ' ' + (k.name || ''));
         if (k.bars && k.bars.length) {
           rows.push([code, k.name, JSON.stringify(k.bars), k.bars.length, k.bars[k.bars.length - 1][0]]);
           okCnt++;
         } else failed.push(code);
-      } catch (e) { failed.push(code); }
+      } catch (e) {
+        if (opts.log) opts.log('fetch', code, false, Date.now() - t1, (e && e.message) || String(e));
+        failed.push(code);
+      }
       if ((okCnt + failed.length) % 100 === 0) prog(`已拉取 ${okCnt + failed.length}/${stale.length}`);
       if (gapMs) await new Promise(r => setTimeout(r, gapMs));
     }

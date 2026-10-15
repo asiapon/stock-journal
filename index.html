@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.12.1">
+<link rel="stylesheet" href="style.css?v=3.12.4">
 </head>
 <body>
 
@@ -74,6 +74,7 @@
       操作日记
     </div>
     <div class="topbar-right">
+      <span id="backendBadge" class="mode-badge" title="当前连接的后端服务器地址（在 设置 → 技能 → 后端服务器地址 切换）">—</span>
       <span id="modelBadge" class="model-badge" title="当前使用的大模型（在 设置 → 模型 中切换）">未配置</span>
       <span id="modeBadge" class="mode-badge" title="数据存储方式">云端</span>
       <span id="userName" class="user-email"></span>
@@ -311,7 +312,8 @@
           <div class="mom-conds">
             连续 <input id="momN" class="inp num-in" type="number" value="3" min="1" max="10"> 日涨幅&gt;0，且每日名次 ≤
             <input id="momTopN" class="inp num-in" type="number" value="1000" min="10" max="6000"> 名；
-            量能每天 ≥ 前一日 × <input id="momVolK" class="inp num-in" type="number" value="1.1" min="1" max="10" step="0.05">；
+            量能每天 ≥ 前一日 × <input id="momVolK" class="inp num-in" type="number" value="1.1" min="0" max="10" step="0.05" placeholder="0=不限">；
+            <span class="hint" style="flex-basis:100%">⚡ 快捷预设：<button id="momPreset1" class="btn ghost sm" type="button">连3放量（默认）</button> <button id="momPreset2" class="btn ghost sm" type="button">连5纯排名（量不设限）</button> <button id="momPreset3" class="btn ghost sm" type="button">连5 + 排名前2000</button>　<span id="momPresetTip">量能填 0 = 不检查量能；成交额填 0 = 不限流动性。</span></span>
             成交额 ≥ <input id="momAmt" class="inp num-in" type="number" value="0.5" min="0" step="0.1"> 亿
           </div>
           <div class="mom-conds">
@@ -587,14 +589,14 @@
         <p class="hint" style="margin-top:8px">统计按「交易日」分组：该日入库的股票数与 K 线根数（首次回补一天约 5600 只，之后每日增量各补一根）。自动同步在打开应用时后台执行，也可随时点「立即同步」；首次建库请到「分析 → 动量筛选」触发。</p>
       </div>
       <div class="card">
-        <div class="card-title">网络日志</div>
+        <div class="card-title">服务器日志（每次数据调用的明细）</div>
         <div class="hint" id="netLogSummary" style="margin-bottom:8px">—</div>
         <div id="netLogList" style="margin-bottom:8px"></div>
         <div class="btn-row">
-          <button class="btn ghost" id="netLogDlBtn" type="button">下载日志文件 (.log)</button>
-          <button class="btn ghost" id="netLogClearBtn" type="button">清空日志</button>
+          <button class="btn ghost" id="netLogClearBtn" type="button">🔄 刷新</button>
+          <button class="btn ghost" id="netLogDlBtn" type="button">下载今天日志文件</button>
         </div>
-        <div class="hint" style="margin-top:8px">审计级记录：哪个功能触发、调了哪个接口（URL）、参数、返回摘要。取不到数据会明示 FAIL 并附原因，绝不静默补数。点开任一条可看完整细节；也可下载 .log 逐条核对。</div>
+        <div class="hint" style="margin-top:8px">v3.12.4 起：网络日志不再在页面实时展示，全部写入服务器 <b>deploy/logs/app-日期.log</b>。覆盖三类调用：① 前端外部接口（东财/腾讯等，2.5 秒批量上报）② RPC 数据库调用（含查了哪张表、参数、返回行数）③ Python 技能包执行（函数/参数/耗时）。本页只读最近 200 行。</div>
       </div>
       </div>
 
@@ -866,12 +868,12 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.12.1"></script>
-<script src="kline-store.js?v=3.12.1"></script>
-<script src="analysis-extra.js?v=3.12.1"></script>
+<script src="app.js?v=3.12.4"></script>
+<script src="kline-store.js?v=3.12.4"></script>
+<script src="analysis-extra.js?v=3.12.4"></script>
 <!-- v3.9.7 智能问答工具层：选股 / 行情 / 财务 / 诊断 / 回测等取数能力。
      必须排在 analysis-extra.js 之后 —— 它直接复用后者挂在全局词法作用域上的
      state / fmtWan / parseJsonLoose / marketOf / qSnapshot / computePositions。 -->
-<script src="qa-tools.js?v=3.12.1"></script>
+<script src="qa-tools.js?v=3.12.4"></script>
 </body>
 </html>

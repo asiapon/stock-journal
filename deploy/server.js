@@ -75,6 +75,7 @@ async function fnArgs(fn) {
 
 const app = express();
 const skillpack = require('./skillpack');   // v3.12.0 SKILL.md 技能包运行时
+const logger = require('./logger');         // v3.12.4 统一日志：deploy/logs/app-YYYYMMDD.log
 app.use(express.json({ limit: '16mb' }));          // kline_upsert 单批约 1.6MB，留足余量
 /* CORS 必须在所有路由之前（含 RPC）—— 混合模式下 WorkBuddy 托管的前端会跨域调本服务 */
 app.use((req, res, next) => {
@@ -100,9 +101,33 @@ app.post('/api/pack/execute', async (req, res) => {
   try {
     const { pack, fn, args } = req.body || {};
     if (!pack || !fn) return res.status(400).json({ ok: false, msg: '缺少 pack / fn' });
-    const r = await skillpack.runPython(pack, fn, args || {});
-    res.json({ ok: true, data: r });
+    const t0 = Date.now();
+    try {
+      const r = await skillpack.runPython(pack, fn, args || {});
+      logger.log('pack', 'execute', pack + '.' + fn, true, Date.now() - t0, 'ok', JSON.stringify(args || {}).slice(0, 200));
+      res.json({ ok: true, data: r });
+    } catch (e) {
+      logger.log('pack', 'execute', pack + '.' + fn, false, Date.now() - t0, e.message || String(e), JSON.stringify(args || {}).slice(0, 200));
+      throw e;
+    }
   } catch (e) { res.status(500).json({ ok: false, msg: e.message || String(e) }); }
+});
+
+/* v3.12.4 前端调用日志上报：页面里的每一次外部接口调用（东财/腾讯等）批量落日志文件 */
+app.post('/api/log', express.json({ limit: '2mb' }), (req, res) => {
+  const entries = (req.body && Array.isArray(req.body.entries)) ? req.body.entries.slice(0, 100) : [];
+  for (const e of entries) {
+    logger.log('web', e.kind || 'fetch', e.name || '', e.ok !== false, e.ms || 0, e.detail || '', e.meta || e.src || '');
+  }
+  res.json({ ok: true, accepted: entries.length });
+});
+/* 日志查看：最近 n 行 / 下载当天文件 */
+app.get('/api/logs/tail', async (req, res) => {
+  const n = Math.min(2000, Math.max(1, parseInt(req.query.n, 10) || 200));
+  res.json({ ok: true, file: logger.todayFile(), lines: await logger.tail(n) });
+});
+app.get('/api/logs/download', (req, res) => {
+  res.download(logger.todayFile());
 });
 app.post('/api/pack/remove', (req, res) => {
   const { name } = req.body || {};
@@ -110,22 +135,32 @@ app.post('/api/pack/remove', (req, res) => {
   res.json(Object.assign({ ok: true }, skillpack.remove(name)));
 });
 
-/* RPC 兼容层：body 键 = 函数命名参数，缺省补 NULL（如 kline_all 不传 p_since） */
+/* RPC 兼容层：body 键 = 函数命名参数，缺省补 NULL（如 kline_all 不传 p_since）
+   v3.12.4：每次 RPC 调用（查了哪张表/什么参数/几行结果）都记入日志文件 */
 app.post('/.cloud/database/rest/rpc/:fn', async (req, res) => {
   const fn = String(req.params.fn || '');
   if (!ALLOWED_FN.has(fn)) return res.status(404).json({ ok: false, msg: '未知接口: ' + fn });
   if (REQUIRE_KEY && req.get('x-wb-webapp-access-key') !== ACCESS_KEY)
     return res.status(401).json({ ok: false, msg: 'access key 不匹配' });
   if (!pool) return res.status(500).json({ ok: false, msg: '服务端未配置 DATABASE_URL' });
+  const t0 = Date.now();
+  const body = (req.body && typeof req.body === 'object') ? req.body : {};
+  const argsSummary = JSON.stringify(body).slice(0, 300);
   try {
     const names = await fnArgs(fn);
-    const body = (req.body && typeof req.body === 'object') ? req.body : {};
     const values = names.map(n => (body[n] === undefined ? null : body[n]));
     const { rows } = await pool.query(
       `SELECT public."${fn}"(${values.map((_, i) => '$' + (i + 1)).join(', ')}) AS result`, values);
-    res.json(rows[0] ? rows[0].result : { ok: false, msg: '函数无返回' });
+    const out = rows[0] ? rows[0].result : { ok: false, msg: '函数无返回' };
+    /* 数据表类调用（app_query/app_insert/...）把查/写的表名也记出来 */
+    const table = body.p_table || body.table || '';
+    logger.log('rpc', fn, table || fn, true, Date.now() - t0,
+      (out && out.rows ? out.rows.length + ' 行' : (out && out.ok === false ? out.msg || 'ok:false' : 'ok')),
+      argsSummary);
+    res.json(out);
   } catch (e) {
     console.error('[rpc]', fn, e.message);
+    logger.log('rpc', fn, body.p_table || '', false, Date.now() - t0, e.message, argsSummary);
     res.status(500).json({ ok: false, msg: '数据库错误: ' + e.message });
   }
 });
@@ -168,6 +203,8 @@ async function runSync(reason) {
     const r = await ksync.syncAll({
       db: pool,
       onProgress: m => console.log('[ksync]', reason, m),
+      /* v3.12.4 每只票的取数明细落日志文件 */
+      log: (kind, name, ok, ms, detail, meta) => logger.log('ksync', kind, name, ok, ms, detail, meta),
     });
     _lastSync = Object.assign({ at: new Date().toISOString(), reason, ms: Date.now() - t0 }, r);
     console.log('[ksync] 完成:', JSON.stringify(_lastSync));
