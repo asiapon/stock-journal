@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.13.0';
+const APP_VER = '3.13.1';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5567,8 +5567,7 @@ function initQa() {
     const del = e.target.closest('[data-qa-del]');
     if (del) { qaDeleteConversation(del.dataset.qaDel); }
   });
-  /* 附件 */
-  $('qaAttachBtn').addEventListener('click', () => $('qaFileInput').click());
+  /* 附件（v3.13.1 起入口在「＋」菜单里，独立 📎 按钮已移除） */
   $('qaFileInput').addEventListener('change', async e => {
     for (const f of Array.from(e.target.files || [])) await qaAddFile(f);
     e.target.value = '';

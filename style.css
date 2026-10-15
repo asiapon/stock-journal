@@ -2028,3 +2028,12 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 .qa-skill-row .sk-toggle.on { color: var(--up, #d93a2b); border-color: var(--up, #d93a2b); }
 .qa-skill-row.sk-off { opacity: .45; }
 .qa-skill-foot { border-top: 1px solid var(--line, #e2e8f0); margin-top: 4px; padding-top: 4px; }
+/* v3.13.1 手机档：弹层宽度贴屏、高度限半屏（避免 ＋ 菜单/技能面板溢出） */
+@media (max-width: 720px) {
+  .qa-plus-menu, .qa-skill-menu, .qa-ex-panel {
+    left: 8px; right: 8px; width: auto;
+  }
+  .qa-skill-menu { width: auto; }
+  .qa-skill-pick { max-height: 46vh; }
+  .qa-ex-panel { max-height: 46vh; }
+}
