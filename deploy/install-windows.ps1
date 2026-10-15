@@ -179,26 +179,8 @@ ACCESS_KEY=
 Write-Host "--- [5/6] 启动方式 + 防火墙"
 netsh advfirewall firewall add rule name="StockJournal3000" dir=in action=allow protocol=TCP localport=$Port | Out-Null
 Write-Host "  已放行入站端口 $Port"
-$bat = Join-Path $DeployDir "start-windows.bat"
-# ASCII-only：cmd 按 GBK 解析含中文的 bat 会执行错乱（UTF-8 也不行）
-@"
-@echo off
-rem ASCII-only: cmd parses .bat with the system codepage (GBK), Chinese gets corrupted.
-cd /d "%~dp0"
-netstat -ano | findstr /R /C:":3000 .*LISTENING" >nul 2>nul
-if %errorlevel%==0 (
-  echo [X] Port 3000 is already in use. Occupied by:
-  netstat -ano | findstr /R /C:":3000 .*LISTENING"
-  echo.
-  echo Fix:
-  echo   1. Kill the stale node.exe:  taskkill /PID pid-above /F
-  echo   2. Or change PORT in .env, then run this script again.
-  echo.
-  pause
-  exit /b 1
-)
-node server.js
-"@ | Set-Content -Path $bat -Encoding ASCII
+# v3.12.6 起 start/stop 脚本由仓库直接提供（start-windows.bat→start-windows.ps1 restart 语义；
+# stop-windows.bat→stop-windows.ps1），安装时不再覆盖生成。
 if ($AutoStart) {
   $action = New-ScheduledTaskAction -Execute "node.exe" -Argument (Join-Path $DeployDir "server.js") -WorkingDirectory $DeployDir
   $trigger = New-ScheduledTaskTrigger -AtLogOn
