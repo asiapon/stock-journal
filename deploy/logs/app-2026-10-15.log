@@ -182,3 +182,89 @@
 2026-10-15T14:51:55.500Z | web | rpc | app_delete | OK | 79ms | 
 2026-10-15T14:51:55.500Z | web | rpc | app_insert | OK | 23ms | 
 2026-10-15T14:51:55.500Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T14:59:52.334Z | rpc | app_has_users | app_has_users | OK | 18ms | ok | {}
+2026-10-15T14:59:52.350Z | rpc | app_query | trades | OK | 11ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-15T14:59:52.585Z | rpc | app_query | watchlist | OK | 245ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-15T14:59:52.591Z | rpc | app_query | settings | OK | 248ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-15T14:59:52.603Z | rpc | app_query | op_logs | OK | 259ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-15T14:59:52.614Z | rpc | app_query | quotes | OK | 273ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-15T14:59:52.622Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T14:59:52.637Z | rpc | app_list_users | app_list_users | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T14:59:52.918Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T14:59:55.421Z | web | rpc | app_has_users | FAIL | 32ms | 
+2026-10-15T14:59:55.421Z | web | rpc | app_query | OK | 85ms | 
+2026-10-15T14:59:55.421Z | web | rpc | app_query | OK | 261ms | 
+2026-10-15T14:59:55.421Z | web | rpc | app_query | OK | 260ms | 
+2026-10-15T14:59:55.421Z | web | rpc | app_query | OK | 270ms | 
+2026-10-15T14:59:55.421Z | web | rpc | app_query | OK | 278ms | 
+2026-10-15T14:59:55.421Z | web | rpc | app_query | OK | 22ms |  | 总览/行情·刷新
+2026-10-15T14:59:55.421Z | web | rpc | app_list_users | OK | 11ms |  | 总览/行情·刷新
+2026-10-15T14:59:55.421Z | web | quote | 东财 push2.eastmoney.com | FAIL | 125ms | Failed to fetch | 总览/行情·刷新
+2026-10-15T14:59:55.421Z | web | quote | 腾讯 qt.gtimg.cn | OK | 22ms | 4/4 只 | 总览/行情·刷新
+2026-10-15T14:59:55.421Z | web | quote | 东财 指数快照 | FAIL | 110ms | Failed to fetch | 总览/行情·刷新
+2026-10-15T14:59:55.421Z | web | quote | 腾讯 指数快照 | OK | 22ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新
+2026-10-15T14:59:55.421Z | web | rpc | app_list_users | OK | 3ms | 
+2026-10-15T15:00:10.254Z | rpc | app_has_users | app_has_users | OK | 107ms | ok | {}
+2026-10-15T15:00:10.262Z | rpc | app_query | trades | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-15T15:00:10.407Z | rpc | app_query | settings | OK | 147ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-15T15:00:10.409Z | rpc | app_query | watchlist | OK | 150ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-15T15:00:10.448Z | rpc | app_query | quotes | OK | 188ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-15T15:00:10.456Z | rpc | app_query | op_logs | OK | 195ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-15T15:00:10.465Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T15:00:10.474Z | rpc | app_list_users | app_list_users | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T15:00:10.722Z | rpc | app_list_users | app_list_users | OK | 0ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T15:00:13.226Z | web | rpc | app_has_users | FAIL | 110ms | 
+2026-10-15T15:00:13.226Z | web | rpc | app_query | OK | 10ms | 
+2026-10-15T15:00:13.226Z | web | rpc | app_query | OK | 151ms | 
+2026-10-15T15:00:13.226Z | web | rpc | app_query | OK | 152ms | 
+2026-10-15T15:00:13.226Z | web | rpc | app_query | OK | 201ms | 
+2026-10-15T15:00:13.226Z | web | rpc | app_query | OK | 201ms | 
+2026-10-15T15:00:13.226Z | web | rpc | app_query | OK | 15ms |  | 总览/行情·刷新
+2026-10-15T15:00:13.226Z | web | rpc | app_list_users | OK | 7ms |  | 总览/行情·刷新
+2026-10-15T15:00:13.226Z | web | quote | 东财 push2.eastmoney.com | FAIL | 129ms | Failed to fetch | 总览/行情·刷新
+2026-10-15T15:00:13.226Z | web | quote | 腾讯 qt.gtimg.cn | OK | 16ms | 4/4 只 | 总览/行情·刷新
+2026-10-15T15:00:13.226Z | web | quote | 东财 指数快照 | FAIL | 93ms | Failed to fetch | 总览/行情·刷新
+2026-10-15T15:00:13.226Z | web | quote | 腾讯 指数快照 | OK | 9ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新
+2026-10-15T15:00:13.226Z | web | rpc | app_list_users | OK | 3ms | 
+2026-10-15T15:00:14.982Z | rpc | app_insert | qa_history | OK | 27ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9o0w2lz4mlu","question":"筛选A股人形机器人产业链中的公司，需同时满足：PE(TTM) 为正且低于80倍、最新可得ROE高于8%、具备公告或主营业务关联的明确证据。按业务关联证据强度和市值排序，输出完整筛选报告，需列出每只股票的代码、名称、所属环节及各项指标实际数值。随后对排名前3的A股进行综合诊断，分别说明原筛选条件中已被验证、被削弱以及仍待验证的部分。","a
+2026-10-15T15:00:14.986Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T15:00:18.800Z | web | rpc | app_insert | OK | 30ms |  | 智能问答·screener：筛选A股人形机器人产业链中的公司，需同时满足：P
+2026-10-15T15:00:18.800Z | web | rpc | app_query | OK | 3ms |  | 智能问答·screener：筛选A股人形机器人产业链中的公司，需同时满足：P
+2026-10-15T15:00:18.800Z | web | dc | 东财数据中心 RPT_BOARD_CONSTITUENT | FAIL | 323ms | 未获取到：返回数据为空 | 智能问答·screener：筛选A股人形机器人产业链中的公司，需同时满足：P
+2026-10-15T15:00:18.800Z | web | dc | 东财数据中心 RPT_BOARD_CONSTITUENT | FAIL | 266ms | 未获取到：返回数据为空 | 智能问答·screener：筛选A股人形机器人产业链中的公司，需同时满足：P
+2026-10-15T15:00:18.800Z | web | dc | 东财数据中心 RPT_BOARD_CONSTITUENT | FAIL | 258ms | 未获取到：返回数据为空 | 智能问答·screener：筛选A股人形机器人产业链中的公司，需同时满足：P
+2026-10-15T15:00:18.800Z | web | dc | 东财数据中心 RPT_BOARD_CONSTITUENT | FAIL | 250ms | 未获取到：返回数据为空 | 智能问答·screener：筛选A股人形机器人产业链中的公司，需同时满足：P
+2026-10-15T15:00:18.800Z | web | dc | 东财数据中心 RPT_LICO_FN_CPD | OK | 102ms | 30 行 | 智能问答·screener：筛选A股人形机器人产业链中的公司，需同时满足：P
+2026-10-15T15:00:24.555Z | web | dc | 东财数据中心 RPT_VALUEANALYSIS_DET | OK | 2232ms | 5576 行 | 智能问答·screener：筛选A股人形机器人产业链中的公司，需同时满足：P
+2026-10-15T15:00:37.031Z | rpc | app_delete | qa_history | OK | 89ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":15}
+2026-10-15T15:00:37.053Z | rpc | app_insert | qa_history | OK | 19ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9o0w2lz4mlu","question":"筛选A股人形机器人产业链中的公司，需同时满足：PE(TTM) 为正且低于80倍、最新可得ROE高于8%、具备公告或主营业务关联的明确证据。按业务关联证据强度和市值排序，输出完整筛选报告，需列出每只股票的代码、名称、所属环节及各项指标实际数值。随后对排名前3的A股进行综合诊断，分别说明原筛选条件中已被验证、被削弱以及仍待验证的部分。","a
+2026-10-15T15:00:37.057Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T15:00:39.560Z | web | rpc | app_delete | OK | 93ms | 
+2026-10-15T15:00:39.560Z | web | rpc | app_insert | OK | 21ms | 
+2026-10-15T15:00:39.560Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T15:01:39.053Z | rpc | app_insert | qa_history | OK | 111ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9o0w2lz4mlu","question":"帮我做一次持仓体检：逐只给出成本、浮盈亏、仓位占比与风险提示，并指出最该处理的一只。","answer":""}}
+2026-10-15T15:01:39.058Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T15:01:43.135Z | web | rpc | app_insert | OK | 115ms | 
+2026-10-15T15:01:43.135Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T15:01:43.135Z | web | llm | 云端模型 glm-5.3-flash | OK | 1686ms | 68 字
+2026-10-15T15:01:43.135Z | web | llm | agentic 回路回退 | FAIL | 0ms | stream must be true; non-streaming chat completions are not supported
+2026-10-15T15:01:56.342Z | rpc | app_delete | qa_history | OK | 75ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":17}
+2026-10-15T15:01:56.364Z | rpc | app_insert | qa_history | OK | 20ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9o0w2lz4mlu","question":"帮我做一次持仓体检：逐只给出成本、浮盈亏、仓位占比与风险提示，并指出最该处理的一只。","answer":"## 持仓体检\n\n先说清一个前提：我这边只有你录入的**成本数据**，没有实时行情（可能滞后或取不到），所以**浮盈亏无法给出准确数字**，下面的仓位占比按成本金额计算。具体的当前市值、浮盈亏请以券商 App 为准。\n\n##
+2026-10-15T15:01:56.368Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T15:01:58.871Z | web | rpc | app_delete | OK | 78ms | 
+2026-10-15T15:01:58.871Z | web | rpc | app_insert | OK | 22ms | 
+2026-10-15T15:01:58.871Z | web | rpc | app_query | OK | 4ms | 
+2026-10-15T15:03:05.803Z | rpc | app_insert | qa_history | OK | 123ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9o0w2lz4mlu","question":"从我的自选股里找出 K 线形态最像 中兴通讯 的前 5 只，用近 60 个交易日比对。","answer":""}}
+2026-10-15T15:03:05.808Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T15:03:08.326Z | web | kline | 腾讯K线 | OK | 63ms | sz000063 day 141根 | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T15:03:08.326Z | web | kline | 腾讯K线 | OK | 44ms | sz000066 day 141根 | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T15:03:08.326Z | web | rpc | app_insert | OK | 127ms |  | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T15:03:08.326Z | web | rpc | app_query | OK | 4ms |  | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T15:03:08.326Z | web | kline | 腾讯K线 | OK | 40ms | sz002611 day 141根 | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T15:03:08.326Z | web | kline | 腾讯K线 | OK | 40ms | sz002352 day 141根 | 智能问答·sim：从我的自选股里找出 K 线形态最像 中兴通讯 的
+2026-10-15T15:03:16.467Z | rpc | app_delete | qa_history | OK | 76ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":19}
+2026-10-15T15:03:16.488Z | rpc | app_insert | qa_history | OK | 18ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmv9o0w2lz4mlu","question":"从我的自选股里找出 K 线形态最像 中兴通讯 的前 5 只，用近 60 个交易日比对。","answer":"你的自选股是空的，所以候选池只有持仓里的另外 3 只（中国长城、东方精工、顺丰控股），凑不满 5 只，实际可比的就这 3 只，结果如下：\n\n| # | 代码 | 名称 | 形态相似度 | 走势相关性 | 近60日涨幅 | 最新
+2026-10-15T15:03:16.493Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T15:03:18.996Z | web | rpc | app_delete | OK | 80ms | 
+2026-10-15T15:03:18.996Z | web | rpc | app_insert | OK | 21ms | 
+2026-10-15T15:03:18.996Z | web | rpc | app_query | OK | 4ms | 
