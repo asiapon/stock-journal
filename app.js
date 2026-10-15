@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.13.2';
+const APP_VER = '3.13.3';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5223,21 +5223,39 @@ function renderQaChips() {
   if (!box) return;
   const fs = qaState.files;
   box.hidden = !fs.length;
+  /* v3.13.3 图片附件显示缩略图（48px），文本附件显示字数 */
   box.innerHTML = fs.map((f, i) =>
-    `<span class="qa-attach-chip"><b>${esc(f.name)}</b><span>${f.image ? '图片' : (f.text ? Math.round(f.text.length / 100) / 10 + 'k 字' : '')}</span>`
+    `<span class="qa-attach-chip">${f.image ? `<img class="qa-chip-img" src="${f.image}" alt="">` : ''}`
+    + `<b>${esc(f.name)}</b><span>${f.image ? '图片' : (f.text ? Math.round(f.text.length / 100) / 10 + 'k 字' : '')}</span>`
     + `<button type="button" data-qa-rm="${i}" title="移除">✕</button></span>`).join('');
 }
 async function qaAddFile(f) {
   if (qaState.files.length >= 5) { toast('最多同时带 5 个附件', 'warn'); return; }
   const isImg = /^image\//.test(f.type);
   if (isImg) {
-    const dataUrl = await new Promise(res => {
+    const raw = await new Promise(res => {
       const fr = new FileReader();
       fr.onload = () => res(fr.result);
       fr.onerror = () => res('');
       fr.readAsDataURL(f);
     });
-    if (!dataUrl) { toast('图片读取失败', 'warn'); return; }
+    if (!raw) { toast('图片读取失败', 'warn'); return; }
+    /* v3.13.3 压缩到 ≤1024px 再发模型（base64 太大会拖垮请求） */
+    const dataUrl = await new Promise(res => {
+      const img = new Image();
+      img.onload = () => {
+        try {
+          const scale = Math.min(1, 1024 / Math.max(img.width, img.height));
+          if (scale >= 1) return res(raw);
+          const cv = document.createElement('canvas');
+          cv.width = Math.round(img.width * scale); cv.height = Math.round(img.height * scale);
+          cv.getContext('2d').drawImage(img, 0, 0, cv.width, cv.height);
+          res(cv.toDataURL('image/jpeg', 0.85));
+        } catch (e) { res(raw); }
+      };
+      img.onerror = () => res(raw);
+      img.src = raw;
+    });
     qaState.files.push({ name: f.name, image: dataUrl });
   } else {
     if (f.size > 512 * 1024) { toast('文件过大（限 500KB）', 'warn'); return; }
@@ -5314,7 +5332,17 @@ async function sendQa() {
      了没人监听的控制器，工具取数阶段完全停不了；且取数完成后走流式必抛
      ReferenceError → 全部显示「回答失败」。现在正确接线。 */
   const signal = controller.signal;
-  myMsgs.push({ role: 'user', content: question + attachNote });
+  /* v3.13.3 图片附件真正发给模型：content 用 multipart 数组（text + image_url），
+     模型/网关不支持时顶层 catch 会自动降级为纯文本重试 */
+  const imgFiles = files.filter(f => f.image);
+  const asTextContent = m => Array.isArray(m.content)
+    ? m.content.filter(p => p.type === 'text').map(p => p.text).join('\n') : m.content;
+  myMsgs.push({
+    role: 'user',
+    content: imgFiles.length
+      ? [{ type: 'text', text: fullQuestion }, ...imgFiles.map(f => ({ type: 'image_url', image_url: { url: f.image } }))]
+      : question + attachNote,
+  });
   qaState.stream[convId] = '';
   qaLocalSet(convId, question || (files.length ? '附件提问' : ''));
   renderQaMessages();
@@ -5381,6 +5409,11 @@ async function sendQa() {
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .slice(-9, -1).map(m => ({ role: m.role, content: m.content }));
     const baseMsgs = [{ role: 'system', content: sys }, ...history, { role: 'user', content: fullQuestion }];
+    /* v3.13.3 带图版消息（多模态模型直接支持；不支持时顶层 catch 降级重试纯文本） */
+    const withImgMsgs = imgFiles.length ? [{ role: 'system', content: sys }, ...history, {
+      role: 'user',
+      content: [{ type: 'text', text: fullQuestion }, ...imgFiles.map(f => ({ type: 'image_url', image_url: { url: f.image } }))],
+    }] : baseMsgs;
     if (toolBlock) {
       /* 规则路由命中 → 原单轮流式（快路径，不受模型能力影响） */
       answer = await qaLlmStream(baseMsgs, {
@@ -5416,7 +5449,7 @@ async function sendQa() {
         }
       };
       try {
-        answer = await qaAgentLoop(baseMsgs, {
+        answer = await qaAgentLoop(withImgMsgs, {
           signal,
           onDelta: onDeltaAg,
           onNote: nm => {
@@ -5447,6 +5480,32 @@ async function sendQa() {
       answer = streamed;
       const h = streamEl();
       if (h) h.innerHTML = qaMdToHtml(streamed || '（已停止生成）');
+    } else if (imgFiles.length) {
+      /* v3.13.3 图片请求被模型/网关拒绝 → 自动降级纯文本重试一次 */
+      try {
+        const h0 = streamEl();
+        if (h0) h0.textContent = '当前模型可能不支持图片，改用纯文本重试…';
+        answer = await qaLlmStream(baseMsgs, {
+          signal,
+          onDelta: (d) => {
+            streamed += d;
+            qaState.stream[convId] = streamed;
+            const h = streamEl();
+            if (h && onScreen()) h.innerHTML = qaMdToHtml(streamed);
+          },
+        });
+        answer = answer || streamed;
+        const h = streamEl();
+        if (h) h.innerHTML = qaMdToHtml(answer);
+        if (onScreen()) toast('模型不支持图片，已按纯文本回答');
+      } catch (e2) {
+        if (e2 && e2.name === 'AbortError') { answer = streamed; }
+        else {
+          const h = streamEl();
+          if (h) h.textContent = '回答失败：' + (e2 && e2.message ? e2.message : '请稍后重试');
+          if (onScreen()) toast('问答请求失败', 'warn');
+        }
+      }
     } else {
       const h = streamEl();
       if (h) h.textContent = '回答失败：' + (e && e.message ? e.message : '请稍后重试');

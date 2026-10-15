@@ -2037,3 +2037,6 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
   .qa-skill-pick { max-height: 46vh; }
   .qa-ex-panel { max-height: 46vh; }
 }
+/* v3.13.3 图片附件缩略图 */
+.qa-attach-chip { display: inline-flex; align-items: center; gap: 6px; }
+.qa-chip-img { width: 40px; height: 40px; object-fit: cover; border-radius: 6px; border: 1px solid var(--line, #e2e8f0); }
