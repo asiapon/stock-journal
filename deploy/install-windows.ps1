@@ -91,8 +91,8 @@ Write-Host "  postgres 认证通过"
 # ---------- 3. 角色 / 数据库 / schema ----------
 Write-Host "--- [3/6] 数据库初始化"
 if (-not $DbPassword) {
-  $bytes = New-Object byte[] 15; (New-Object Security.Cryptography.RNGCryptoServiceProvider).GetBytes($bytes)
-  $DbPassword = ([Convert]::ToBase64String($bytes) -replace '[^A-Za-z0-9]', '').Substring(0, 20)
+  $chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnpqrstuvwxyz23456789'
+  $DbPassword = -join (1..20 | ForEach-Object { $chars[(Get-Random -Maximum $chars.Length)] })
   $GeneratedPw = $true
 } else { $GeneratedPw = $false }
 $existsRole = (& $psql -U postgres -h 127.0.0.1 -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DbUser'") 2>$null
