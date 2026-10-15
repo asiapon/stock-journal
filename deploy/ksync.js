@@ -88,12 +88,58 @@ async function fetchKlineEast(code, lmt) {
   return { name: (j.data && j.data.name) || code, bars };
 }
 
+/* —— 数据源：东财主源（带真实成交额 f57）+ 腾讯兜底（与前端口径一致：
+   量单位手 → ×100 股；成交额缺失 → (O+H+L+C)/4 × 股数 近似） —— */
+async function fetchKlineTx(code, lmt) {
+  const sym = (inferMarket(code) === 'bj' ? 'bj' : inferMarket(code)) + code;
+  const urls = [
+    'https://web.ifzq.gtimg.cn/appstock/app/newfqkline/get?param=' + sym + ',day,,,' + Math.min(lmt, 320) + ',qfq',
+    'https://ifzq.gtimg.cn/appstock/app/fqkline/get?param=' + sym + ',day,,,' + Math.min(lmt, 320) + ',qfq',
+  ];
+  let lastErr = null;
+  for (const url of urls) {
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(15000) });
+      if (!res.ok) { lastErr = new Error('HTTP ' + res.status); continue; }
+      const j = await res.json();
+      const d = (j.data && j.data[sym]) || {};
+      const arr = d.qfqday || d.day || [];
+      if (!arr.length) { lastErr = new Error('空数据'); continue; }
+      return {
+        name: (d.qt && d.qt.data && d.qt.data[1]) || code,
+        bars: arr.map(k => {
+          const o = +k[1], c = +k[2], h = +k[3], l = +k[4], v = (+k[5] || 0) * 100;   // 手 → 股
+          return [k[0], o, c, h, l, v, Math.round(((o + h + l + c) / 4) * v)];
+        }),
+      };
+    } catch (e) { lastErr = e; }
+  }
+  throw lastErr || new Error('腾讯K线无数据');
+}
+/* 东财 → 腾讯兜底；eastDown 熔断：东财连续失败 5 次后，本轮剩余请求直接走腾讯
+   （东财主源优点是真实成交额 f57，能用则用） */
+function makeSmartFetcher() {
+  let eastFails = 0;
+  return async function (code, lmt) {
+    if (eastFails < 5) {
+      try {
+        const k = await fetchKlineEast(code, lmt);
+        if (k.bars && k.bars.length) { eastFails = 0; return k; }
+        eastFails += 1;
+      } catch (e) { eastFails += 1; }
+      if (eastFails >= 5) console.error('[ksync] 东财源连续失败 5 次，本轮改用腾讯源（成交额将为近似值）');
+    }
+    return fetchKlineTx(code, lmt);
+  };
+}
+
 /* ---------- 主流程 ---------- */
 
 /* 全量/增量同步一轮。opts: {db, fetcher?, lmt?, concurrency?, gapMs?, batchSize?, onProgress?} */
 async function syncAll(opts) {
   const { db } = opts;
-  const fetcher = opts.fetcher || fetchKlineEast;
+  /* 默认智能取数器：东财主源 + 腾讯兜底 + 熔断（可用 opts.fetcher 注入 mock） */
+  const fetcher = opts.fetcher || makeSmartFetcher();
   const lmt = opts.lmt || 280;
   const conc = opts.concurrency || 6;
   const gapMs = opts.gapMs == null ? 12 : opts.gapMs;

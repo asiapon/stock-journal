@@ -267,3 +267,14 @@ CREATE OR REPLACE FUNCTION public.kline_stats(p_token text)
  SECURITY DEFINER
  SET search_path TO 'public'
 AS $function$ DECLARE uname TEXT; res JSONB; BEGIN SELECT s.username INTO uname FROM app_sessions s WHERE s.token = p_token AND s.expires_at > now(); IF uname IS NULL THEN RETURN jsonb_build_object('ok', false, 'msg', '未登录或会话已过期'); END IF; SELECT jsonb_build_object('stocks', (SELECT count(*) FROM kline_cache), 'totalBars', (SELECT COALESCE(sum(days), 0) FROM kline_cache), 'first', (SELECT min(updated) FROM kline_cache), 'last', (SELECT max(updated) FROM kline_cache), 'daily', (SELECT COALESCE(jsonb_agg(jsonb_build_object('d', day, 'stocks', cnt, 'bars', bars)), '[]'::jsonb) FROM (SELECT updated::date AS day, count(*)::int AS cnt, COALESCE(sum(days), 0)::bigint AS bars FROM kline_cache GROUP BY 1 ORDER BY 1 DESC LIMIT 90) t)) INTO res; RETURN jsonb_build_object('ok', true, 'data', res); END $function$;
+
+-- ============================================================================
+-- ⑥ 自托管直连权限（v3.12.2）：服务端定时采集（ksync）以应用角色直连表做
+--    K 线批量 upsert，不走 RPC —— 需要显式表权限。业务表虽有 RLS（auth.uid()
+--    shim 恒为 NULL，直连看不见任何业务行），但 kline_cache 是共享参考数据、
+--    无 RLS，必须可读写。
+-- ============================================================================
+GRANT USAGE ON SCHEMA public TO PUBLIC;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO PUBLIC;
+GRANT EXECUTE ON ALL FUNCTIONS IN SCHEMA public TO PUBLIC;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO PUBLIC;

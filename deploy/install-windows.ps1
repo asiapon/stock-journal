@@ -111,6 +111,9 @@ if (-not $DbPassword) {
 $existsRole = (& $psql -U postgres -h 127.0.0.1 -tAc "SELECT 1 FROM pg_roles WHERE rolname='$DbUser'") 2>$null
 if ("$existsRole".Trim() -ne "1") {
   & $psql -U postgres -h 127.0.0.1 -c "CREATE ROLE $DbUser LOGIN PASSWORD '$DbPassword'" | Out-Null
+} else {
+  # 角色已存在（上次安装）：把密码同步成本次的——否则重装生成的 .env 与角色旧密码不一致，服务端连库必失败
+  & $psql -U postgres -h 127.0.0.1 -c "ALTER ROLE $DbUser WITH LOGIN PASSWORD '$DbPassword'" | Out-Null
 }
 $existsDb = (& $psql -U postgres -h 127.0.0.1 -tAc "SELECT 1 FROM pg_database WHERE datname='$DbName'") 2>$null
 if ("$existsDb".Trim() -ne "1") {

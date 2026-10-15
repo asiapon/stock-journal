@@ -49,6 +49,13 @@ if (!DATABASE_URL) {
   console.warn('⚠ 未配置 DATABASE_URL（deploy/.env），RPC 将返回 500；静态页面仍可访问。');
 }
 const pool = DATABASE_URL ? new Pool({ connectionString: DATABASE_URL, max: 10 }) : null;
+if (pool) {
+  pool.query('SELECT current_user AS u').then(r => {
+    console.log('✓ 数据库自检: current_user =', r.rows[0].u, '| 连接串掩码:', DATABASE_URL.replace(/:[^:@/]+@/, ':***@'));
+  }).catch(e => {
+    console.error('✗ 数据库自检失败:', e.message, '| 原始串:', JSON.stringify(DATABASE_URL));
+  });
+}
 
 /* 函数参数名：从 pg_catalog 现取（与建库 DDL 永远一致，不用手维护清单）。
    identity args 形如 "p_token text, p_since date" —— 取每段第一个 token 即参数名 */
