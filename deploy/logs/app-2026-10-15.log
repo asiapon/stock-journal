@@ -1,1 +1,32 @@
 2026-10-15T12:25:30.220Z | web | quote | 实时行情(冒烟) | OK | 120ms | 3只 | 冒烟测试
+2026-10-15T13:42:40.313Z | rpc | app_has_users | app_has_users | OK | 229ms | ok | {}
+2026-10-15T13:42:40.340Z | rpc | app_query | trades | OK | 13ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-15T13:42:40.589Z | rpc | app_query | watchlist | OK | 261ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-15T13:42:40.609Z | rpc | app_query | settings | OK | 272ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-15T13:42:40.616Z | rpc | app_query | quotes | OK | 286ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-15T13:42:40.705Z | rpc | app_query | op_logs | OK | 366ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-15T13:42:40.715Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T13:42:40.755Z | rpc | app_list_users | app_list_users | OK | 8ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T13:42:40.872Z | rpc | app_list_users | app_list_users | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T13:42:42.335Z | rpc | app_has_users | app_has_users | OK | 3ms | ok | {}
+2026-10-15T13:42:42.344Z | rpc | app_query | trades | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-15T13:42:42.345Z | rpc | app_query | watchlist | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-15T13:42:42.346Z | rpc | app_query | settings | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-15T13:42:42.346Z | rpc | app_query | quotes | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-15T13:42:42.347Z | rpc | app_query | op_logs | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-15T13:42:42.358Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-15T13:42:42.368Z | rpc | app_list_users | app_list_users | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T13:42:42.548Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-15T13:42:45.054Z | web | rpc | app_has_users | FAIL | 8ms | 
+2026-10-15T13:42:45.054Z | web | rpc | app_query | OK | 8ms | 
+2026-10-15T13:42:45.054Z | web | rpc | app_query | OK | 11ms | 
+2026-10-15T13:42:45.054Z | web | rpc | app_query | OK | 11ms | 
+2026-10-15T13:42:45.054Z | web | rpc | app_query | OK | 11ms | 
+2026-10-15T13:42:45.054Z | web | rpc | app_query | OK | 11ms | 
+2026-10-15T13:42:45.054Z | web | rpc | app_query | OK | 45ms |  | 总览/行情·刷新
+2026-10-15T13:42:45.054Z | web | rpc | app_list_users | OK | 47ms |  | 总览/行情·刷新
+2026-10-15T13:42:45.054Z | web | quote | 东财 指数快照 | FAIL | 170ms | Failed to fetch | 总览/行情·刷新
+2026-10-15T13:42:45.054Z | web | quote | 腾讯 指数快照 | OK | 8ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新
+2026-10-15T13:42:45.054Z | web | rpc | app_list_users | OK | 4ms | 
+2026-10-15T13:42:51.588Z | rpc | app_bulk_delete |  | FAIL | 5ms | 类型json的输入语法无效 | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_tables":["trades","watchlist","quotes","op_logs"]}
+2026-10-15T13:42:54.239Z | web | rpc | app_bulk_delete | FAIL | 9ms | 服务不可用(500)
