@@ -7,12 +7,18 @@
 
 /* ---------------- 云端配置 ----------------
    云端访问 key 与应用域名绑定（服务端校验 Origin）；
-   云端运行走相对路径，本地打开走云端绝对地址，均指向同一后端 */
-const CLOUD_HOST = 'https://stock-journal-84311.app.workbuddy.host';
+   云端运行走相对路径，本地打开走云端绝对地址，均指向同一后端
+   v3.8.63 曾迁至应用「股票操作日记」（appId wbapp_nRQHqCtwORJYvXyAPTEn0E，域名
+   trade-journal-94951）；v3.8.64 按用户要求把链接前缀改成 stock-journal ——
+   平台域名前缀只在建应用时确定、事后不可改（文档原文 "cannot be changed later"），
+   所以另建新应用「股票日记」（appId wbapp_mtCmnoJVwocZG4iRlx6CMe，
+   stock-journal-07300）并逐字复刻整套 7 表 / 15 函数云库。
+   旧应用 stock-journal-84311、trade-journal-94951 及各自数据保持不变、互不影响 */
+const CLOUD_HOST = 'https://stock-journal-07300.app.workbuddy.host';
 const RPC_BASE = (location.hostname === 'localhost' || location.hostname === '127.0.0.1' || location.protocol === 'file:')
   ? CLOUD_HOST + '/.cloud/database/rest/rpc'
   : '/.cloud/database/rest/rpc';
-const ACCESS_KEY = 'wbpk_CwUOa3QUCTJDNRwFYHCDQ6_F8oKu5xRL79KamRYPWuUJZl4TZ4wfukP';
+const ACCESS_KEY = 'wbpk_mtCmnoJVwocZG4iRlx6CMe_NtYKw83A5VMgiaYhXnfV80AIGKO1rMbm';
 /* 云端 LLM（免密钥）：模型目录 + 对话调用，与旧版 trade-manager 同一通道 */
 let cloudLlm = null;
 function initCloudLlm() {
@@ -20,7 +26,9 @@ function initCloudLlm() {
   try { return WorkBuddyCloud.createWorkBuddyCloud({ endpoint: CLOUD_HOST, publishableKey: ACCESS_KEY }); }
   catch (e) { return null; }
 }
-const TABLES = ['trades', 'watchlist', 'quotes', 'settings', 'op_logs'];
+/* v3.9.0 新增 qa_history（智能问答历史，云端）。加入 TABLES 后 localStore 的
+   清空/读写会一并覆盖，云端则由 app_query/app_insert/app_delete 的白名单放行。 */
+const TABLES = ['trades', 'watchlist', 'quotes', 'settings', 'op_logs', 'qa_history'];
 
 /* ---------------- 全局状态 ---------------- */
 const S = {
@@ -71,7 +79,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.8.61';
+const APP_VER = '3.9.11';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -192,6 +200,19 @@ const StockDict = {
 };
 
 /* ---------- 通用联想下拉（自选 / 交易表单共用） ---------- */
+/* v3.8.86 加自选弹窗 PC 档隐藏股票联想（CSS 里 `#watchModal #tvWfSug{display:none}`）。
+   但只隐藏视觉不够：`input` 事件照旧会触发 showShield() 插入全屏透明防护罩
+   （.modal-mask 内 inset:0 / z-index:29），用户点「添加」按钮时第一次点击会被它吞掉。
+   所以这里做双保险 —— 候选压根不渲染，也不插罩。 */
+const SUG_OFF_IN_WATCH_PC = (() => {
+  let mql = null;
+  try { mql = window.matchMedia('(min-width: 721px)'); } catch (e) { /* 老浏览器忽略 */ }
+  return boxId => {
+    if (boxId !== 'tvWfSug') return false;
+    return !!(mql && mql.matches);
+  };
+})();
+
 function bindSuggest(inputId, boxId, onPick) {
   const inp = $(inputId), box = $(boxId);
   let items = [], shield = null, shieldTimer = null;
@@ -202,6 +223,7 @@ function bindSuggest(inputId, boxId, onPick) {
     if (shield) { shield.remove(); shield = null; }
   };
   const showShield = () => {
+    if (SUG_OFF_IN_WATCH_PC(boxId)) return;   /* v3.8.86 PC 弹窗内联想已关，别插罩拦点击 */
     if (shield) { if (shieldTimer) { clearTimeout(shieldTimer); shieldTimer = null; } return; }
     shield = document.createElement('div');
     shield.className = 'sug-shield';
@@ -215,6 +237,9 @@ function bindSuggest(inputId, boxId, onPick) {
     if (shield && !shieldTimer) shieldTimer = setTimeout(removeShieldNow, 350);
   };
   inp.addEventListener('input', () => {
+    /* v3.8.86 PC 弹窗内直接不渲染候选（顺手把可能残留的下拉/防护罩收掉），
+       输入框本身仍照常收字符，提交走 StockDict.resolve 不受影响。 */
+    if (SUG_OFF_IN_WATCH_PC(boxId)) { close(); removeShieldNow(); return; }
     const v = inp.value.trim();
     if (!v || !StockDict.ready) { close(); return; }
     items = StockDict.search(v, 8);
@@ -229,7 +254,12 @@ function bindSuggest(inputId, boxId, onPick) {
     ).join('');
     box.hidden = false;
     showShield();
-    requestAnimationFrame(() => box.scrollIntoView({ block: 'nearest', behavior: 'smooth' }));
+    /* v3.8.79 下拉不再整块 scrollIntoView。
+       旧写法 `box.scrollIntoView({block:'nearest'})` 在弹窗（.modal-lg 自身可滚）内会
+       把「下拉 + 弹窗」一起滚动，视觉上下拉像被顶到屏幕中间、盖住大半个页面，
+       用户反馈「下拉筛选股票会把页面全挡」。
+       现在只保证**股票输入框**留在视野内即可 —— 下拉紧贴其下方，自然跟着可见。 */
+    try { inp.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* */ }
   });
   const pick = e => {
     const it = e.target.closest('.sug-item');
@@ -432,10 +462,18 @@ const NetQuote = {
   eastDeadUntil: 0,          // 东财连续失败 3 次熔断 10 分钟（期间直接走腾讯）
   idx: new Map(),            // v3.8.26 指数快照：sym(sh000001) -> { name, price, pct }
   idxTime: 0,
-  INDEXES: [                 // 三大指数：随行情刷新一并拉取
+  /* v3.8.62 大盘指数清单：前 3 项是原有的三大市场指数，后 3 项是大中小盘宽基，
+     凑成「沪 / 深 / 创业板 + 大盘 / 中盘 / 小盘」的市场结构全景。
+     本数组是纯配置——请求侧靠 secid 拼批量 URL、渲染侧逐项生成胶囊，都是
+     数组驱动，以后增删指数只改这里，不必动任何逻辑。
+     secid 规则：沪市与中证系 1.xxxxxx，深市 0.xxxxxx，北交所 0.899xxx。 */
+  INDEXES: [
     { sym: 'sh000001', name: '上证指数', secid: '1.000001' },
     { sym: 'sz399001', name: '深证成指', secid: '0.399001' },
     { sym: 'sz399006', name: '创业板指', secid: '0.399006' },
+    { sym: 'sh000300', name: '沪深300',  secid: '1.000300' },
+    { sym: 'sh000905', name: '中证500',  secid: '1.000905' },
+    { sym: 'sh000852', name: '中证1000', secid: '1.000852' },
   ],
   prefix(market, code) {
     if (market === 'bj' || market === 'bse') return 'bj' + code;
@@ -504,13 +542,21 @@ const NetQuote = {
       return null;
     }
   },
-  /* v3.8.26 指数快照：东财 ulist 主源（f12代码+f13市场避免与个股代码撞号）→ 腾讯备选 */
+  /* v3.8.26 指数快照：东财 ulist 主源（f12代码+f13市场避免与个股代码撞号）→ 腾讯备选
+     v3.8.62 两处调整：① sym 改为按 secid 精确映射，不再用 f13 猜前缀——原写法
+     `(it.f13 === 1 ? 'sh' : 'sz')` 会把北交所指数（如北证50，f13=0 且返回 899050）
+     误判成 sz899050；② 主源缺项时用腾讯补齐，见下方调用处。 */
   async fetchIdx() {
     const t0 = Date.now();
+    /* secid -> sym 反查表：东财返回的 f13 + f12 拼回 secid 后精确取回清单里声明的 sym，
+       这样 sh / sz / bj 三种前缀都由清单本身说了算，不依赖任何猜测规则 */
+    const symBySecid = new Map(this.INDEXES.map(i => [i.secid, i.sym]));
     const tryEast = async () => {
       const secids = this.INDEXES.map(i => i.secid).join(',');
+      /* v3.8.69 补 f4（涨跌额）：手机端「每行一枚胶囊」有大量余量，用户要求把涨跌
+         的具体数值也显示出来（原来只有百分比）。f4 = 涨跌额，实测与腾讯 p[31] 一致 */
       const url = 'https://push2.eastmoney.com/api/qt/ulist.np/get?secids=' + secids
-        + '&fields=f2,f3,f12,f13,f14&fltt=2';
+        + '&fields=f2,f3,f4,f12,f13,f14&fltt=2';
       const res = await fetch(url);
       if (!res.ok) throw new Error('HTTP ' + res.status);
       const j = await res.json();
@@ -518,8 +564,9 @@ const NetQuote = {
       for (const it of ((j.data && j.data.diff) || [])) {
         const price = parseFloat(it.f2), code = it.f12 && String(it.f12);
         if (!code || !(price > 0)) continue;
-        const sym = (it.f13 === 1 ? 'sh' : 'sz') + code;
-        out.set(sym, { name: it.f14 || code, price, pct: parseFloat(it.f3) });
+        const sym = symBySecid.get(it.f13 + '.' + code)      // 精确匹配（含 bj 前缀）
+          || ((it.f13 === 1 ? 'sh' : 'sz') + code);          // 兜底：清单之外的意外返回
+        out.set(sym, { name: it.f14 || code, price, pct: parseFloat(it.f3), chg: parseFloat(it.f4) });
       }
       return out;
     };
@@ -528,10 +575,12 @@ const NetQuote = {
       const buf = await res.arrayBuffer();
       const text = new TextDecoder('gbk').decode(buf);
       const out = new Map();
-      for (const m of text.matchAll(/v_(sh|sz)(\d{6})="([^"]*)"/g)) {
+      /* v3.8.62 正则补 bj：北交所指数的腾讯代码是 bj899050 这种形式，原 (sh|sz) 会整条漏掉 */
+      for (const m of text.matchAll(/v_(sh|sz|bj)(\d{6})="([^"]*)"/g)) {
         const p = m[3].split('~');
         const price = parseFloat(p[3]);
-        if (price > 0) out.set(m[1] + m[2], { name: p[1], price, pct: parseFloat(p[32]) });
+        /* v3.8.69 p[31] = 涨跌额（已带符号），与东财 f4 同口径 */
+        if (price > 0) out.set(m[1] + m[2], { name: p[1], price, pct: parseFloat(p[32]), chg: parseFloat(p[31]) });
       }
       return out;
     };
@@ -540,10 +589,24 @@ const NetQuote = {
       try { out = await tryEast(); NetLog.push('quote', '东财 指数快照', out.size > 0, Date.now() - t0, `${out.size}/${this.INDEXES.length} 个`); }
       catch (e) { NetLog.push('quote', '东财 指数快照', false, Date.now() - t0, e.message || String(e)); }
     }
-    if (!out || !out.size) {
+    /* v3.8.62 从「主源全失败才切备源」改成「只要不满员就补齐」：
+       原判据 `!out.size` 在指数只有 3 个时够用，扩到 6 个后就不牢靠了——
+       东财返回 5/6 也算「非空成功」，缺的那一枚会永远不显示，且不报错、不留痕。
+       现在只要有缺项就拉腾讯补缺；已拿到的项不覆盖（腾讯仅补空位，不夺主源口径）。 */
+    if (!out || out.size < this.INDEXES.length) {
       const t1 = Date.now();
-      try { out = await tryTx(); NetLog.push('quote', '腾讯 指数快照', out.size > 0, Date.now() - t1, `${out.size}/${this.INDEXES.length} 个`); }
-      catch (e) { NetLog.push('quote', '腾讯 指数快照', false, Date.now() - t1, e.message || String(e)); }
+      try {
+        const tx = await tryTx();
+        if (tx && tx.size) {
+          if (!out) out = new Map();                 // 主源全失败：整体采用腾讯
+          let filled = 0;
+          for (const [k, v] of tx) if (!out.has(k)) { out.set(k, v); filled++; }
+          NetLog.push('quote', '腾讯 指数快照', true, Date.now() - t1,
+            filled ? `补齐 ${filled} 个（腾讯共返回 ${tx.size} 个）` : '主源已完整，无需补齐');
+        } else {
+          NetLog.push('quote', '腾讯 指数快照', false, Date.now() - t1, `0/${this.INDEXES.length} 个`);
+        }
+      } catch (e) { NetLog.push('quote', '腾讯 指数快照', false, Date.now() - t1, e.message || String(e)); }
     }
     if (out && out.size) { this.idx = out; this.idxTime = Date.now(); }
   },
@@ -1206,8 +1269,24 @@ async function enterApp(user) {
   ModelMgr.loadCache(); ModelMgr.loadCustom();
   ModelMgr.applyCloudConfig();
   ModelMgr.loadCur(); ModelMgr.render();
+  /* v3.9.0 智能问答初始化：必须在 loadAll 之后 —— 它要读 S.trades / S.watchlist
+     组织上下文。initQa 里绑事件只做一次（重复登录不能重复绑），
+     qaBoot 拉云端历史，失败不影响应用其它部分。
+     注意顺序：initQa → qaSyncSendState 会读 ModelMgr.cur 写底部提示文案，
+     所以它必须排在 ModelMgr.loadCur() 之后。旧版把问答放在模型之前，
+     导致首次进入即使配好模型，底部也一直显示「尚未选择模型…」（且没有
+     任何后续时机再刷新这行字）。 */
+  if (typeof initQa === 'function') {
+    if (!initQa._bound) { try { initQa(); initQa._bound = true; } catch (e) { /* */ } }
+    else { renderQaMessages(); renderQaHistory(); qaSyncSendState(); }
+    if (typeof qaBoot === 'function') qaBoot().catch(() => { /* */ });
+  }
   if (cloudLlm) {
-    ModelMgr.reload().catch(e => {
+    /* 目录是异步拉的，拉到后 cur 可能从 null 变成实模型（savedId 二次解析），
+       所以 reload 完成后必须再同步一次问答区文案，否则提示会停在旧状态。 */
+    ModelMgr.reload().then(() => {
+      try { if (typeof qaSyncSendState === 'function') qaSyncSendState(); } catch (e) { /* */ }
+    }).catch(e => {
       const st = $('modelStatus');
       if (st) st.textContent = '模型列表加载失败：' + (e.message || e);
     });
@@ -1303,7 +1382,7 @@ const HOLD_MOUNTS = [
 const WATCH_MOUNTS = [
   { root: 'view-today', form: 'tvWatchForm', input: 'tvWfInput', sug: 'tvWfSug', note: 'tvWfNoteQuick', group: 'tvWfGroupQuick',
     submit: 'tvWfSubmit', cancel: 'tvWfCancel', tabs: 'tvWatchTabs', table: 'tvWatchTable', empty: 'tvWatchEmpty', delGroup: 'tvDelGroupBtn',
-    toggle: 'tvWatchAddBtn' },   /* v3.8.39 添加区折叠开关（标题行按钮） */
+    toggle: 'tvWatchAddBtn' },   /* v3.8.78 标题行「＋ 加自选」= 开弹窗入口（原折叠开关） */
 ];
 function renderHoldings() {
   const all = computeHoldings();
@@ -1395,13 +1474,25 @@ function renderHoldings() {
   ['tvQuoteTime'].forEach(id => {
     const el = document.getElementById(id); if (el) el.textContent = qtiTxt;
   });
-  /* v3.8.26 指数条：上证指数 / 深证成指 / 创业板指（红涨绿跌） */
+  /* v3.8.26 指数条（红涨绿跌）；v3.8.62 起为 6 枚：上证指数 / 深证成指 / 创业板指
+     + 沪深300 / 中证500 / 中证1000（大中小盘宽基），全部由 NetQuote.INDEXES 驱动
+     v3.8.69 手机端补「涨跌额」：窄屏每行一枚胶囊、右侧余量很大（实测 360px 下
+     内容仅占 296px / 可用 332px），而原来只有百分比、看不到具体涨跌多少个点。
+     v3.8.70 涨跌额改为**并入百分比括号内**（-0.74%(-28.19)）：原先它是第 4 枚
+     独立 span（.i-chg），自带 5.5em 定宽右对齐，实测在百分比后隔出 35.8px 空隙，
+     用户反馈「中间隔的空太多」。合并后不再需要独立列，定宽与空隙一并消失。
+     括号段字号比主数值小一档（12px）、跟随涨跌着色，保持「补充信息」的主次。
+     仍在窄屏才加：PC 端一行排 6 枚，多一段数值会把它们挤到换行。 */
+  const idxNarrow = window.matchMedia('(max-width: 720px)').matches;
   const idxItems = NetQuote.INDEXES.map(ix => {
     const q = NetQuote.idx.get(ix.sym);
     if (!q || !(q.price > 0)) return '';
     const cls = q.pct >= 0 ? 'up' : 'down';
     const sign = q.pct >= 0 ? '+' : '';
-    return `<span class="idx-chip ${cls}"><span class="i-name">${esc(q.name || ix.name)}</span><span class="i-val">${fmt2(q.price)}</span><span class="i-pct">${sign}${q.pct.toFixed(2)}%</span></span>`;
+    /* v3.8.70 涨跌额并进百分比（括号形式）；涨跌额缺失（个别源不返回）时只显示百分比 */
+    const chgTxt = (idxNarrow && q.chg != null && !isNaN(q.chg))
+      ? `<span class="i-chg">(${q.chg >= 0 ? '+' : ''}${fmt2(q.chg)})</span>` : '';
+    return `<span class="idx-chip ${cls}"><span class="i-name">${esc(q.name || ix.name)}</span><span class="i-val">${fmt2(q.price)}</span><span class="i-pct">${sign}${q.pct.toFixed(2)}%</span>${chgTxt}</span>`;
   }).join('');
   ['tvIdxBar'].forEach(id => {
     const el = document.getElementById(id); if (!el) return;
@@ -1418,7 +1509,10 @@ function renderHoldings() {
   const statChip = (name, val, cls, pct) => `<span class="idx-chip${cls ? ' ' + cls : ''}">`
     + `<span class="i-name">${name}</span><span class="i-val">${val}</span>`
     + (pct ? `<span class="i-pct">${pct}</span>` : '') + '</span>';
-  const tvStatsHtml = statChip('持仓市值', '¥' + fmt2(totalMV), '', '')
+  /* v3.8.75 去掉「持仓市值」的 ¥ 前缀：胶囊里已经有「持仓市值」这个语义标签，
+     同一行其余两项（浮动盈亏/当日盈亏）也都是纯数字，带符号不带上限单位，
+     保留 ¥ 反而让三项基线不齐、宽度被撑开。 */
+  const tvStatsHtml = statChip('持仓市值', fmt2(totalMV), '', '')
     + statChip('浮动盈亏', sSgn(totalFloat) + fmt2(totalFloat), sCls(totalFloat), sPct(totalFloat, totalMV - totalFloat))
     + statChip('当日盈亏', sSgn(totalDayPnl) + fmt2(totalDayPnl), sCls(totalDayPnl), sPct(totalDayPnl, totalMV - totalDayPnl))
     + (missingQty ? `<span class="hold-warn">${missingQty} 只现价未获取</span>` : '');
@@ -1804,10 +1898,13 @@ function updateFeePreview() {
 }
 
 /* ---------- 自选 ---------- */
-/* 买入自动加自选（不在自选时才加，归入「默认」分组） */
+/* 买入自动加自选（「默认」组里没有这只票时才加）
+   v3.8.83：判重口径从「全局存在即跳过」改为「目标分组内存在才跳过」，
+   与手动加自选的同分组去重规则保持一致 —— 否则把票放进别的分组后，
+   再买入这只票时就不会往「默认」组里补一条了。 */
 async function autoWatchOnBuy(code, name) {
   try {
-    if (!code || S.watchlist.some(w => w.stock_code === code)) return;
+    if (!code || S.watchlist.some(w => w.stock_code === code && (w.group_name || '默认') === '默认')) return;
     let anchor = NetQuote.get(code);
     if (!anchor) { try { await refreshQuotes(true); } catch (e) { /* */ } anchor = NetQuote.get(code); }
     const row = { stock_code: code, stock_name: name || code, group_name: '默认', note: '买入自动加入', cur_price: anchor ? anchor.price : null, prev_close: null };
@@ -1859,6 +1956,19 @@ function watchModel() {
   const tabGroups = groups.includes(watchTab) ? groups : [...groups, watchTab].filter(Boolean);
   const list = S.watchlist.filter(w => !watchTab || (w.group_name || '默认') === watchTab);
   const qm = quoteMap();
+  /* v3.8.83 分组统计：数量 + 组内涨跌幅平均值（跳过未知涨跌幅的票）。
+     例：组内 5 只、只有 4 只有涨跌幅 → 用这 4 只的平均值代表该组涨跌幅；
+     全组都没有涨跌幅（行情未到）→ avgChg 为 null，Tab 上不显示涨幅。 */
+  const groupStat = new Map();
+  for (const g of tabGroups) {
+    const inG = S.watchlist.filter(w => (w.group_name || '默认') === g);
+    let sum = 0, cnt = 0;
+    for (const w of inG) {
+      const q = qm.get(w.stock_code);
+      if (q && q.pct != null && !isNaN(q.pct)) { sum += Number(q.pct); cnt++; }
+    }
+    groupStat.set(g, { count: inG.length, avgChg: cnt ? sum / cnt : null, known: cnt });
+  }
   const backfilled = new Set();   // 本轮渲染中已触发锚点回填的自选 id
   /* v3.8.22 先算每行的展示数据，再按表头排序状态排序 */
   const items = list.map(w => {
@@ -1897,7 +2007,7 @@ function watchModel() {
       });
     }
   }
-  return { tabGroups, items, listLen: list.length };
+  return { tabGroups, items, listLen: list.length, groupStat };
 }
 /* v3.8.34 把自选列表画到某个挂载点（总览页 / 自选页共用同一份模型） */
 function paintWatch(m, M) {
@@ -1907,9 +2017,20 @@ function paintWatch(m, M) {
      = 图标 + 短词（folderPlus「新建分组」/ trash「删除分组」），样式上与 Tab 分层。
      删除按钮仅在具体分组（非「默认」）时出现。 */
   const canDelGroup = !!(watchTab && watchTab !== '默认');
-  if (tabs) tabs.innerHTML = M.tabGroups.map(g => `<button class="wtab${watchTab === g ? ' on' : ''}" data-g="${esc(g)}">${esc(g)}<i>${S.watchlist.filter(w => (w.group_name || '默认') === g).length}</i></button>`).join('')
-    + `<button class="wtab wtab-act wtab-add" data-g="+" title="新建分组" aria-label="新建分组">${ICO.folderPlus}<span>新建分组</span></button>`
-    + (m.delGroup ? `<button class="wtab wtab-act wtab-del" id="${m.delGroup}" type="button" aria-label="删除当前分组" title="删除当前分组，组内自选移回「默认」"${canDelGroup ? '' : ' hidden'}>${ICO.trash}<span>删除分组</span></button>` : '');
+  if (tabs) {
+    /* v3.8.83 分组 Tab 增加「组内涨跌幅平均值」：数量徽标保留，后面跟一个涨跌胶囊。
+       跳过未知涨跌幅的票（组内 5 只只有 4 只有值 → 取这 4 只的平均）；全组无值则不显示。
+       涨幅配色沿用全局 pnlCls（红涨绿跌，A 股习惯）。 */
+    tabs.innerHTML = M.tabGroups.map(g => {
+      const st = (M.groupStat && M.groupStat.get(g)) || { count: 0, avgChg: null };
+      const avg = st.avgChg != null
+        ? `<em class="wtab-chg ${pnlCls(st.avgChg / 100)}">${fmtPct(st.avgChg / 100)}</em>`
+        : '';
+      return `<button class="wtab${watchTab === g ? ' on' : ''}" data-g="${esc(g)}">${esc(g)}<i>${st.count}</i>${avg}</button>`;
+    }).join('')
+      + `<button class="wtab wtab-act wtab-add" data-g="+" title="新建分组" aria-label="新建分组">${ICO.folderPlus}<span>新建分组</span></button>`
+      + (m.delGroup ? `<button class="wtab wtab-act wtab-del" id="${m.delGroup}" type="button" aria-label="删除当前分组" title="删除当前分组，组内自选移回「默认」"${canDelGroup ? '' : ' hidden'}>${ICO.trash}<span>删除分组</span></button>` : '');
+  }
   const table = el(m.table);
   if (!table) return;                       // 该挂载点不存在（例如页面已下线）
   const empty = el(m.empty);
@@ -1935,9 +2056,9 @@ function paintWatch(m, M) {
   }).join('');
   if (empty) {
     empty.hidden = M.listLen > 0;
-    /* v3.8.50 空态文案带可点的「＋ 添加自选」链接：点它直接展开上方添加区 */
+    /* v3.8.50 空态文案带可点的「＋ 加自选」链接：点它直接展开上方添加区 */
     const g = watchTab || '默认';
-    empty.innerHTML = `分组「${esc(g)}」暂无自选，点<a href="javascript:void(0)" class="we-add">「＋ 添加自选」</a>添加股票`;
+    empty.innerHTML = `分组「${esc(g)}」暂无自选，点<a href="javascript:void(0)" class="we-add">「＋ 加自选」</a>添加股票`;
   }
 }
 function renderWatch() {
@@ -1947,127 +2068,129 @@ function renderWatch() {
   syncGroupList();
   updateWatchHead();
 }
-/* 分组下拉数据源：所有已用分组 + 默认（数据加载完即同步，供添加/高级选项联想） */
+/* 分组下拉数据源（v3.8.82 起为自绘 .wg-list，原 datalist 已删除）：
+   所有已用分组 + 当前分组（数据加载完即同步） */
 function syncGroupList() {
   const groups = [...new Set([...allWatchGroups(), watchTab])].filter(Boolean);
-  const dl = $('groupList');
-  if (dl) dl.innerHTML = groups.map(g => `<option value="${esc(g)}">`).join('');
+  const dl = $('tvWfGroupList');
+  if (dl) dl.innerHTML = groups.length
+    ? groups.map(g => `<div class="wg-item${g === watchTab ? ' on' : ''}" data-g="${esc(g)}">${esc(g)}</div>`).join('')
+    : '<div class="wg-empty">暂无分组，可直接输入新分组名</div>';
 }
 /* ============================================================
-   v3.8.47 展开添加区后「自动滚进可视区」
-   手机上键盘一弹起，可视高度只剩一半，而添加区在卡片顶部 —— 常被键盘压住，
-   还得手动上滑才看得到「添加」按钮。这里在展开（并聚焦）后自己算一次可视区：
-     · 优先用 visualViewport（能反映键盘占位，也能反映缩放）
-     · 顶栏是 sticky 的，滚上来会被它盖住 → 可视上沿取顶栏底部
-     · 底部导航是 fixed 的，若正压在可视区底部 → 把它让出来
-   然后把整个表单（股票 / 备注 / 分组 / 按钮）滚到键盘之上，填完直接点「添加」。
-   键盘是动画展开的，所以多次补算 + 监听 visualViewport resize。
+   v3.8.78 加自选改为「弹窗」（与「＋ 记一笔」同一交互模式）
+
+   旧做法（v3.8.39~v3.8.77）：标题行「＋ 加自选」按钮在原地**展开**表单
+   （.watch-form.open），再靠一整套 revealWatchForm 逻辑在手机键盘弹起后
+   把表单滚进可视区 —— 需要 visualViewport 监听、body 补底部留白、多次定时补算，
+   代码量大且仍会闪。改为弹窗后，遮罩层天然居中在键盘之上，这套滚动补偿
+   逻辑整段不再需要（保留 v3.8.47 的函数仅供历史参考已删除）。
+
+   交互对齐「记一笔」：
+     · 点「＋ 加自选」→ 开弹窗（新增态，清空表单）
+     · 点行内「编辑」→ 开弹窗并回填（票锁定，只改分组/理由）
+     · 提交成功 / 取消 / 点遮罩 / 按 Esc → 关弹窗
    ============================================================ */
-let _wfRevealTimers = [];
-let _wfRevealUnhook = null;
-let _wfExtraPad = 0;
-/* 自选卡是页面最后一张卡：已经滚到底时没有更多可滚空间，
-   临时给 body 补一段底部留白把可滚区撑够，收起表单时还原 */
-function setWatchRevealPad(px) {
-  _wfExtraPad = Math.max(0, Math.round(px || 0));
-  document.body.style.paddingBottom = _wfExtraPad ? _wfExtraPad + 'px' : '';
+function openWatchModal(reset = true) {
+  const m = document.getElementById('watchModal');
+  if (!m) return;
+  if (reset) resetWatchForm(false);            // 清空表单，但先不关弹窗（由下面统一控制）
+  m.hidden = false;
+  fitWatchModal();                             // v3.8.79 打开即按当前可视视口校准高度
+  /* v3.8.79 焦点策略（修「输完光标自动下一个文本框」）：
+     只有「用户显式点了我」才自动送光标 —— 点标题栏「＋ 加自选」或空态链接进来时，
+     直接给股票框聚焦，省一次点击；从行内「编辑」进来时股票框已只读，光标给备注框。
+     键盘 / 按钮触发（relatedTarget 为 null）时不再自动聚焦，避免手机上刚一点开
+     就弹键盘、把下面的按钮顶出屏幕外。 */
+  const target = watchFocusTarget();
+  if (target) setTimeout(() => { try { target.focus({ preventScroll: true }); } catch (e) { try { target.focus(); } catch (e2) { /* */ } } }, 60);
 }
-/* 当前「真正看得见」的纵向范围：顶栏是 sticky、底部导航是 fixed，都要让出来 */
-function watchVisibleRange() {
+/* v3.8.79 弹窗打开后「光标该落在哪」：编辑态（股票框只读）→ 备注框；新增态 → 股票框 */
+function watchFocusTarget() {
+  const inp = document.getElementById('tvWfInput');
+  const note = document.getElementById('tvWfNoteQuick');
+  if (!inp) return note || null;
+  return (inp.readOnly && note) ? note : inp;
+}
+function closeWatchModal() {
+  const m = document.getElementById('watchModal');
+  if (!m) return;
+  m.hidden = true;
+  const lg = m.querySelector('.modal-lg');
+  if (lg) lg.style.maxHeight = '';             // v3.8.79 清掉键盘适配留下的内联高度
+  resetWatchForm(false);                       // 关闭即复位（等同取消），不留半截输入
+  const sb = document.getElementById('tvWfSug'); if (sb) sb.hidden = true;
+  const gl = document.getElementById('tvWfGroupList'); if (gl) gl.hidden = true;   // v3.8.82 分组下拉一并收起
+}
+/* v3.8.79 加自选弹窗高度跟随可视视口
+   —— 与「记一笔」的 scrollRecBottom/fit 同一套思路，但独立实现（两边弹窗高度策略不同：
+   记一笔是「滚到底部」，加自选只需保证整窗不被键盘遮住）。
+   窄屏时 .modal-lg 的 max-height 由 JS 写内联值（压过 CSS 的 88vh）；
+   宽屏沿用 CSS，避免桌面档被多余地限制。
+   注意：只有「可视视口比 layout 视口明显缩水（>60px，即键盘弹起的量级）」才跟随，
+   否则用 innerHeight —— 地址栏伸缩 / 平板分屏也会让 vv.height 偏小，
+   不设阈值的话弹窗会被无谓压扁（headless 截图已复现过这个误判）。 */
+function fitWatchModal() {
+  const m = document.getElementById('watchModal');
+  if (!m || m.hidden) return;
+  const lg = m.querySelector('.modal-lg');
+  if (!lg) return;
   const vv = window.visualViewport;
-  let visTop = vv ? vv.offsetTop : 0;
-  let visBottom = Math.min(window.innerHeight, vv ? vv.offsetTop + vv.height : Infinity);
-  const tb = document.querySelector('.topbar');
-  if (tb) { const tr = tb.getBoundingClientRect(); if (tr.height > 0) visTop = Math.max(visTop, tr.bottom); }
-  const bn = document.querySelector('.bottom-nav');
-  if (bn) {
-    const br = bn.getBoundingClientRect();
-    /* 只有它确实贴在可视区下沿时才让位；被键盘顶到看不见（bottom 超出可视区）就不管 */
-    if (br.height > 0 && br.top > window.innerHeight * 0.5 && br.bottom <= visBottom + 1) visBottom = br.top;
+  const narrow = window.matchMedia('(max-width: 639px)').matches;
+  if (narrow) {
+    let vh = window.innerHeight;
+    if (vv && vv.height > 0 && window.innerHeight - vv.height > 60) vh = vv.height;
+    /* v3.8.82 留白 100px：CSS 里 #watchModal 窄屏内距「上 10 下 90」（累计上移 40px），
+       这里保持一致，弹窗才不会顶出视口。 */
+    lg.style.maxHeight = Math.max(200, Math.round(vh - 100)) + 'px';
+  } else {
+    lg.style.maxHeight = '';                   // 宽屏交回 CSS（88vh）
   }
-  return { visTop: visTop, visBottom: visBottom };
 }
-function revealWatchForm(form) {
-  if (!form || !form.classList.contains('open')) return;
-  const gap = 10;
-  /* 两趟：第一趟滚过去，第二趟把「被滚动上限截断 / 留白刚撑开」造成的残余误差补掉。
-     键盘是动画展开的，每次 visualViewport 变化 / 定时补算都会再走一遍，逐步落位。 */
-  for (let pass = 0; pass < 2; pass++) {
-    const range = watchVisibleRange();
-    const r = form.getBoundingClientRect();
-    let delta;
-    if (r.height >= range.visBottom - range.visTop - gap * 2) {
-      delta = r.top - (range.visTop + gap);              // 表单比可视区还高：优先露出第一个输入框
-    } else if (r.bottom > range.visBottom - gap) {
-      delta = r.bottom - (range.visBottom - gap);        // 通常走这条：底部对齐到键盘上方
-    } else if (r.top < range.visTop + gap) {
-      delta = r.top - (range.visTop + gap);
-    } else {
-      delta = 0;
-    }
-    if (Math.abs(delta) < 4) return;
-    if (delta > 0) {
-      /* 下方可滚空间不够 → 先补底部留白把可滚区撑够，否则这一下会被滚动上限截断 */
-      const avail = document.documentElement.scrollHeight - document.documentElement.clientHeight - window.scrollY;
-      if (avail < delta - 1) {
-        setWatchRevealPad(Math.min(1600, _wfExtraPad + Math.ceil(delta - avail)));
-        void document.documentElement.offsetHeight;      // 强制回流，让新高度立刻对滚动生效
+(function () {
+  const vv = window.visualViewport;
+  if (!vv) return;
+  let t = null;
+  const sync = () => {
+    clearTimeout(t);
+    t = setTimeout(() => {
+      fitWatchModal();
+      /* v3.8.79 键盘高度写进 :root 的 --kb，供 style.css 里 #watchModal .modal-lg 的
+         max-height 计算兜底（老浏览器没有 dvh 时靠它）。
+         同 fitWatchModal：只有缩水超过 60px（键盘量级）才认，否则归 0。
+         v3.8.84 顺带在 <html> 上挂 .kb-on：键盘真的弹起时收窄弹窗内下拉的高度
+         （分组下拉 / 股票联想 200px 在键盘场景会整条压进键盘底下），见 style.css。 */
+      const shrink = window.innerHeight - vv.height - vv.offsetTop;
+      const kbOn = shrink > 60;
+      document.documentElement.style.setProperty('--kb', kbOn ? Math.round(shrink) + 'px' : '0px');
+      document.documentElement.classList.toggle('kb-on', kbOn);
+      /* v3.8.84 「电脑端选分组时弹窗标题没了」的修复：
+         旧写法只要 vv 触发 scroll/resize（电脑上**滚动页面就会触发**）就对聚焦控件
+         scrollIntoView —— scrollIntoView 会连弹窗这个可滚祖先一起滚，把标题+股票框
+         滚出弹窗可视区。现在只在「窄屏 + 键盘真的弹起」时才滚（那是它唯一该出场
+         的场景：键盘弹起后聚焦框可能被压在键盘底下）。 */
+      const m = $('watchModal');
+      if (kbOn && window.matchMedia('(max-width: 639px)').matches && m && !m.hidden) {
+        const el = document.activeElement;
+        if (el && el !== document.body && m.contains(el) &&
+            /^(INPUT|SELECT|TEXTAREA)$/.test(el.tagName)) {
+          try { el.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (e) { /* */ }
+        }
       }
-    }
-    window.scrollBy(0, Math.round(delta));
-  }
-}
-function scheduleRevealWatchForm(form) {
-  _wfRevealTimers.forEach(clearTimeout);
-  _wfRevealTimers = [];
-  setWatchRevealPad(0);                      // 每次展开从零开始，避免跨次累加
-  const run = () => revealWatchForm(form);
-  [80, 240, 420, 620].forEach(ms => _wfRevealTimers.push(setTimeout(run, ms)));
-  if (_wfRevealUnhook) _wfRevealUnhook();
-  const vv = window.visualViewport;
-  if (vv) {
-    const onVV = () => run();
-    vv.addEventListener('resize', onVV);
-    _wfRevealUnhook = () => { vv.removeEventListener('resize', onVV); _wfRevealUnhook = null; };
-    _wfRevealTimers.push(setTimeout(() => { if (_wfRevealUnhook) _wfRevealUnhook(); }, 1000));
-  }
+    }, 80);
+  };
+  vv.addEventListener('resize', sync);
+  vv.addEventListener('scroll', sync);
+})();
+/* 兼容旧调用点：setWatchFormOpen(m, true/false) 现等价于「开/关弹窗」。
+   保留这个函数名，是为了让 bindWatchCard 里的调用点不必全改。 */
+function setWatchFormOpen(m, open) {
+  if (open) openWatchModal(false);
+  else closeWatchModal();
 }
 
-/* ============================================================
-   v3.8.39 自选添加区「折叠 / 展开」
-   默认收起，减少卡片噪音；以下三种情况自动展开：
-     · 点标题行「＋ 添加自选」/「收起」切换
-     · 点某行的「编辑」按钮（自动展开并回填）
-   收起即复位（等同取消），避免留下半截输入。
-   ============================================================ */
-function setWatchFormOpen(m, open) {
-  const form = document.getElementById(m.form);
-  if (!form) return;
-  form.classList.toggle('open', !!open);
-  const btn = m.toggle ? document.getElementById(m.toggle) : null;
-  if (btn) {
-    /* v3.8.42 纯文字链接（与「手动录入 ▸」同款 .link-btn）；展开时文字转淡，主动作交给行内「添加/保存」
-       v3.8.46 去掉尾部「▸」箭头——它是纯文字链接，箭头多余且会跟右侧边界打架 */
-    btn.textContent = open ? '收起' : '＋ 添加自选';
-    btn.classList.toggle('is-open', !!open);
-    btn.setAttribute('aria-expanded', open ? 'true' : 'false');
-  }
-  if (!open) {
-    /* 收起时取消未跑完的滚动补算，并还原临时留白，避免收起来之后又自己滚一下 */
-    _wfRevealTimers.forEach(clearTimeout); _wfRevealTimers = [];
-    if (_wfRevealUnhook) _wfRevealUnhook();
-    setWatchRevealPad(0);
-    return;
-  }
-  /* 展开后把光标送到该去的框：新增态进股票框，编辑态（股票锁定）进备注框 */
-  const inp = document.getElementById(m.input);
-  const note = document.getElementById(m.note);
-  const target = (inp && inp.readOnly && note) ? note : inp;
-  if (target) setTimeout(() => { try { target.focus(); } catch (err) { /* */ } }, 40);
-  scheduleRevealWatchForm(form);              // v3.8.47 滚到键盘之上，一屏可见
-}
 function fillWatchForm(w, m) {
-  resetWatchForm(false);                     // 先清空所有挂载点（暂不折叠），避免两个表单同时停在编辑态
+  resetWatchForm();                          // 先清空所有挂载点，避免两个表单同时停在编辑态
   S.editingWatchId = w.id;
   const inp = document.getElementById(m.input);
   if (!inp) return;
@@ -2080,10 +2203,17 @@ function fillWatchForm(w, m) {
   const nt = document.getElementById(m.note); if (nt) nt.value = w.note || '';
   const sub = document.getElementById(m.submit); if (sub) sub.textContent = '保存';   /* v3.8.35 编辑态：保存 */
   const cc = document.getElementById(m.cancel); if (cc) cc.hidden = false;
-  setWatchFormOpen(m, true);                 // v3.8.39 编辑：自动展开并回填
+  /* v3.8.78 弹窗标题跟着态变：编辑 → 「编辑自选」 */
+  const tt = $('watchModalTitle'); if (tt) tt.textContent = '编辑自选';
+  /* v3.8.78 编辑：开弹窗并回填（不再原地展开）。传 reset=false 保留刚填的值 */
+  openWatchModal(false);
 }
-function resetWatchForm(collapse = true) {
+/* v3.8.78 表单复位。参数已无意义（表单不再「展开/收起」，只是弹窗里的内容），
+   保留形参是为了不破坏既有调用点；关弹窗由 closeWatchModal() 负责。 */
+function resetWatchForm() {
   S.editingWatchId = null;
+  /* v3.8.78 标题回到「加自选」（新增态） */
+  const wt = document.getElementById('watchModalTitle'); if (wt) wt.textContent = '加自选';
   /* v3.8.34 所有挂载点一并复位 */
   for (const m of WATCH_MOUNTS) {
     const form = document.getElementById(m.form); if (form) form.reset();
@@ -2094,11 +2224,18 @@ function resetWatchForm(collapse = true) {
       inp.placeholder = '代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt';
       inp.classList.remove('ro');
     }
-    const gq = document.getElementById(m.group); if (gq) gq.value = '';
+    /* v3.8.86 分组框默认填「当前选中的分组 Tab」。
+       旧写法 `gq.value = ''` 每次打开都是空框，用户在「自选 A」组里点加自选，
+       还得再手敲一遍分组名 —— 而绝大多数场景就是「加到我现在看的这个组」。
+       这里只在新增态（resetWatchForm 仅由 reset=true 的 openWatchModal 调用）填默认值；
+       编辑态走 openWatchModal(false)，不经过本函数，稍后由 fillWatchForm 用行内原值覆盖。
+       注意：watchTab 是「当前 Tab」，不是「分组是否存在」——极端情况下 Tab 名可能不在
+       分组列表里，但提交时后端按字符串存，不影响。 */
+    const gq = document.getElementById(m.group);
+    if (gq) gq.value = watchTab || '默认';
     const nt = document.getElementById(m.note); if (nt) nt.value = '';
     const sub = document.getElementById(m.submit); if (sub) sub.textContent = '添加';   /* v3.8.35 新增态：添加 */
     const cc = document.getElementById(m.cancel); if (cc) cc.hidden = true;
-    if (collapse) setWatchFormOpen(m, false);  // v3.8.39 收起即复位
   }
 }
 /* ============================================================
@@ -2112,17 +2249,38 @@ function bindWatchCard(m) {
   bindSuggest(m.input, m.sug, h => {
     input.value = `${h.code} ${h.name}`;
     input.dataset.picked = h.code;
-    const nt = el(m.note); if (nt) nt.focus();   // 选完股票，光标进备注/理由框
+    /* v3.8.79 去掉「选完股票光标自动跳备注框」。旧写法无论用户下一步想干嘛都强行
+       focus 到备注框，手机上等于「选完立刻弹一次键盘」，用户反馈不想要这个跳转。
+       现在只改写 input 自身的 value，光标停在原地 —— 想接着填备注，点一下即可。 */
   });
-  /* 分组下拉不筛选：聚焦时临时清空以展示全部分组，未选择则恢复原值 */
+  /* v3.8.82 分组下拉：原生 datalist 的弹层宽度由浏览器决定（PC 上能铺满半个弹窗），
+     无法用 CSS 约束，改为自绘 .wg-list —— 与输入框同宽，聚焦展开、点选填入、
+     点击外部 / Esc / 失焦收起；输入框仍可自由输入新分组名（不再聚焦清空）。 */
   const gq = el(m.group);
   if (gq) {
-    let gqPrev = '';
-    gq.addEventListener('focus', () => { gqPrev = gq.value; gq.dataset.clearing = '1'; gq.value = ''; });
-    gq.addEventListener('blur', () => {
-      if (gq.dataset.clearing && !gq.value.trim()) gq.value = gqPrev;
-      delete gq.dataset.clearing;
-    });
+    const gList = document.getElementById('tvWfGroupList');
+    const closeGList = () => { if (gList) gList.hidden = true; };
+    if (gList) {
+      const openGList = () => {
+        syncGroupList();
+        gList.hidden = false;
+        /* v3.8.84 保险：弹窗内容并不需要滚动时（PC 上内容远小于 max-height），
+           把可能被误滚的 scrollTop 复位回 0，保证「加自选」标题始终可见。 */
+        const lg = gList.closest('.modal-lg');
+        if (lg && lg.scrollHeight <= lg.clientHeight + 2 && lg.scrollTop > 0) lg.scrollTop = 0;
+      };
+      gq.addEventListener('focus', openGList);
+      gq.addEventListener('input', openGList);          // 输入中也保持展开（可边输边点选）
+      gq.addEventListener('blur', () => setTimeout(closeGList, 150));
+      gq.addEventListener('keydown', e => { if (e.key === 'Escape') closeGList(); });
+      gList.addEventListener('mousedown', e => {        // mousedown 抢在 blur 前完成点选
+        const it = e.target.closest('.wg-item');
+        if (!it) return;
+        e.preventDefault();
+        gq.value = it.dataset.g;
+        closeGList();
+      });
+    }
   }
   /* 提交：编辑（票已定，只改理由/分组，可手动改）或新增 */
   el(m.form).addEventListener('submit', async e => {
@@ -2133,12 +2291,19 @@ function bindWatchCard(m) {
     if (S.editingWatchId) {
       const w = S.watchlist.find(x => x.id == S.editingWatchId);
       if (!w) { resetWatchForm(); return; }
+      /* v3.8.83 编辑（改分组）也要防重：同一分组里不允许出现重复标的（跨分组允许）。
+         排除自己这条（w.id），把票挪进已含有该票的分组时直接拦下。 */
+      if ((w.group_name || '默认') !== group) {
+        const dup = S.watchlist.find(x => x.id != w.id &&
+          x.stock_code === w.stock_code && (x.group_name || '默认') === group);
+        if (dup) { toast(`${w.stock_name || w.stock_code} 已在「${group}」分组中，换个分组即可`, 'warn'); return; }
+      }
       try {
         await store.update('watchlist', w.id, { group_name: group, note });
         await store.log('watch', `修改自选 ${w.stock_name || w.stock_code}（理由/分组）`);
         addWatchGroup(group);                // v3.8.50 用到的分组名一并记住
         toast('已保存');
-        resetWatchForm();
+        closeWatchModal();                   // v3.8.78 保存成功即关弹窗
         watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (err) { /* */ }
         await loadAll(); renderWatch(); renderToday();
       } catch (err) { toast(err.message || '保存失败', 'warn'); }
@@ -2152,13 +2317,23 @@ function bindWatchCard(m) {
     else hit = StockDict.resolve(txt);
     if (!hit || !hit.code) { toast('未识别股票，请输入代码或名称', 'warn'); return; }
     if (!hit.name) hit.name = hit.code;
+    /* v3.8.83 同分组去重：同一分组内不允许重复标的，跨分组可以各加一份
+       （例如「600519 贵州茅台」同时进「白酒」和「核心持仓」）。
+       旧行为是「全局只要存在就拒绝」（见 addQuick 里的 some 判断），
+       导致无法把同一只票放进第二个分组。
+       v3.8.85 提示语写清「换个分组就行」，避免用户误以为整只票加不进来。 */
+    const dup = S.watchlist.find(x => x.stock_code === hit.code && (x.group_name || '默认') === group);
+    if (dup) { toast(`${hit.name || hit.code} 已在「${group}」分组中，换个分组即可再添加`, 'warn'); return; }
     /* 添加时记一个现价锚点（供「自选收益」计算）；网络行情没有则留空 */
     let anchor = NetQuote.get(hit.code);
     if (!anchor) { try { await refreshQuotes(true); } catch (err) { /* */ } anchor = NetQuote.get(hit.code); }
     const row = {
       stock_code: hit.code,
       stock_name: hit.name,
-      group_name: group,
+      /* v3.8.85 分组名一律落库为非空字符串：DB 唯一约束是 (owner_id, stock_code, group_name)，
+         而 SQL 里 NULL 互不相等，一旦写入 NULL 就等于绕过约束（同组能塞两条）。
+         这里统一兜到「默认」，配合约束上的 NULLS NOT DISTINCT 双保险。 */
+      group_name: group || '默认',
       note, cur_price: anchor ? anchor.price : null, prev_close: null
     };
     try {
@@ -2166,25 +2341,30 @@ function bindWatchCard(m) {
       await store.log('watch', `添加自选 ${row.stock_name}（${row.stock_code}）`);
       addWatchGroup(group);                  // v3.8.50 用到的分组名一并记住
       toast(`已添加自选 ${row.stock_name}`);
-      resetWatchForm();
+      closeWatchModal();                     // v3.8.78 添加成功即关弹窗
       watchTab = group; try { localStorage.setItem('sj_watchTab', group); } catch (err) { /* */ }
       await loadAll(); renderWatch(); renderToday();
     } catch (err) { toast(err.message || '保存失败', 'warn'); }
   });
   const cancelBtn = el(m.cancel);
-  if (cancelBtn) cancelBtn.addEventListener('click', () => resetWatchForm());
-  /* v3.8.50 空态里的「＋ 添加自选」链接（内容随渲染重建，故用事件委托） */
+  if (cancelBtn) cancelBtn.addEventListener('click', () => closeWatchModal());
+  /* v3.8.50 空态里的「＋ 加自选」链接（内容随渲染重建，故用事件委托） */
   const emptyEl = el(m.empty);
   if (emptyEl) emptyEl.addEventListener('click', e => {
-    if (e.target.closest('.we-add')) { resetWatchForm(false); setWatchFormOpen(m, true); }
-  });
-  /* v3.8.39 标题行折叠开关：展开 → 清空进入新增态并聚焦；收起 → 复位 */
+    if (e.target.closest('.we-add')) openWatchModal(true);
+  });  /* v3.8.78 标题行「＋ 加自选」：开弹窗（新增态）。旧版是原地展开/收起切换，
+     现在只有「开」这一个动作 —— 关闭交给弹窗自己的 ✕ / 取消 / 遮罩 / Esc */
   const toggleBtn = m.toggle ? el(m.toggle) : null;
   if (toggleBtn) toggleBtn.addEventListener('click', () => {
-    const form = el(m.form);
-    const isOpen = !!(form && form.classList.contains('open'));
-    if (isOpen) resetWatchForm();
-    else { resetWatchForm(false); setWatchFormOpen(m, true); }
+    openWatchModal(true);
+    /* v3.8.79 只在**用户手动点击**（relatedTarget 为 null，即指针/触摸触发）时自动把
+       光标送进股票框。键盘 Enter 激活按钮（relatedTarget 是按钮本身）时不抢焦点，
+       否则会绕过 openWatchModal 里的「不自动聚焦」策略。 */
+    const rt = window.event && window.event.relatedTarget;
+    if (rt == null) {
+      const t = watchFocusTarget();
+      if (t) setTimeout(() => { try { t.focus({ preventScroll: true }); } catch (e) { /* */ } }, 80);
+    }
   });
   /* v3.8.41 「删除该分组」按钮也渲染在分组 Tab 行内，走同一处事件委托 */
   const tabs = el(m.tabs);
@@ -2230,8 +2410,9 @@ function bindWatchCard(m) {
     if (editBtn) {
       const w = S.watchlist.find(x => x.id == editBtn.dataset.id);
       if (w) {
+        /* v3.8.78 改为弹窗后不再需要把表单滚进视野（弹窗自带居中），
+           fillWatchForm 内部已调用 openWatchModal() */
         fillWatchForm(w, m);
-        const fm = el(m.form); if (fm) fm.scrollIntoView({ behavior: 'smooth', block: 'center' });
       }
       return;
     }
@@ -2258,10 +2439,16 @@ function delWatchGroup() {
   const n = S.watchlist.filter(w => (w.group_name || '默认') === g).length;
   confirmDlg('删除分组', `确认删除分组「${g}」？${n ? `组内 ${n} 只自选将移回「默认」分组` : '该分组当前为空'}。`, async () => {
     try {
+      /* v3.9.11 移回「默认」前先查重：默认组里已有同代码的票时不再 update（否则默认组出现重复行），
+         直接删掉本行完成去重 —— 去重由删除逻辑自己消化，全程静默不报错。 */
+      const moved = new Set(); let dupN = 0;
       for (const w of S.watchlist.filter(w => (w.group_name || '默认') === g)) {
-        await store.update('watchlist', w.id, { group_name: '默认' });
+        const dup = moved.has(w.stock_code)
+          || S.watchlist.some(o => o.id !== w.id && o.stock_code === w.stock_code && (o.group_name || '默认') === '默认');
+        if (dup) { dupN++; await store.remove('watchlist', w.id); }
+        else { moved.add(w.stock_code); await store.update('watchlist', w.id, { group_name: '默认' }); }
       }
-      await store.log('update', `删除分组「${g}」（${n} 只移回默认）`);
+      await store.log('update', `删除分组「${g}」（${moved.size} 只移回默认${dupN ? `，${dupN} 只与默认组重复已去重` : ''}）`);
       removeWatchGroup(g);                 // v3.8.50 从持久化分组里移除
       watchTab = '默认';
       try { localStorage.setItem('sj_watchTab', watchTab); } catch (err) { /* */ }
@@ -2305,6 +2492,8 @@ async function saveFeeEditor() {
 function switchSetPane(name) {
   document.querySelectorAll('#setTabs .set-tab').forEach(x => x.classList.toggle('active', x.dataset.set === name));
   document.querySelectorAll('#view-me .set-pane').forEach(p => { p.hidden = p.dataset.pane !== name; });
+  /* v3.9.9 每次切到技能页都重渲染：Key / 技能开关可能在别处（问答页提示条）刚变过 */
+  if (name === 'skill') renderSkillCenter();
 }
 function renderMe() {
   renderFeeEditor();
@@ -2516,6 +2705,12 @@ function bindEvents() {
   $('recModalClose').addEventListener('click', closeRecModal);
   $('recModal').addEventListener('mousedown', e => { if (e.target === $('recModal')) closeRecModal(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('recModal').hidden) closeRecModal(); });
+  /* v3.8.78 加自选弹窗：关闭按钮 / 点遮罩关闭 / Esc 关闭（与「记一笔」完全一致的关闭手势） */
+  if ($('watchModal')) {
+    $('watchModalClose').addEventListener('click', closeWatchModal);
+    $('watchModal').addEventListener('mousedown', e => { if (e.target === $('watchModal')) closeWatchModal(); });
+    document.addEventListener('keydown', e => { if (e.key === 'Escape' && !$('watchModal').hidden) closeWatchModal(); });
+  }
 
   /* AI 模型 */
   $('modelCurSel').addEventListener('change', () => { ModelMgr.setCur($('modelCurSel').value); toast('已切换模型'); });
@@ -2547,6 +2742,66 @@ function bindEvents() {
     ModelMgr.saveCustom();
     ModelMgr.loadCur(); ModelMgr.render();
   });
+
+  /* v3.9.9 技能中心：妙想 Key 配置 + 技能添加/删除/启停（事件委托，列表随渲染重建） */
+  $('mxKeyEye').addEventListener('click', () => {
+    const inp = $('mxKeyInput');
+    inp.type = inp.type === 'password' ? 'text' : 'password';
+  });
+  $('mxKeySaveBtn').addEventListener('click', () => {
+    const v = $('mxKeyInput').value.trim();
+    if (!v) { toast('请先粘贴 mkt_ 开头的妙想 Key', 'warn'); return; }
+    mxKeySet(v);
+    $('mxKeyInput').value = '';
+    const st = $('mxKeyStatus'); if (st) st.dataset.dirty = '1';
+    mxKeyStatusRender('已保存：<span class="mx-ok">' + esc(mxKeyMask()) + '</span>（仅本机浏览器）· 妙想类技能立即可用，可点「测试连接」验证。');
+    renderSkillCenter(); qaRefreshSkillHint();
+    toast('妙想 Key 已保存（仅本机）');
+  });
+  $('mxKeyClearBtn').addEventListener('click', () => {
+    if (!mxKeyGet()) { toast('当前没有保存过 Key'); return; }
+    if (!confirm('确认清除本机保存的妙想 Key？清除后妙想类技能退回「待配置凭据」，问答改用免费公开数据源。')) return;
+    mxKeySet('');
+    const st = $('mxKeyStatus'); if (st) st.dataset.dirty = '1';
+    mxKeyStatusRender();
+    renderSkillCenter(); qaRefreshSkillHint();
+    toast('妙想 Key 已清除');
+  });
+  $('mxKeyTestBtn').addEventListener('click', async () => {
+    const v = $('mxKeyInput').value.trim() || mxKeyGet();
+    const st = $('mxKeyStatus');
+    if (!v) { mxKeyStatusRender('<span class="mx-err">请先粘贴 Key（或先保存过一把）再测试</span>'); return; }
+    mxKeyStatusRender('测试连接中…（妙想免费额度约 2 秒才能问一次，请稍候）');
+    try {
+      const r = await mxQuery('贵州茅台最新收盘价', { key: v, timeout: 30000 });
+      mxKeyStatusRender('<span class="mx-ok">✅ 连接成功</span>（耗时 ' + (r.ms || 0) + 'ms，返回 '
+        + (r.tables && r.tables.length ? r.tables.length + ' 张数据表' : '文本结果') + '）。记得点「保存」把 Key 存进本机。');
+      if (st) delete st.dataset.dirty;
+    } catch (e) {
+      mxKeyStatusRender('<span class="mx-err">❌ 连接失败：' + esc(e.message || e) + '</span>');
+    }
+  });
+  const onSkillListClick = e => {
+    const b = e.target.closest('[data-sk]');
+    if (!b) return;
+    const id = b.dataset.sid, act = b.dataset.sk;
+    if (act === 'toggle') {
+      const s = skillById(id);
+      skillSetEnabled(id, !skillEnabled(id));
+      toast(s && skillEnabled(id) ? '已启用「' + s.name + '」' : '已停用「' + (s && s.name || id) + '」');
+    } else if (act === 'del') {
+      const s = skillById(id);
+      if (!confirm('卸载「' + (s && s.name || id) + '」？卸载后问答不再调用它，可在「可添加的技能」里随时装回来。')) return;
+      skillUninstall(id);
+    } else if (act === 'add') {
+      const s = skillById(id);
+      skillInstall(id);
+      toast('已添加「' + (s && s.name || id) + '」');
+    }
+    renderSkillCenter(); qaRefreshSkillHint();
+  };
+  $('skillListOn').addEventListener('click', onSkillListClick);
+  $('skillListOff').addEventListener('click', onSkillListClick);
 
   /* 设置：分类页签切换 */
   $('setTabs').addEventListener('click', e => {
@@ -2712,9 +2967,48 @@ function bindEvents() {
   /* ---------- 持仓：刷新 / 自动刷新 / 表头排序 / 改价 ---------- */
   /* v3.8.37 持仓页下线：行情刷新入口只剩总览页一处 */
   const refreshQuotesAll = async () => { await loadAll(); await refreshQuotes(true); };
-  ['tvRefreshBtn'].forEach(id => {
+  /* v3.8.65 刷新入口变两处：大盘卡右上角（原位）+ 悬浮条（滚出视野后出现）。
+     挂载点数组本就是为此设计的，追加 id 即可自动共用同一套逻辑与状态 */
+  ['tvRefreshBtn', 'tvRefreshFab'].forEach(id => {
     const b = document.getElementById(id);
-    if (b) b.addEventListener('click', async () => { await refreshQuotesAll(); toast('已刷新行情'); });
+    if (b) b.addEventListener('click', async (e) => {
+      /* v3.9.6 点完主动失焦：按钮没有自定义 :focus 样式，用的是浏览器默认焦点环
+         （按钮外圈那圈描边）。鼠标点过之后焦点一直留在按钮上，描边就那样挂着，
+         直到用户点页面别处 —— 观感像「卡住了」。这里在点击处理的一开始就 blur，
+         立刻消除描边（不等到刷新结束，网络慢时也不用盯着那圈框）。
+         只对指针点击生效（e.detail > 0）：键盘 Enter/Space 触发的 click 其
+         detail 为 0，此时保留焦点环才是正确的无障碍行为，也能连按 Enter 重复刷新。 */
+      if (e && e.detail > 0 && document.activeElement === b) b.blur();
+      await refreshQuotesAll();
+      toast('已刷新行情');
+    });
+  });
+  /* v3.8.65 悬浮条显隐：滚动/缩放时按需同步。
+     用 rAF 节流 —— scroll 事件每秒可触发上百次，而 syncQuoteFab 里的
+     getBoundingClientRect() 会强制同步布局，每次都跑代价太高 */
+  if ($('quoteFab')) {
+    let fabRaf = 0;
+    const reqFabSync = () => {
+      if (fabRaf) return;
+      fabRaf = requestAnimationFrame(() => { fabRaf = 0; syncQuoteFab(); });
+    };
+    window.addEventListener('scroll', reqFabSync, { passive: true });
+    window.addEventListener('resize', reqFabSync);
+    /* v3.8.76 顺序调整：先定位、再决定显隐。
+       旧顺序是 syncQuoteFab() 在前，会把 .on 加上触发淡入，而定位在下一行才做；
+       同一次同步执行里浏览器一般来不及画中间帧，但先定位更稳妥（首帧就是正确位置）。 */
+    initQuoteFabDrag();
+    syncQuoteFab();
+  }
+  /* v3.8.69 跨 720px 断点时重渲染指数条：涨跌额只在窄屏显示，转屏 / 拉窗口后
+     必须重新生成 HTML（否则从宽变窄不会冒出来）。只在「跨过断点」时触发一次，
+     普通 resize（手机地址栏收起等）不重渲染，避免白白重建 DOM */
+  let idxNarrowPrev = window.matchMedia('(max-width: 720px)').matches;
+  window.addEventListener('resize', () => {
+    const now = window.matchMedia('(max-width: 720px)').matches;
+    if (now === idxNarrowPrev) return;
+    idxNarrowPrev = now;
+    if (typeof renderToday === 'function') renderToday();
   });
   $('holdRecBtn').addEventListener('click', () => openRecModal());
   /* 空态「去记一笔」：每个持仓挂载点各绑一份 */
@@ -2722,7 +3016,8 @@ function bindEvents() {
     const rb = m.recBtn ? document.getElementById(m.recBtn) : null;
     if (rb) rb.addEventListener('click', () => openRecModal());
   }
-  /* 自动刷新：总览页行情条的下拉 */
+  /* 自动刷新：总览页行情条的下拉
+     v3.8.75 悬浮条已去掉「自动刷新」入口，挂载点只剩大盘卡里的 #tvAuto */
   let holdTimer = null;
   function setHoldAuto(sec, from) {
     if (holdTimer) { clearInterval(holdTimer); holdTimer = null; }
@@ -3004,6 +3299,134 @@ function fillFormFromParsed(res) {
   }
   updateFeePreview();
 }
+/* v3.8.65 行情悬浮条显隐判定。
+   出现条件：① 当前在总览页（其他页没有行情条，出现即误导）；
+   ② 大盘卡右上角的原刷新按钮已完全滚出视口上方（rect.bottom < 0）。
+   不用 IntersectionObserver 的 isIntersecting：这里要的是「原位入口彻底看不见了」
+   这一明确语义，而带阈值/比例的相交判定会让按钮刚露半个在屏顶时悬浮条就冒出来，
+   同一功能两处入口同时可见。 */
+function syncQuoteFab() {
+  const fab = document.getElementById('quoteFab');
+  if (!fab) return;
+  const today = document.getElementById('view-today');
+  const anchor = document.getElementById('tvRefreshBtn');
+  const show = !!(today && today.classList.contains('active'))
+    && (!anchor || anchor.getBoundingClientRect().bottom < 0);
+  fab.classList.toggle('on', show);
+}
+
+/* ---------- v3.8.66 行情悬浮条：可上下拖动 + 高度记忆 ----------
+   横向不动，永远贴着右边（避免条子被拖到屏幕中间挡内容）；只让纵向可调，
+   纵向由内联 top 接管。用户拖过之后把 top 写进 localStorage，下次打开仍停在他放的高度。
+   v3.8.76：没有存档时也由 JS 量算真实落位（不再依赖 CSS 常量），只是不写存档 ——
+   这样首屏位置和拖动后的位置用的是同一套算法，不会再出现「先压顶栏、一会儿跳下去」。 */
+const QF_POS_KEY = 'sj_qf_pos';
+/* 纵向夹取：条子始终完整可见，且两头不让它压住顶栏 / 底部 Tab 栏 */
+function setQuoteFabTop(fab, t) {
+  const h = fab.offsetHeight || 44;
+  /* 上界：视口底；手机端再避开底部 Tab（底部导航 z-index 50 > 条子 45，压进去就点不到了） */
+  let hi = window.innerHeight - h - 8;
+  const nav = document.querySelector('.bottom-nav');
+  if (nav && getComputedStyle(nav).display !== 'none') {
+    hi = Math.min(hi, nav.getBoundingClientRect().top - 8 - h);
+  }
+  hi = Math.max(8, hi);
+  /* 下界：顶栏底部 + 8。顶栏是 sticky，贴着它下沿既是「最上面」的位置，
+     也不会遮住顶栏里的退出等按钮。
+     v3.8.76：sticky 顶栏滚出视口后 rect.bottom 会变成负数（顶栏已经缩上去），
+     此时不能再拿它当基准，否则 lo 变负、条子被顶到视口外。故夹到 [8, hi] 区间。
+     v3.8.87：导航栏 .tabs 也吸顶了（PC 端），只让开顶栏会让悬浮条压在导航上 ——
+     基准取「顶栏底」与「导航底」的较大者，两层都吸顶时自然落在导航之下；
+     手机端 .tabs 是 display:none（rect 全 0），取 topbar 即可，行为不变。 */
+  const bar = document.querySelector('.topbar');
+  const barBottom = bar ? bar.getBoundingClientRect().bottom : 8;
+  const tabs = document.querySelector('.tabs');
+  let base = barBottom;
+  if (tabs && getComputedStyle(tabs).display !== 'none') {
+    const tr = tabs.getBoundingClientRect();
+    if (tr.height > 0) base = Math.max(base, tr.bottom);
+  }
+  let lo = (base > 0 ? base : 8) + 8;
+  lo = Math.max(8, Math.min(lo, hi));
+  const t2 = Math.min(Math.max(lo, t), hi);
+  fab.style.top = t2 + 'px';
+  return t2;
+}
+function saveQuoteFabPos(fab) {
+  try {
+    localStorage.setItem(QF_POS_KEY, JSON.stringify({ t: parseFloat(fab.style.top) || 0 }));
+  } catch (e) { /* 隐私模式等写不进去，忽略：位置只是偏好，丢了不影响功能 */ }
+}
+function initQuoteFabDrag() {
+  const fab = $('quoteFab');
+  if (!fab) return;
+  /* v3.8.76 首次落位修复：不管有没有拖动存档，都先用 JS 量算一次真实位置。
+     旧写法只在「有存档」时才 setQuoteFabTop()，没存档就纯靠 CSS 常量猜顶栏高度；
+     而 topbar 是 sticky + height:auto，字体/图标晚加载会让它比常量更高，
+     于是首屏悬浮条会先压住顶栏的退出按钮，等某次 scroll/resize 才纠正 —— 这就是
+     「先在上面、一会儿跑到下面」的根因。现在无条件量算，CSS 只当兜底。 */
+  let saved = null;
+  try {
+    const p = JSON.parse(localStorage.getItem(QF_POS_KEY) || 'null');
+    if (p && typeof p.t === 'number') saved = p.t;
+  } catch (e) { /* 存档损坏则忽略，走默认落位 */ }
+  /* 有存档就在存档高度处夹取；没存档传 0 —— setQuoteFabTop 里 Math.max(lo, 0) = lo，
+     正好落到「顶栏底部 + 8」这一最低允许位置（传大值会被上界夹到视口底部，那就错了） */
+  setQuoteFabTop(fab, saved == null ? 0 : saved);
+  /* 二次校正：字体/图标（SVG 已内联，但字体可能晚到）会让顶栏高度变化，
+     等字体就绪后按新高度重算一次，避免仍按首帧的旧高度定位 */
+  const reflow = () => {
+    if (!fab.style.top) return;
+    setQuoteFabTop(fab, parseFloat(fab.style.top) || 0);
+  };
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(reflow).catch(() => { /* */ });
+  /* 顶栏高度可能因窗口变化、模式徽章增减等变动：直接盯它，一变就跟着调，
+     不再依赖「必须滚动一下才会纠正」。
+     v3.8.87：导航栏 .tabs 也参与落位基准（吸顶后它压在顶栏之下），同样盯上 ——
+     它可能因 flex-wrap 换行而改变高度，不跟就会让悬浮条压住第二行 Tab。 */
+  if (window.ResizeObserver) {
+    const watch = [document.querySelector('.topbar'), document.querySelector('.tabs')];
+    for (const el0 of watch) {
+      if (el0) { try { new ResizeObserver(() => { reflow(); }).observe(el0); } catch (e) { /* */ } }
+    }
+  }
+
+  let dragging = false, moved = false, sy = 0, oy = 0, pid = null;
+  fab.addEventListener('pointerdown', (e) => {
+    if (e.button) return;
+    /* 下拉与按钮必须能被正常点开，按下它们时不进入拖动（只让条身与手柄拖动） */
+    if (e.target.closest && e.target.closest('select, button, option')) return;
+    dragging = true; moved = false; pid = e.pointerId;
+    sy = e.clientY; oy = fab.getBoundingClientRect().top;
+    try { fab.setPointerCapture(pid); } catch (err) { /* 老浏览器不支持捕获也不影响拖动 */ }
+    e.preventDefault();   /* 顺带屏蔽拖动过程中的原生拖拽与文字选中 */
+  });
+  fab.addEventListener('pointermove', (e) => {
+    if (!dragging) return;
+    /* 只认纵向位移：横向一概不理会，条子始终贴右边（3px 以内当手抖，不算拖动） */
+    const dy = e.clientY - sy;
+    if (!moved && Math.abs(dy) < 3) return;
+    moved = true;
+    fab.classList.add('dragging');
+    setQuoteFabTop(fab, oy + dy);
+  });
+  const endDrag = () => {
+    if (!dragging) return;
+    dragging = false;
+    fab.classList.remove('dragging');
+    try { fab.releasePointerCapture(pid); } catch (err) { /* */ }
+    if (moved) saveQuoteFabPos(fab);   /* 只是点了一下没拖动，就不写存档 */
+  };
+  fab.addEventListener('pointerup', endDrag);
+  fab.addEventListener('pointercancel', endDrag);
+  /* 窗口尺寸变化（含手机横竖屏）可能把条子挤出视口，按新高度重新夹取并存档 */
+  window.addEventListener('resize', () => {
+    if (!fab.style.top) return;
+    setQuoteFabTop(fab, parseFloat(fab.style.top) || 0);
+    saveQuoteFabPos(fab);
+  });
+}
+
 function switchView(name) {
   /* v3.8.37 持仓页 / 自选页已下线：旧会话残留的 sj_view 或历史入口统一回落到总览 */
   if (!$('view-' + name)) name = 'today';
@@ -3011,10 +3434,20 @@ function switchView(name) {
   $('view-' + name).classList.add('active');
   document.querySelectorAll('[data-view]').forEach(b => b.classList.toggle('active', b.dataset.view === name));
   try { localStorage.setItem('sj_view', name); } catch (e) { /* */ }
+  /* v3.8.65 切页后总览页可能停在滚动中间位置，需立刻重算悬浮条显隐 */
+  syncQuoteFab();
   if (name === 'analysis' && typeof switchAnalysisTab === 'function') {
     if (typeof renderAnalysisSelect === 'function') renderAnalysisSelect();
     if (typeof renderBtOptions === 'function') { try { renderBtOptions(); } catch (e) { /* */ } }
     switchAnalysisTab(typeof anTab !== 'undefined' ? anTab : 'diag');
+  }
+  /* v3.9.0 切到问答页：重绘一次（消息可能在本页外生成完，DOM 是重建的） */
+  if (name === 'qa' && typeof renderQaMessages === 'function') {
+    try { renderQaMessages(); renderQaHistory(); qaSyncSendState(); } catch (e) { /* */ }
+  }
+  /* v3.9.9 切到问答页时同步技能状态条（用户可能刚在设置里改了技能开关 / 妙想 Key） */
+  if (name === 'qa' && typeof qaRefreshSkillHint === 'function') {
+    try { qaRefreshSkillHint(); } catch (e) { /* */ }
   }
 }
 
@@ -3900,5 +4333,731 @@ async function saveDiagReport() {
   $('stockAnalyzeBtn').onclick = () => diagnoseStock();
   renderDiagHistory();
 })();
+
+
+/* ============================================================
+   v3.9.0 智能问答（核心对话）
+   来源：trade-manager-97288。迁移「核心对话」这一层：
+     多轮对话 / 流式输出 / 历史记录（云端 qa_history）/ 搜索 / 新对话 /
+     附件上传 / 语音输入 / Markdown 渲染 / 基于持仓与交易的上下文注入。
+   v3.9.7 起另补上「工具取数层」（独立文件 qa-tools.js，见该文件头注释）：
+     条件选股 / 板块成分股 / 实时行情 / 财务估值 / 五维诊断 / 技术分析 / 组合风险 /
+     操作复盘 / 策略回测 / K 线相似度 —— 全部走公开免费接口，无需任何 Key。
+   仍未迁移（源站有、本项目按需摘除）：
+     · 妙想（mx）技能中心、凭证管理与依赖 Key 的技能；问答范围设置与视觉模型选择
+     · maybeRecordFromQa（从问答自动记一笔）
+   适配点：命名沿用 stock-journal 习惯（sj_ 前缀）、复用 store/S/esc/toast，
+          LLM 走现有 ModelMgr + llmComplete，仅额外补一个可中止的流式封装。
+   ============================================================ */
+const QA_HISTORY_LIMIT = 400;      // 单次拉取的历史记录上限（云端 app_query 无分页）
+const QA_CTX_TRADES = 30;          // 注入上下文时带的近期交易条数
+
+/* v3.9.2 快捷提问示例（数据源，逐字照搬 trade-manager 的 QA_EXAMPLES）。
+   空对话时渲染成可点击卡片，点一下把 q 填进输入框；q 里的 {股票} 占位符
+   在点击时替换成用户自己的股票（见 qaPickStock）。
+   注意：源站这些示例里有一部分依赖它的「交易工具层」（选股 / 回测 / 自动记账）。
+   v3.9.7 起工具层已迁到 qa-tools.js（选股 / 行情 / 财务 / 诊断 / 回测 / 风险 / 复盘 /
+   K 线相似度），这些示例点下去能真的取到数；只有「自动记账」仍不在范围内。
+   放在模块作用域顶部是为了避免 TDZ：qaExamplesHtml 在其之后才定义。 */
+const QA_EXAMPLES = [
+  { g: '🎯 智能选股', items: [
+    { n: '多因子选股（深度）', q: '筛选A股人形机器人产业链中的公司，需同时满足：PE(TTM) 为正且低于80倍、最新可得ROE高于8%、具备公告或主营业务关联的明确证据。按业务关联证据强度和市值排序，输出完整筛选报告，需列出每只股票的代码、名称、所属环节及各项指标实际数值。随后对排名前3的A股进行综合诊断，分别说明原筛选条件中已被验证、被削弱以及仍待验证的部分。' },
+    { n: '低估值高ROE', q: '帮我筛选沪深A股中市盈率低于20倍、ROE高于15%的公司，按ROE从高到低排序，列出前20只的代码、名称、PE、ROE和所属行业。' },
+    { n: '板块成分股', q: '列出人形机器人概念的成分股，按总市值从高到低排序，给出前20只的名称、收盘价、涨跌幅、总市值和申万一级行业。' },
+    { n: '创业板涨幅榜', q: '列出创业板今天涨幅前 10 的股票，给出代码、名称、涨跌幅和总市值。' },
+    { n: '区间+形态选股', q: '在创业板里找近 20 个交易日累计涨幅超过 20%、且近 5 日均量较 20 日均量放量 50% 的股票，按累计涨幅降序给我前 20 只。' },
+    { n: '均线形态选股', q: '找出站上 MA60、均线多头排列且不是 ST 的沪深主板股票，按近 20 日涨幅降序前 20 只。' },
+    { n: '超跌回撤选股', q: '找出自近 60 日高点回撤超过 30%、市盈率为正的创业板股票，按回撤幅度降序前 20 只。' },
+    { n: 'K 线相似度', q: '从我的自选股里找出 K 线形态最像 {股票} 的前 5 只，用近 60 个交易日比对。' },
+  ] },
+  { g: '🔬 个股诊断', items: [
+    { n: '五维诊断（深度）', q: '对{股票}进行全面、深入的五维诊断，覆盖基本面与估值、技术趋势、资金行为、消息事件和机构观点，重点识别不同维度之间的共识、冲突、证据缺口、主要风险及后续验证指标。生成一份包含关键图表和统一综合判断的报告。' },
+    { n: '估值贵不贵', q: '{股票}现在估值贵不贵？结合 PE/PB、营收与净利增速、机构目标价给一个明确判断。' },
+    { n: '技术位置', q: '{股票}现在的技术面怎么样？支撑位和压力位在哪，这个位置适合买入还是继续观察？' },
+    { n: '机构怎么看', q: '机构对{股票}的一致预期如何？评级分布、目标价区间和盈利预测说明了什么？' },
+  ] },
+  { g: '💼 持仓与风险', items: [
+    { n: '持仓体检', q: '帮我做一次持仓体检：逐只给出成本、浮盈亏、仓位占比与风险提示，并指出最该处理的一只。' },
+    { n: '组合风险', q: '对我的持仓组合做一次风险分析：集中度、相关性、Beta 与压力测试，并给出再平衡建议。' },
+    { n: '该不该加仓', q: '结合我的持仓成本、当前仓位和最近的行情，说清楚我现在该加仓、持有还是减仓，给出触发条件。' },
+  ] },
+  { g: '🔁 复盘与回测', items: [
+    { n: '操作复盘', q: '复盘我最近的操作，找出反复出现的错误与行为偏差，给我 3 条可执行的交易规则。' },
+    { n: '策略回测', q: '回测{股票}最近一年的均线策略，看看胜率、盈亏比与最大回撤，并与买入持有做个对比。' },
+    { n: '跌买涨卖测试', q: '用一个"跌 5% 买入、涨 5% 卖出"的网格策略回测{股票}最近一年，能赚钱吗？' },
+    { n: '回测 + 风控', q: '用均线策略回测{股票}最近一年，叠加 ATR 3 倍跟踪止损和 20% 回撤熔断，看看风控把最大回撤压下去多少。' },
+    { n: '策略横截面对比', q: '把唐奇安通道突破策略在我持仓股上跑一遍，按总收益排名看哪只最适合做突破。' },
+  ] },
+  /* v3.9.2 本组源站叫「记账与日常」，首条「快速记账」依赖源站的自动记账工具
+     （maybeRecordFromQa），本项目没迁那层 —— 点了只会得到一段文字而不会真的
+     写入交易记录，属于「承诺做不到的事」，故摘除该条与组名里的「记账」。
+     仍需 22 条的观感？见 qaEmptyHtml 里 QA_EXAMPLES 的渲染结果（现 21 条）。 */
+  { g: '✍️ 日常问答', items: [
+    { n: '今日行情', q: '{股票}今天的行情和最新一期财务怎么样？和它的估值水平匹配吗？' },
+    { n: '买卖点参考', q: '{股票}最近值得买入吗？如果买，止损位和第一目标位大概放在哪？' },
+  ] },
+];
+
+/* 会话状态：state.qaAll 为云端全量记录（倒序），其余按会话 id 分桶缓存 */
+const qaState = {
+  conversationId: '',
+  messages: [],
+  all: [],
+  msgs: {},          // cid -> 消息数组（切走再切回不丢）
+  local: {},         // cid -> {title, at}：已新建但云端还没有占位行的会话
+  busyConvs: {},     // cid -> true 正在生成
+  controllers: {},   // cid -> AbortController
+  stream: {},        // cid -> 已生成的文本
+  files: [],         // 待发送附件 [{name, text, image}]
+  loaded: false,
+};
+
+function qaNewId() {
+  return 'c' + Date.now().toString(36) + Math.random().toString(36).slice(2, 7);
+}
+function qaMsgsOf(cid) {
+  if (!qaState.msgs[cid]) qaState.msgs[cid] = [];
+  return qaState.msgs[cid];
+}
+function qaAttach(cid) {
+  qaState.conversationId = cid;
+  qaState.messages = qaMsgsOf(cid);
+}
+
+/* ---------- Markdown → HTML（来源同源站 qaMdToHtml，行内标记单独抽出便于复用） ---------- */
+function qaMdInline(s) {
+  let t = String(s == null ? '' : s);
+  t = t.replace(/`([^`]+)`/g, '<code>$1</code>');
+  t = t.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+  t = t.replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>');
+  t = t.replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, '<a href="$2" target="_blank" rel="noopener">$1</a>');
+  return t;
+}
+/* 极简 Markdown 渲染：标题 / 列表 / 代码块 / 表格 / 引用 / 分隔线 / 段落。
+   输入先 esc()，只放开白名单标签，避免模型输出里的 HTML 直接注入。 */
+function qaMdToHtml(src) {
+  const lines = esc(String(src == null ? '' : src)).split('\n');
+  const out = [];
+  let list = null;
+  const flush = () => {
+    if (list) { out.push('<' + list.tag + '>' + list.items.map(x => '<li>' + x + '</li>').join('') + '</' + list.tag + '>'); list = null; }
+  };
+  for (let i = 0; i < lines.length; i++) {
+    const raw = lines[i];
+    const t = raw.trim();
+    if (/^```/.test(t)) {                                    // 代码块
+      flush();
+      const buf = [];
+      i++;
+      while (i < lines.length && !/^```/.test(lines[i].trim())) { buf.push(lines[i]); i++; }
+      out.push('<pre class="qa-code">' + buf.join('\n') + '</pre>');
+      continue;
+    }
+    if (/^\|.*\|$/.test(t) && i + 1 < lines.length && /^\|[\s:|-]+\|$/.test(lines[i + 1].trim())) {  // 表格
+      flush();
+      const cells = s => s.replace(/^\||\|$/g, '').split('|').map(x => qaMdInline(x.trim()));
+      const head = cells(t);
+      i += 2;
+      const rows = [];
+      while (i < lines.length && /^\|.*\|$/.test(lines[i].trim())) { rows.push(cells(lines[i].trim())); i++; }
+      i--;
+      out.push('<div class="qa-table-wrap"><table class="qa-table"><thead><tr>' + head.map(x => '<th>' + x + '</th>').join('')
+        + '</tr></thead><tbody>' + rows.map(r => '<tr>' + r.map(x => '<td>' + x + '</td>').join('') + '</tr>').join('') + '</tbody></table></div>');
+      continue;
+    }
+    if (/^#{1,6}\s+/.test(t)) { flush(); out.push('<h4 class="qa-h">' + qaMdInline(t.replace(/^#{1,6}\s+/, '')) + '</h4>'); continue; }
+    if (/^(-{3,}|\*{3,}|_{3,})$/.test(t)) { flush(); out.push('<hr class="qa-hr">'); continue; }
+    let m;
+    if ((m = /^[-*+]\s+(.*)$/.exec(t))) {
+      if (!list || list.tag !== 'ul') { flush(); list = { tag: 'ul', items: [] }; }
+      list.items.push(qaMdInline(m[1]));
+      continue;
+    }
+    if ((m = /^\d+[.)]\s+(.*)$/.exec(t))) {
+      if (!list || list.tag !== 'ol') { flush(); list = { tag: 'ol', items: [] }; }
+      list.items.push(qaMdInline(m[1]));
+      continue;
+    }
+    if ((m = /^&gt;\s?(.*)$/.exec(t))) { flush(); out.push('<blockquote>' + qaMdInline(m[1]) + '</blockquote>'); continue; }
+    if (!t) { flush(); out.push('<div class="qa-gap"></div>'); continue; }
+    flush();
+    out.push('<p>' + qaMdInline(raw) + '</p>');
+  }
+  flush();
+  return out.join('');
+}
+
+/* ---------- 可中止的流式补全 ----------
+   现有 llmComplete 不支持 AbortSignal（记一笔不需要中止），这里加一层包装：
+   自定义模型走 fetch（原生支持 signal），云端模型走 SDK 的 for await，
+   用 signal.aborted 在 chunk 之间跳出。 */
+async function qaLlmStream(messages, { signal, onDelta } = {}) {
+  const m = ModelMgr.cur;
+  if (!m) throw new Error('尚未选择模型，请到「设置 → AI 模型」选择');
+  if (m.custom) {
+    let url = m.baseUrl.replace(/\/+$/, '');
+    if (!/\/chat\/completions$/.test(url)) url += '/chat/completions';
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + m.apiKey },
+      body: JSON.stringify({ model: m.model, messages, stream: true }),
+      signal,
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => '');
+      throw new Error('自定义模型请求失败 HTTP ' + res.status + (t ? '：' + t.slice(0, 200) : ''));
+    }
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = '', text = '';
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        const s = line.trim();
+        if (!s.startsWith('data:')) continue;
+        const data = s.slice(5).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const j = JSON.parse(data);
+          const d = j.choices && j.choices[0] && j.choices[0].delta;
+          if (d && d.content) { text += d.content; if (onDelta) try { onDelta(d.content); } catch (e) { /* */ } }
+        } catch (e) { /* 忽略无法解析的行 */ }
+      }
+    }
+    return text;
+  }
+  if (!cloudLlm) throw new Error('云端模型服务不可用');
+  const llm = cloudLlm.llm || cloudLlm;
+  let text = '';
+  for await (const chunk of llm.chat.completions.create({ model: m.id, messages, stream: true })) {
+    if (signal && signal.aborted) break;
+    const d = chunk.choices && chunk.choices[0] && chunk.choices[0].delta;
+    if (d && d.content) { text += d.content; if (onDelta) try { onDelta(d.content); } catch (e) { /* */ } }
+  }
+  return text;
+}
+
+/* ---------- 问答上下文：把持仓 / 自选 / 近期交易喂给模型 ----------
+   v3.9.8 持仓不再自己算，改走 computeHoldings() —— 那是「总览 / 持仓 / 复盘」页面显示的
+   **同一个**引擎。旧写法有两条独立缺陷，叠在一起会让问答把「有仓位」说成「空仓」：
+     ① 方向字段读的是 `t.action`，而云端 trades 表的真实列名是 `transaction_type`
+        （表结构已核对）→ `t.action === 'buy'` 恒 false → **每一笔买入都被当成卖出**
+        → 持股量恒 ≤ 0 → 永远输出「无持仓」；
+     ② 排序用的是不存在的 `t.trade_date`（真列是 transaction_time）→ 顺序全乱，
+        再加上只读 t.price、忽略手续费与 net_amount，成本口径也和页面不一致。
+   现在与页面共用一套结果：加权成本、摊薄成本、浮动盈亏都能对上，问答与界面不会再各说各话。 */
+function qaHoldingsSummary() {
+  const qm = new Map(S.quotes.map(q => [q.stock_code, q]));
+  const out = [];
+  for (const h of computeHoldings()) {
+    if (!(h.qty > 0)) continue;
+    const q = qm.get(h.code);
+    const px = q && q.price != null ? Number(q.price) : null;
+    const costW = h.costValue / h.qty;      // 加权成本（含手续费）
+    const costD = h.dilutedValue / h.qty;   // 摊薄成本（已实现盈亏滚入）
+    const pnl = px != null ? h.qty * px - h.costValue : null;
+    out.push(`${h.name || h.code}(${h.code})：${h.qty}股，加权成本 ${costW.toFixed(3)}，摊薄成本 ${costD.toFixed(3)}`
+      + (px != null ? `，现价 ${px}` : '')
+      + (pnl != null ? `，浮动盈亏 ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}元` : ''));
+  }
+  return out.length ? out.join('；') : '无持仓';
+}
+function qaBuildContext() {
+  const posStr = qaHoldingsSummary();
+  /* v3.9.8 字段名修正：读 transaction_time / transaction_type / note（云端真实列），
+     不再是 tm 那套 t.trade_date / t.action / t.comment —— 旧写法让日期列全空、
+     方向恒显示「卖出」、备注丢失，模型照着说就成了「最近几笔都是卖出操作」。 */
+  const sorted = S.trades.slice().sort((a, b) =>
+    String(b.transaction_time || '').localeCompare(String(a.transaction_time || '')));
+  const trades = sorted.slice(0, QA_CTX_TRADES).map(t =>
+    `${String(t.transaction_time || '').replace('T', ' ').slice(0, 16)} ${t.transaction_type === 'buy' ? '买入' : '卖出'} `
+    + `${t.stock_name || t.stock_code}(${t.stock_code}) ${t.quantity}股 @${t.price}`
+    + (t.note ? `（${t.note}）` : '')).join('\n') || '无';
+  const watch = S.watchlist.map(w => `${w.stock_name || w.stock_code}${w.note ? `（${w.note}）` : ''}`).join('、') || '无';
+  return `【用户当前持仓】${posStr}\n【自选股】${watch}\n【近期交易记录（新→旧）】\n${trades}\n`
+    + '【说明】以上是用户在本应用里记录的数据，可能不是最新行情。涉及「今天涨跌/当前价格」这类'
+    + '实时性问题时，请说明你看到的是记录值、可能存在延迟，不要编造具体价格与财务数字。';
+}
+function qaSysPrompt() {
+  return '你是「操作日记」里的智能助手，帮用户复盘交易、解答疑问、聊聊市场。'
+    + '回答要简洁、口语化、有条理；涉及数字时优先引用下面给出的用户数据。'
+    /* v3.9.8 反「念小抄」约束。用户问「持仓多少」时，模型把【用户当前持仓】【自选股】
+       【近期交易记录】三块依次复述一遍，其中「空仓」在相邻三句里说了三遍、自选名单出现两次
+       —— 看着信息很全，实际是冗余。根因是提示词只说"优先引用下面的数据"，等于鼓励它逐条倒出来。
+       这里明确：下面的数据是备查材料，只回答被问到的部分，同一结论不重复。 */
+    + '**只回答用户实际问到的内容**：下面给你的用户数据是「备查材料」，不要逐项复述；'
+    + '同一结论只讲一次，不要换着措辞反复强调（例如「目前空仓」不要在三句话里说三遍）。'
+    + '问题很短、只是要一个事实（持仓多少 / 有哪些自选 / 最近交易）时，一两句话直接给答案，'
+    + '不要展开分析，也不要主动补充他没问的部分。'
+    /* v3.9.7 工具层上线后：模型能拿到真实抓取的行情/财务/筛选结果，必须优先采信，
+       而不是拿自己的记忆数字去覆盖，也不再需要为"实时性问题"打延迟免责声明。 */
+    + '如果下面出现了【工具计算结果】，那是本应用刚刚实时抓取到的权威数据 —— 涉及这些'
+    + '标的的价格、涨跌、估值、财务、筛选名单时，必须严格使用其中的数字，禁止用你自己的'
+    + '记忆改写或补充；工具结果里标注为「本次未取到」的部分要如实说明缺失，不要用推测填补。'
+    + '没有【工具计算结果】时，才按你自身知识回答，并说明可能不是最新。'
+    + '可以正常使用 Markdown（标题、列表、表格、加粗、代码），但不要输出 HTML。\n\n';
+}
+
+/* ---------- 渲染：消息区 ---------- */
+/* v3.9.2 空对话态由「一行提示」升级为「分组快捷提问卡片」（照搬 trade-manager）。
+   旧版只有一段 qa-empty-tip 纯文本，用户得自己组织问题；现在把常用问法摆出来，
+   点一下即填入输入框，降低上手成本。 */
+function qaPickStock() {
+  /* {股票} 的默认取值：优先持仓 → 自选 → 交易过的 → 兜底示例。
+     v3.9.8 改走 computeHoldings()（与「总览 / 持仓」页同一份口径）。
+     旧写法自己遍历 S.trades 并读 t.action —— 该字段在云端 trades 表里根本不存在
+     （真实列名是 transaction_type），`t.action === 'buy'` 恒 false → 持股量恒为负
+     → 永远认为「没有持仓」，于是 {股票} 一直落到自选第一只，而不是真持仓第一只。 */
+  const qm = new Map(S.quotes.map(q => [q.stock_code, q]));
+  const holds = computeHoldings().filter(h => h.qty > 0);
+  if (holds.length) {
+    const mv = h => { const q = qm.get(h.code); return q && q.price != null ? h.qty * Number(q.price) : 0; };
+    holds.sort((a, b) => mv(b) - mv(a));      // 按当前市值从大到小，取最重的一只
+    return holds[0].name || holds[0].code;
+  }
+  if (S.watchlist.length) return S.watchlist[0].stock_name || S.watchlist[0].stock_code;
+  if (S.trades.length) return S.trades[0].stock_name || S.trades[0].stock_code;
+  return '贵州茅台';
+}
+function qaEmptyHtml() {
+  const intro = '<div class="qa-ex-intro">👋 我是你的操作日记，能结合你的持仓、自选与交易记录回答问题。'
+    + '<br>下面是一些常用问法，点一下即可填入输入框（<b>{股票}</b> 已自动替换为你的股票，可自行修改）——</div>';
+  const groups = QA_EXAMPLES.map(g =>
+    '<div class="qa-ex-group"><div class="qa-ex-title">' + esc(g.g) + '</div><div class="qa-ex-grid">'
+    + g.items.map(x => '<button type="button" class="qa-ex-card" data-q="' + esc(x.q) + '"><b>' + esc(x.n) + '</b><span>'
+      + esc(x.q.replace(/\{股票\}/g, '某股').slice(0, 46)) + '…</span></button>').join('')
+    + '</div></div>').join('');
+  return '<div class="qa-examples">' + intro + groups
+    + '<div class="qa-ex-foot">也可以直接聊别的，或「上传文件」（txt / csv / md / json）让我帮你看看。</div>'
+    + '</div>';
+}
+/* 点击示例卡片 → 填入输入框（{股票} 就地替换）并聚焦，光标落到末尾 */
+function qaUseExample(q) {
+  const input = $('qaInput');
+  if (!input || !q) return;
+  const text = String(q).replace(/\{股票\}/g, qaPickStock());
+  input.value = text;
+  qaSyncSendState();
+  input.focus();
+  try { input.setSelectionRange(text.length, text.length); } catch (e) { /* 忽略 */ }
+}
+/* 示例卡片是随 renderQaMessages 重建的，故用事件委托绑在 #qaMessages 上，
+   只绑一次（dataset 打标防重复绑定，登录多次不叠加监听）。 */
+function bindQaExamples() {
+  const box = $('qaMessages');
+  if (!box || box.dataset.exBound) return;
+  box.dataset.exBound = '1';
+  box.addEventListener('click', e => {
+    const btn = e.target.closest('.qa-ex-card');
+    if (!btn) return;
+    qaUseExample(btn.dataset.q);
+  });
+}
+function renderQaMessages() {
+  const box = $('qaMessages');
+  if (!box) return;
+  const cid = qaState.conversationId;
+  const busy = !!qaState.busyConvs[cid];
+  if (!qaState.messages.length && !busy) { box.innerHTML = qaEmptyHtml(); return; }
+  let html = qaState.messages.map(m => {
+    /* v3.9.7 工具结果便签：qa-tools.js 的 qaRunTools 会往消息流里塞一条 role:'tool' 的
+       记录（icon/title/lines/html/chart/skills），它不是对话内容而是「本轮取到了哪些数据」
+       的凭证，所以单独走 toolNoteHtml 渲染，并用 .msg.note 的居中浅绿气泡样式区分开。 */
+    if (m.role === 'tool') return `<div class="msg note">${toolNoteHtml(m)}</div>`;
+    if (m.role === 'assistant') return `<div class="msg assistant">${qaMdToHtml(m.content)}</div>`;
+    return `<div class="msg ${m.role}">${esc(m.content)}</div>`;
+  }).join('');
+  /* 正在生成的会话补一个流式气泡：切走再切回来，已生成的部分接着显示
+     （内容存在 qaState.stream，DOM 用固定 id 定位，不依赖旧元素引用） */
+  if (busy) {
+    const s = qaState.stream[cid] || '';
+    html += `<div class="msg assistant" id="qaStream-${esc(cid)}">${s ? qaMdToHtml(s) : '思考中…'}</div>`;
+  }
+  box.innerHTML = html;
+  box.scrollTop = box.scrollHeight;
+}
+
+/* ---------- 渲染：左侧历史列表 ---------- */
+function renderQaHistory() {
+  const list = $('qaHistoryList');
+  if (!list) return;
+  const kwEl = $('qaSearch');
+  const kw = kwEl ? kwEl.value.trim().toLowerCase() : '';
+  let rows = qaState.all;
+  if (kw) rows = rows.filter(r => ((r.question || '') + (r.answer || '')).toLowerCase().includes(kw));
+  /* 云端聚合：每个会话取最新一条问题做标题（all 已按 id 倒序 = 插入倒序） */
+  const convs = [];
+  const seen = new Set();
+  for (const r of rows) {
+    const cid = r.conversation_id;
+    if (!cid || seen.has(cid)) continue;
+    seen.add(cid);
+    convs.push({ id: cid, title: String(r.question || '').replace(/^📎.*$/m, '').slice(0, 30) || '新对话' });
+  }
+  /* 本地登记的会话（刚点「新对话」或占位行还在路上）顶到最前，
+     这样左侧列表不用等落库往返就能看到 */
+  const extra = Object.keys(qaState.local)
+    .filter(id => !seen.has(id))
+    .map(id => ({ id, title: qaState.local[id].title, at: qaState.local[id].at || 0 }))
+    .filter(c => !kw || String(c.title).toLowerCase().includes(kw))
+    .sort((a, b) => b.at - a.at)
+    .map(c => ({ id: c.id, title: c.title }));
+  const finalList = extra.concat(convs);
+  list.innerHTML = finalList.length
+    ? finalList.map(c => `<div class="qa-hist-item${c.id === qaState.conversationId ? ' active' : ''}">`
+        + `<span class="qa-hist-main" data-qa-open="${esc(c.id)}">💬 ${esc(c.title)}</span>`
+        + `<span class="qa-hist-del" title="删除该会话" data-qa-del="${esc(c.id)}">✕</span></div>`).join('')
+    : '<div class="qa-empty-tip" style="font-size:12.5px">暂无历史问答</div>';
+}
+
+/* ---------- 附件 ---------- */
+function renderQaChips() {
+  const box = $('qaAttachChips');
+  if (!box) return;
+  const fs = qaState.files;
+  box.hidden = !fs.length;
+  box.innerHTML = fs.map((f, i) =>
+    `<span class="qa-attach-chip"><b>${esc(f.name)}</b><span>${f.image ? '图片' : (f.text ? Math.round(f.text.length / 100) / 10 + 'k 字' : '')}</span>`
+    + `<button type="button" data-qa-rm="${i}" title="移除">✕</button></span>`).join('');
+}
+async function qaAddFile(f) {
+  if (qaState.files.length >= 5) { toast('最多同时带 5 个附件', 'warn'); return; }
+  const isImg = /^image\//.test(f.type);
+  if (isImg) {
+    const dataUrl = await new Promise(res => {
+      const fr = new FileReader();
+      fr.onload = () => res(fr.result);
+      fr.onerror = () => res('');
+      fr.readAsDataURL(f);
+    });
+    if (!dataUrl) { toast('图片读取失败', 'warn'); return; }
+    qaState.files.push({ name: f.name, image: dataUrl });
+  } else {
+    if (f.size > 512 * 1024) { toast('文件过大（限 500KB）', 'warn'); return; }
+    const text = await f.text().catch(() => '');
+    if (!text) { toast('文件读取失败', 'warn'); return; }
+    qaState.files.push({ name: f.name, text });
+  }
+  renderQaChips();
+}
+
+/* ---------- 发送 / 中止 ---------- */
+function qaSyncSendState() {
+  const btn = $('qaSendBtn'), stop = $('qaStopBtn'), inp = $('qaInput');
+  if (!btn) return;
+  const busy = !!qaState.busyConvs[qaState.conversationId];
+  const has = !!(inp && inp.value.trim()) || qaState.files.length > 0;
+  btn.disabled = busy || !has;
+  if (stop) stop.hidden = !busy;
+  const hint = $('qaSrcHint');
+  if (hint) {
+    hint.classList.remove('err');
+    if (busy) hint.textContent = '正在生成…可点右侧 ■ 中断';
+    else if (!ModelMgr.cur) hint.textContent = '尚未选择模型，请到「设置 → AI 模型」选择后再提问';
+    else hint.textContent = `当前模型：${ModelMgr.shortLabel ? ModelMgr.shortLabel(ModelMgr.cur) : (ModelMgr.cur.id || '')}`;
+  }
+}
+function qaLocalSet(cid, title) {
+  /* 顺手清掉之前建过、但一直没用过的空会话，免得「新对话」项越堆越多 */
+  Object.keys(qaState.local).forEach(id => {
+    if (id === cid) return;
+    const it = qaState.local[id];
+    if (it && it.title === '新对话'
+      && !(qaState.msgs[id] || []).length
+      && !qaState.busyConvs[id]
+      && !qaState.all.some(r => r.conversation_id === id)) delete qaState.local[id];
+  });
+  const cur = qaState.local[cid];
+  const t = title === undefined ? '' : String(title || '').trim();
+  qaState.local[cid] = {
+    title: (t || (cur && cur.title) || '新对话').slice(0, 30),
+    at: cur ? cur.at : Date.now(),
+  };
+}
+
+async function sendQa() {
+  const input = $('qaInput');
+  const question = input.value.trim();
+  const files = qaState.files || [];
+  if (!question && !files.length) return;
+  /* v3.9.8 记录类问题（持仓 / 自选 / 交易记录）本地直答：答案全在本机数据里，
+     不需要模型也不需要联网。放在最前面有两个作用 ——
+       ① 彻底避开模型把【持仓】【自选】【交易记录】三块小抄各念一遍的啰嗦
+          （用户反馈：问「持仓多少」得到三句「目前处于空仓状态」）；
+       ② 没配 AI 模型时也照样能查持仓（下面的模型校验对它放行）。
+     带附件的提问一律不走本地直答 —— 附件内容可能重新定义问题，交给模型更稳。 */
+  const localAns = files.length ? '' : qaLocalAnswer(question);
+  if (!localAns && !ModelMgr.cur) { toast('请先到「设置 → AI 模型」选择一个模型', 'warn'); return; }
+  /* 会话快照：本次生成全程绑定 convId。中途切走会话也不中断，回答会照常入库，
+     切回来就能看到；只有「当前视图仍是本会话」时才回写界面。 */
+  const convId = qaState.conversationId;
+  qaState.messages = qaMsgsOf(convId);
+  const myMsgs = qaState.messages;
+  input.value = '';
+  /* 附件内容拼进问题文本，展示层只带附件名单 */
+  const attachNote = files.length ? '\n📎 附件：' + files.map(f => f.name).join('、') : '';
+  let fullQuestion = question;
+  for (const f of files) if (f.text) fullQuestion += `\n\n【附件：${f.name}】\n${f.text.slice(0, 8000)}`;
+  qaState.files = [];
+  renderQaChips();
+  qaState.busyConvs[convId] = true;
+  const controller = new AbortController();
+  qaState.controllers[convId] = controller;
+  myMsgs.push({ role: 'user', content: question + attachNote });
+  qaState.stream[convId] = '';
+  qaLocalSet(convId, question || (files.length ? '附件提问' : ''));
+  renderQaMessages();
+  renderQaHistory();
+  qaSyncSendState();
+
+  /* 落库占位：后台并行写，不阻塞提问；生成结束时要拿它的 id 做替换，所以留一个 promise */
+  const phPromise = (async () => {
+    try {
+      const ph = await store.insert('qa_history', {
+        conversation_id: convId, question: question + attachNote, answer: '',
+      });
+      const id = (ph && ph.id) || 0;
+      await qaReloadAll();
+      if (qaState.all.some(x => x.conversation_id === convId)) delete qaState.local[convId];
+      renderQaHistory();
+      return id;
+    } catch (e) { return 0; }
+  })();
+
+  const box = $('qaMessages');
+  const streamEl = () => document.getElementById('qaStream-' + convId);
+  const onScreen = () => qaState.conversationId === convId;
+  const holder = streamEl() || (() => {
+    const d = document.createElement('div');
+    d.className = 'msg assistant';
+    d.id = 'qaStream-' + convId;
+    d.textContent = '思考中…';
+    if (box) box.appendChild(d);
+    return d;
+  })();
+  if (box) box.scrollTop = box.scrollHeight;
+
+  let answer = '', streamed = '', lastPaint = 0;
+  /* 长回答首字较慢时给个明确提示，避免「卡死」观感 */
+  const slowTip = setTimeout(() => {
+    if (streamed) return;
+    const h = streamEl();
+    if (h) h.textContent = '正在生成较长内容，请稍候…（可点右侧 ■ 中断）';
+  }, 20000);
+
+  try {
+    if (localAns) {
+      /* v3.9.8 本地直答分支：直接落字，不跑工具、不请求模型。同步完成，
+         holder 上那句「思考中…」在同一帧内就被替换掉，用户看不到中间态。 */
+      answer = localAns;
+      qaState.stream[convId] = localAns;
+      const h0 = streamEl();
+      if (h0) h0.innerHTML = qaMdToHtml(localAns);
+      if (box) box.scrollTop = box.scrollHeight;
+    } else {
+    /* v3.9.7 先跑工具取数。命中意图（选股 / 行情 / 财务 / 诊断 / 回测 / 风险 / 复盘 / K线相似度）时，
+       qaRunTools 会真实抓取公开数据、往消息流插一张结果便签，并返回一段【工具计算结果】文本；
+       把它接到 system 末尾，模型就必须引用其中的真实数字，而不是凭记忆编造。
+       工具层任何失败都不影响正常问答（异常吞掉，退化为原来的纯上下文问答）。 */
+    let toolBlock = '';
+    try { toolBlock = await qaRunTools(question, box, holder); } catch (e) { toolBlock = ''; }
+    const sys = qaSysPrompt() + qaBuildContext() + (toolBlock ? '\n\n' + toolBlock : '');
+    const history = myMsgs
+      .filter(m => m.role === 'user' || m.role === 'assistant')
+      .slice(-9, -1).map(m => ({ role: m.role, content: m.content }));
+    answer = await qaLlmStream(
+      [{ role: 'system', content: sys }, ...history, { role: 'user', content: fullQuestion }],
+      {
+        signal: controller.signal,
+        onDelta: (d) => {
+          streamed += d;
+          qaState.stream[convId] = streamed;    // 缓存：切走再切回来能看到已生成的部分
+          const h = streamEl();
+          if (!h) return;                        // 该会话不在视图上 → 只累积，不碰 DOM
+          const now = Date.now();
+          if (!lastPaint || now - lastPaint > 90) {
+            lastPaint = now;
+            h.innerHTML = qaMdToHtml(streamed);
+            if (box) box.scrollTop = box.scrollHeight;
+          }
+        },
+      });
+    answer = answer || streamed;
+    const h = streamEl();
+    if (h) h.innerHTML = qaMdToHtml(answer);
+    }
+  } catch (e) {
+    if (e && e.name === 'AbortError') {
+      answer = streamed;
+      const h = streamEl();
+      if (h) h.innerHTML = qaMdToHtml(streamed || '（已停止生成）');
+    } else {
+      const h = streamEl();
+      if (h) h.textContent = '回答失败：' + (e && e.message ? e.message : '请稍后重试');
+      if (onScreen()) toast('问答请求失败', 'warn');
+    }
+  } finally {
+    clearTimeout(slowTip);
+    delete qaState.busyConvs[convId];
+    delete qaState.controllers[convId];
+    delete qaState.stream[convId];
+    qaSyncSendState();
+  }
+
+  myMsgs.push({ role: 'assistant', content: answer || streamed || '（本轮未生成回答）' });
+  if (onScreen()) renderQaMessages();
+
+  /* 落库收尾：首问时已写入占位行，这里把它换成完整记录；
+     若最终没生成出回答，就保留占位行 —— 左侧列表里这条会话与提问仍然看得到。 */
+  let phId = 0;
+  try { phId = await phPromise; } catch (e) { phId = 0; }
+  try {
+    if (answer) {
+      if (phId) { try { await store.remove('qa_history', phId); } catch (e) { /* 占位删不掉不影响最终记录 */ } }
+      await store.insert('qa_history', {
+        conversation_id: convId, question: question + attachNote, answer,
+      });
+    }
+    await qaReloadAll();
+    if (qaState.all.some(x => x.conversation_id === convId)) delete qaState.local[convId];
+    renderQaHistory();
+  } catch (e) { /* 保存失败不影响使用 */ }
+}
+function qaStop() {
+  const c = qaState.controllers[qaState.conversationId];
+  if (c) { try { c.abort(); } catch (e) { /* */ } }
+}
+
+/* ---------- 历史加载 / 会话切换 / 删除 ---------- */
+async function qaReloadAll() {
+  try {
+    const rows = await store.query('qa_history');
+    qaState.all = (rows || []).slice(0, QA_HISTORY_LIMIT);
+    qaState.loaded = true;
+  } catch (e) { qaState.all = []; }
+}
+function qaLoadConversation(cid) {
+  const rows = qaState.all.filter(r => r.conversation_id === cid)
+    .sort((a, b) => (a.id > b.id ? 1 : -1));
+  const cloudMsgs = [];
+  for (const r of rows) {
+    cloudMsgs.push({ role: 'user', content: r.question });
+    /* 占位行（answer 为空，生成失败/被中止时留下的）→ 给个明确提示，别让用户以为丢了 */
+    cloudMsgs.push({ role: 'assistant', content: r.answer || '（这轮没有生成出回答，可以重新提问）' });
+  }
+  const mem = qaState.msgs[cid] || [];
+  /* 正在生成、或内存里比云端还新（刚答完、正在落库）→ 用内存缓存，避免内容闪失；
+     否则以云端记录为准重建（保证与落库内容一致）。 */
+  if (qaState.busyConvs[cid] || mem.length > cloudMsgs.length) qaAttach(cid);
+  else { qaState.msgs[cid] = cloudMsgs; qaAttach(cid); }
+  renderQaMessages();
+  renderQaHistory();
+  qaSyncSendState();
+}
+async function qaDeleteConversation(cid) {
+  if (!window.confirm('删除该会话的全部问答记录？删除后不可恢复。')) return;
+  try {
+    const ids = qaState.all.filter(r => r.conversation_id === cid).map(r => r.id);
+    for (const id of ids) await store.remove('qa_history', id);
+    delete qaState.local[cid];
+    delete qaState.msgs[cid];
+    delete qaState.stream[cid];
+    if (qaState.conversationId === cid) qaAttach(qaNewId());
+    await qaReloadAll();
+    renderQaMessages();
+    renderQaHistory();
+    qaSyncSendState();
+    toast('会话已删除');
+  } catch (e) {
+    toast('删除失败：' + (e && e.message || e), 'warn');
+  }
+}
+
+/* ---------- 初始化（DOM 就绪后调用） ---------- */
+function initQa() {
+  if (!$('view-qa')) return;
+  qaAttach(qaNewId());
+  renderQaMessages();
+  renderQaHistory();
+  renderQaChips();
+  qaSyncSendState();
+  /* v3.9.9 技能状态条：输入框上方一行小字，标明本轮可用的取数技能与妙想 Key 状态 */
+  qaRefreshSkillHint();
+  /* v3.9.2 快捷提问卡片：事件委托绑在 #qaMessages（卡片本身随渲染重建） */
+  bindQaExamples();
+
+  $('newChatBtn').addEventListener('click', () => {
+    qaAttach(qaNewId());
+    renderQaMessages();
+    renderQaHistory();
+    qaSyncSendState();
+    const inp = $('qaInput');
+    if (inp) inp.focus();
+  });
+  $('qaSearch').addEventListener('input', renderQaHistory);
+  $('qaSendBtn').addEventListener('click', sendQa);
+  const stopBtn = $('qaStopBtn');
+  if (stopBtn) stopBtn.addEventListener('click', qaStop);
+  $('qaInput').addEventListener('input', qaSyncSendState);
+  $('qaInput').addEventListener('keydown', e => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQa(); }
+  });
+  /* 历史列表：事件委托（内容随渲染重建） */
+  $('qaHistoryList').addEventListener('click', e => {
+    const open = e.target.closest('[data-qa-open]');
+    if (open) { qaLoadConversation(open.dataset.qaOpen); return; }
+    const del = e.target.closest('[data-qa-del]');
+    if (del) { qaDeleteConversation(del.dataset.qaDel); }
+  });
+  /* 附件 */
+  $('qaAttachBtn').addEventListener('click', () => $('qaFileInput').click());
+  $('qaFileInput').addEventListener('change', async e => {
+    for (const f of Array.from(e.target.files || [])) await qaAddFile(f);
+    e.target.value = '';
+    qaSyncSendState();
+  });
+  $('qaAttachChips').addEventListener('click', e => {
+    const rm = e.target.closest('[data-qa-rm]');
+    if (!rm) return;
+    qaState.files.splice(Number(rm.dataset.qaRm), 1);
+    renderQaChips();
+    qaSyncSendState();
+  });
+  /* 语音输入：必须「点击时」才去取 SpeechRecognition —— 部分浏览器的兼容层
+     是页面加载完成后才注入的，提前取会拿到 undefined。不支持时给出提示。 */
+  let rec = null;
+  $('qaMicBtn').addEventListener('click', () => {
+    const btn = $('qaMicBtn');
+    if (rec) { try { rec.stop(); } catch (e) { /* */ } rec = null; btn.classList.remove('rec'); return; }
+    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    if (!SR) { toast('当前浏览器不支持语音输入，请用键盘输入', 'warn'); return; }
+    try { rec = new SR(); } catch (e) { toast('语音输入不可用', 'warn'); return; }
+    rec.lang = 'zh-CN';
+    rec.interimResults = true;
+    rec.continuous = false;
+    const inp = $('qaInput');
+    const base = inp.value;
+    rec.onresult = ev => {
+      let txt = '';
+      for (let i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+      inp.value = base + txt;
+      qaSyncSendState();
+    };
+    rec.onerror = ev => {
+      rec = null; btn.classList.remove('rec');
+      toast(ev && ev.error === 'not-allowed' ? '麦克风权限被拒绝' : '语音识别失败', 'warn');
+    };
+    rec.onend = () => { rec = null; btn.classList.remove('rec'); };
+    try { rec.start(); btn.classList.add('rec'); }
+    catch (e) { rec = null; toast('语音输入启动失败', 'warn'); }
+  });
+}
+/* 问答历史首载：登录后拉一次（放在 boot 之后，失败不影响其它模块） */
+async function qaBoot() {
+  try { await qaReloadAll(); } catch (e) { /* 未登录等情况忽略 */ }
+  renderQaHistory();
+}
 
 boot();

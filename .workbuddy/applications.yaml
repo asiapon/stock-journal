@@ -1,5 +1,13 @@
 # stock-journal 应用绑定（跨机器可移植：只含「应用名 → appId」，不含绝对路径）
-# 发布/覆盖目标 = 应用「操作日记」；新增应用请勿在此手写，应由平台侧操作。
+# 发布/覆盖目标 = 清单【最后一条】。
+# v3.8.63 曾迁至独立新应用「股票操作日记」wbapp_nRQHqCtwORJYvXyAPTEn0E（域名 trade-journal-94951）；
+# v3.8.64 按用户要求把链接前缀改成 stock-journal —— 域名前缀在建应用时确定、事后不可改，
+# 故另建「股票日记」wbapp_mtCmnoJVwocZG4iRlx6CMe（域名 stock-journal-07300，库结构逐字复刻）。
+# 旧应用「操作日记」wbapp_CwUOa3QUCTJDNRwFYHCDQ6（stock-journal-84311）及其历史数据保持不变。
 applications:
   - name: Stock Journal
     locator: wbapp_CwUOa3QUCTJDNRwFYHCDQ6
+  - name: 股票操作日记
+    locator: wbapp_nRQHqCtwORJYvXyAPTEn0E
+  - name: 股票日记
+    locator: wbapp_mtCmnoJVwocZG4iRlx6CMe

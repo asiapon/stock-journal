@@ -1,16 +1,26 @@
 #!/usr/bin/env bash
-# 操作日记 · 本地静态服务
+# ============================================================
+#  操作日记 · 本地一键启动（macOS / Linux）
+#  用法： ./start.sh        或        bash start.sh
+#  停止： Ctrl+C
+# ============================================================
+set -e
 cd "$(dirname "$0")"
-echo "========================================"
-echo " 操作日记 · 本地服务"
-echo " http://localhost:8080"
-echo " Ctrl+C 停止"
-echo "========================================"
-if command -v python3 >/dev/null 2>&1; then
-  exec python3 -m http.server 8080
-elif command -v python >/dev/null 2>&1; then
-  exec python -m http.server 8080
-else
-  echo "未找到 python，请改用任意静态服务器，例如: npx serve ."
+
+PY=""
+for c in python3 python; do
+  if command -v "$c" >/dev/null 2>&1; then PY="$c"; break; fi
+done
+
+if [ -z "$PY" ]; then
+  echo
+  echo "  [X] 没有找到 Python。"
+  echo
+  echo "  任选一种解决："
+  echo "    1) 装 Python 3（macOS: brew install python3 / Linux: apt install python3）"
+  echo "    2) 用任意静态服务器：  npx serve .  或  npx --yes http-server -p 8080 -c-1 ."
+  echo
   exit 1
 fi
+
+exec "$PY" serve.py "$@"

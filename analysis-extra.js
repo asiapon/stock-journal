@@ -13,8 +13,30 @@ const AX = {
   snap: null, heatSort: 'avg',
   batch: null, risk: null, review: null, bt: null,
 };
+/* v3.9.8 tm 口径适配 —— 一处修掉一整批「字段名对不上」的静默错误。
+   已核对的云端 trades 表真实列：transaction_time / transaction_type / note
+   （另有 stock_code / stock_name / market / quantity / price / gross_amount /
+   fee / net_amount / source）。**没有** action / trade_date / comment / tags ——
+   那是被整块搬过来的 trade-manager 那套字段名。
+   而 analysis-extra.js 通篇读的是 t.action / t.trade_date / t.comment / t.tags，
+   旧 shim 却直接 `return S.trades`，于是：
+     · t.action 恒 undefined → `t.action === 'buy'` 恒 false → **每一笔买入都被当成卖出**；
+     · t.trade_date 恒 undefined → 行为评分/阶段总结的日期列全空、`近30天交易` 恒为 0、
+       操作复盘的 FIFO 配对排序错乱（lots 永远建不起来 → closed 恒空 → 复盘无数据）；
+     · t.comment 恒 undefined → 备注丢失。
+   在数据出口映射一次，下游 6 处一行都不用改，也不会再漏。
+   返回浅拷贝（不动 S.trades 里的原对象），避免多出来的字段被写回云端。 */
+function axTrade(t) {
+  if (!t) return t;
+  return Object.assign({}, t, {
+    action: t.transaction_type === 'buy' ? 'buy' : 'sell',
+    trade_date: String(t.transaction_time || '').replace('T', ' ').slice(0, 19),
+    comment: t.note || '',
+    tags: [],
+  });
+}
 const state = {
-  get trades() { return S.trades; },
+  get trades() { return S.trades.map(axTrade); },
   get watch() { return S.watchlist; },
   get stockDict() { return StockDict.d; },
   get boardDict() { return AX.boardDict; },
@@ -118,8 +140,15 @@ function computePositions() {
   }));
 }
 /* 行情 shim：腾讯批量（GBK），返回 {code:{price,prevClose,pct,…}} */
-function txQuotePrefix(c) { return ({ sh: 'sh', sz: 'sz', bse: 'bj' })[inferMarket(c)] + c; }
+/* v3.9.10 修复：inferMarket 对北交所返回 'bj'，但这里查表只写了 'bse' 键 →
+   前缀变成 'undefined920002'，349 只北交所股票全部静默拉不到（快照 5573 只只回
+   5224 只，热度页的北证小字永远是 0/0）。补齐两个键 + 兜底，缺市场映射不再静默。 */
+function txQuotePrefix(c) {
+  const p = ({ sh: 'sh', sz: 'sz', bse: 'bj', bj: 'bj' })[inferMarket(c)];
+  return (p || 'sz') + c;
+}
 async function fetchQuotesTencent(codes) {
+  const t0 = Date.now();
   try {
     const q = codes.map(txQuotePrefix).join(',');
     const res = await fetch('https://qt.gtimg.cn/q=' + q);
@@ -142,8 +171,14 @@ async function fetchQuotesTencent(codes) {
         floatCap: num(p[44]), totalCap: num(p[45]),
       };
     }
+    /* v3.9.10 失败只记一条日志（成功不打 —— 全市场快照一次 70 批，全记会刷屏）。
+       此前该函数静默吞掉所有异常，市场热度的数据取不到时日志页毫无线索。 */
+    if (!Object.keys(out).length) NetLog.push('quote', '腾讯 qt.gtimg.cn(快照分批)', false, Date.now() - t0, `${codes.length} 只全部未返回`);
     return out;
-  } catch (e) { return {}; }
+  } catch (e) {
+    NetLog.push('quote', '腾讯 qt.gtimg.cn(快照分批)', false, Date.now() - t0, e.message || String(e));
+    return {};
+  }
 }
 async function fetchQuotes(codes) {
   codes = [...new Set((codes || []).filter(Boolean))];
@@ -162,23 +197,35 @@ async function qSnapshot() {
   if (_qCache && now - _qCache.at < Q_TTL) return _qCache;
   if (_qPending) return _qPending;
   _qPending = (async function () {
+    const t0 = Date.now();
     const codes = Object.keys(StockDict.d).filter(c => /^(60|68|00|30|43|83|87|92)/.test(c));
-    if (!codes.length) throw new Error('拿不到全市场代码清单（股票字典未加载），无法拉取实时行情');
+    if (!codes.length) {
+      NetLog.push('quote', '腾讯 全市场快照(qt.gtimg.cn)', false, 0, '股票字典未加载，无法拉取');
+      throw new Error('拿不到全市场代码清单（股票字典未加载），无法拉取实时行情');
+    }
     const parts = [];
     for (let i = 0; i < codes.length; i += 80) parts.push(codes.slice(i, i + 80));
     const map = {};
-    let idx = 0;
+    let idx = 0, emptyBatches = 0;
     const worker = async function () {
       while (idx < parts.length) {
         const one = await fetchQuotesTencent(parts[idx++]).catch(function () { return {}; });
+        if (!Object.keys(one).length) emptyBatches++;
         Object.assign(map, one);
       }
     };
     await Promise.all([0, 1, 2, 3, 4, 5].map(worker));
     const got = Object.keys(map).length;
-    if (!got) throw new Error('实时行情接口没有返回数据（可能是网络波动或临时限流），请稍后重试');
+    /* v3.9.10 快照此前完全不进网络日志（一次 70 批请求静默完成）→ 记一条汇总：
+       覆盖数 / 总数 / 失败批次数，日志页可直接核对市场热度的数据来源与完整性。 */
+    if (!got) {
+      NetLog.push('quote', '腾讯 全市场快照(qt.gtimg.cn)', false, Date.now() - t0, `0/${codes.length} 只 · ${parts.length} 批全部失败`);
+      throw new Error('实时行情接口没有返回数据（可能是网络波动或临时限流），请稍后重试');
+    }
     const snap = { map: map, at: Date.now(), n: got };
     _qCache = snap;
+    NetLog.push('quote', '腾讯 全市场快照(qt.gtimg.cn)', true, Date.now() - t0,
+      `${got}/${codes.length} 只 · ${parts.length} 批` + (emptyBatches ? ` · ${emptyBatches} 批失败(该批个股缺失)` : ''));
     return snap;
   })();
   try { return await _qPending; } finally { _qPending = null; }
@@ -278,6 +325,8 @@ function switchAnalysisTab(name) {
   if (anTab === 'diag' && state.batch) setTimeout(() => { try { renderBatchView(); } catch (e) { /* */ } }, 0);
   if (anTab === 'heat' && !state.snap) setTimeout(() => { try { refreshHeat(false); } catch (e) { /* */ } }, 0);
   if (anTab === 'profile') setTimeout(() => { try { renderProfileView(); } catch (e) { /* */ } }, 0);
+  /* v3.8.74 切到动量筛选时：没结果就把上次的扫描状态画出来（不自动重扫，避免白耗流量） */
+  if (anTab === 'mom') setTimeout(() => { try { renderMomView(); } catch (e) { /* */ } }, 0);
 }
 /* 报告保存 shim：写入主应用报告历史（localStorage） */
 async function api(op, args) {
@@ -315,8 +364,10 @@ function openModal(title, meta, body) {
 const BATCH_BTN_TEXT = '📊 批量诊断（自选 + 持仓）';
 const BATCH_CONCURRENCY = 4;   // 腾讯 K 线接口较宽容，4 路并发实测稳定
 
-/* 批量对象：持仓在前、自选在后，按代码去重；名称统一走 dispStockName（交易所简称） */
-function batchTargets() {
+/* 批量对象：持仓在前、自选在后，按代码去重；名称统一走 dispStockName（交易所简称）
+   v3.8.74 追加 extra：动量筛选结果要「全部批量诊断」时，把命中的代码临时并进来
+   （不写库、不动自选，只在本次批量里参与），避免为了诊断而污染用户的自选列表。 */
+function batchTargets(extra) {
   const seen = new Set(), out = [];
   const push = (code, name, held) => {
     const c = String(code || '').trim();
@@ -326,6 +377,9 @@ function batchTargets() {
   };
   computePositions().forEach(p => push(p.code, p.name, true));
   state.watch.forEach(w => push(w.stock_code, w.stock_name, false));
+  if (Array.isArray(extra)) {
+    extra.forEach(x => push(typeof x === 'string' ? x : (x && x.code), x && x.name, false));
+  }
   return out;
 }
 
@@ -400,15 +454,20 @@ function renderBatchView() {
     </tr>`;
   };
   box.hidden = false;
+  /* v3.8.74 标题可覆盖：动量筛选「全部批量诊断」时显示来源，避免和自选+持仓的批量诊断混淆 */
+  const headTitle = (b.titleOverride ? '📊 ' + b.titleOverride : '📊 批量技术诊断');
+  const headTip = b.titleOverride
+    ? `对<b>动量筛选命中的 ${b.total} 只</b>逐只跑同一套技术面规则（日线 260 根 × 60% ＋ 周线 180 根 × 40%），口径与「个股诊断」完全一致。<b>本次调用不会改动自选列表</b>。`
+    : '对<b>自选股 + 持仓股</b>逐只跑同一套技术面规则（日线 260 根 × 60% ＋ 周线 180 根 × 40%），结论口径与「个股诊断」完全一致。规则引擎免费、可复现，不消耗大模型额度。点「详情」跳到该股完整诊断（含 K 线图与 AI 解读）。';
   box.innerHTML = `
     <div class="card-head">
-      <h3>📊 批量技术诊断</h3>
+      <h3>${esc(headTitle)}</h3>
       <div class="head-right">
         <button id="batchSaveBtn" class="btn ghost sm">💾 存为报告</button>
         <button id="batchCloseBtn" class="btn ghost sm">关闭</button>
       </div>
     </div>
-    <div class="form-tip">对<b>自选股 + 持仓股</b>逐只跑同一套技术面规则（日线 260 根 × 60% ＋ 周线 180 根 × 40%），结论口径与「个股诊断」完全一致。规则引擎免费、可复现，不消耗大模型额度。点「详情」跳到该股完整诊断（含 K 线图与 AI 解读）。</div>
+    <div class="form-tip">${headTip}</div>
     <div class="batch-head">
       ${b.running
         ? `<span>分析中… <b>${b.items.length}/${b.total}</b></span><span class="batch-bar"><i style="width:${barPct}%"></i></span>`
@@ -434,17 +493,17 @@ function renderBatchView() {
   if (cl) cl.onclick = () => { state.batch = null; box.hidden = true; box.innerHTML = ''; };
 }
 
-async function runBatchDiagnose() {
+async function runBatchDiagnose(extraTargets, titleOverride) {
   const btn = document.getElementById('batchDiagBtn');
   const box = document.getElementById('batchBox');
   if (!btn || !box) return;
   if (state.batch && state.batch.running) return toast('正在批量诊断中，请稍候…');
-  const list = batchTargets();
+  const list = batchTargets(extraTargets);
   if (!list.length) return toast('自选和持仓都还没有股票，先添加几只再试');
   btn.disabled = true;
   btn.textContent = '⏳ 批量诊断中…';
   try {
-    state.batch = { items: [], total: list.length, done: 0, running: true, sortKey: 'pct', sortDir: -1, at: nowTs() };
+    state.batch = { items: [], total: list.length, done: 0, running: true, sortKey: 'pct', sortDir: -1, at: nowTs(), titleOverride: titleOverride || '' };
     renderBatchView();
     box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
     // 现价/涨跌幅并行拉（失败不影响技术面，界面显示 --）
@@ -522,9 +581,12 @@ async function saveBatchReport() {
  * ============================================================ */
 
 // 涨跌幅上限（%）：用于还原涨停价
+/* v3.9.10 北交所判定抽成独立函数：热度统计要按「沪深 / 北证」拆分口径（同花顺大盘页的
+   涨跌家数不含北交所，不拆开就没法对照），原来只写在 limitPctOf 的正则里没法复用。 */
+function isBSE(code) { return /^(43|83|87|88|92)/.test(String(code || '')); }
 function limitPctOf(code, name) {
   const c = String(code || '');
-  if (/^(43|83|87|88|92)/.test(c)) return 30;          // 北交所
+  if (isBSE(c)) return 30;                              // 北交所
   if (/^(30|68)/.test(c)) return 20;                    // 创业板 / 科创板
   return /ST/.test(String(name || '')) ? 5 : 10;        // 主板（ST 5%）
 }
@@ -541,12 +603,17 @@ function isLimitDown(q) {
   return q.price <= limitPriceOf(q.prevClose, limitPctOf(q.code, q.name), -1) + 0.005;
 }
 
-/* 全市场热度：入参 = 快照 map（code → quote），纯函数、无 DOM、可单测 */
+/* 全市场热度：入参 = 快照 map（code → quote），纯函数、无 DOM、可单测
+ * v3.9.10 新增 bse 拆分：同花顺等行情软件大盘页的「涨跌家数」只统计沪深两市、
+ * 不含北交所，且停牌股直接剔除；我们这边停牌股腾讯返回 pct=0 会被算进「平盘」。
+ * 不拆出口径，用户对照时永远对不上、还以为是数据错了。 */
 function computeMarketHeat(snapMap) {
   const out = {
     n: 0, up: 0, down: 0, flat: 0, zt: 0, dt: 0,
     avgPct: null, medPct: null, amount: 0,
     b: { hi: 0, mid: 0, low: 0, flat: 0, dlow: 0, dmid: 0 },   // ≥9.5 / 5~9.5 / 0~5 / 平 / 0~-5 / ≤-5
+    bse: { n: 0, up: 0, down: 0, flat: 0, zt: 0, dt: 0 },      // 北交所拆分（对照同花顺请用 n-bse.n 那套）
+    suspended: 0,                                              // 疑似停牌（成交额=0 且现价=昨收）
   };
   const pcts = [];
   for (const code in (snapMap || {})) {
@@ -556,6 +623,16 @@ function computeMarketHeat(snapMap) {
     pcts.push(q.pct);
     if (q.amount) out.amount += q.amount;
     if (q.pct > 0.005) out.up++; else if (q.pct < -0.005) out.down++; else out.flat++;
+    if (isBSE(code)) {
+      const bse = out.bse;
+      bse.n++;
+      if (q.pct > 0.005) bse.up++; else if (q.pct < -0.005) bse.down++; else bse.flat++;
+      if (isLimitUp(q)) bse.zt++;
+      if (isLimitDown(q)) bse.dt++;
+    }
+    /* 疑似停牌：腾讯对停牌股返回昨收价、零成交 → pct=0 且无成交额。同花顺口径里这类直接剔除，
+       是「平盘家数」对不上的主要来源之一（盘后对账时尤其明显）。 */
+    if (!q.amount && q.price != null && q.prevClose != null && q.price === q.prevClose) out.suspended++;
     if (isLimitUp(q)) out.zt++;
     if (isLimitDown(q)) out.dt++;
     const p = q.pct;
@@ -703,18 +780,29 @@ function renderHeatView() {
   const w = v => (v / bdTotal * 100).toFixed(2) + '%';
   const upRatio = h.n ? (h.up / h.n * 100) : 0;
   const noBoard = state.boardDict.length ? '' : '<div class="hh-warn">板块数据未就绪（board-dict.json 未加载成功），板块热度与持仓画像暂不可用。</div>';
+  /* v3.9.10 涨跌家数按「沪深 / 北证」拆分展示：同花顺等行情软件大盘页的涨跌家数
+     不含北交所（且停牌股剔除），只给总数用户对照时永远差一截、还以为数据错了。
+     卡片主数字改成沪深口径（与同花顺可直接对），北交所单独用小字标注。 */
+  const upSH = h.up - h.bse.up, downSH = h.down - h.bse.down;
+  const suspTxt = h.suspended ? ` · 疑似停牌 ${h.suspended}` : '';
 
   box.innerHTML = `
     <div class="hh-cards">
       <div class="hh-card"><div class="hh-k">市场温度</div><div class="hh-v ${sc.tone === 'up' ? 'hh-up' : sc.tone === 'down' ? 'hh-down' : ''}">${sc.score == null ? '—' : sc.score}<span class="hh-unit">${sc.label}</span></div></div>
-      <div class="hh-card"><div class="hh-k">上涨 / 下跌</div><div class="hh-v"><span class="hh-up">${h.up}</span><span class="hh-slash">/</span><span class="hh-down">${h.down}</span></div></div>
+      <div class="hh-card" title="主数字为沪深两市（与同花顺大盘页同口径，不含北交所）；北证为北交所单独统计。本页全市场统计含北交所。"><div class="hh-k">上涨 / 下跌</div><div class="hh-v"><span class="hh-up">${upSH}</span><span class="hh-slash">/</span><span class="hh-down">${downSH}</span><span class="hh-bse">北证 <span class="hh-up">${h.bse.up}</span>/<span class="hh-down">${h.bse.down}</span></span></div></div>
       <div class="hh-card"><div class="hh-k">涨停 / 跌停</div><div class="hh-v"><span class="hh-up">${h.zt}</span><span class="hh-slash">/</span><span class="hh-down">${h.dt}</span></div></div>
       <div class="hh-card"><div class="hh-k">中位涨幅</div><div class="hh-v ${heatCls(h.medPct || 0)}">${heatPctTxt(h.medPct)}</div></div>
       <div class="hh-card"><div class="hh-k">赚钱效应</div><div class="hh-v">${upRatio.toFixed(0)}%</div></div>
       <div class="hh-card"><div class="hh-k">两市成交</div><div class="hh-v">${heatAmtTxt(h.amount)}</div></div>
     </div>
 
-    <div class="hh-sub">涨跌分布（${h.n} 只 · 快照 ${heatTimeTxt()}）</div>
+    <div class="hh-head">
+      <div class="hh-sub">涨跌分布（${h.n} 只${suspTxt} · 快照 ${heatTimeTxt()}）</div>
+      <div class="hh-sorts">
+        <button class="hh-sort" data-hexport="detail" type="button">⬇ 全市场明细</button>
+        <button class="hh-sort" data-hexport="board" type="button">⬇ 板块汇总</button>
+      </div>
+    </div>
     <div class="hh-bar">
       <div style="width:${w(h.b.hi)};background:#A32D2D"></div>
       <div style="width:${w(h.b.mid)};background:#E24B4A"></div>
@@ -768,10 +856,21 @@ function renderHeatView() {
       <div class="hh-wrap"><table class="hh-tbl"><thead><tr><th>名称</th><th class="num">涨幅</th><th class="num">成交额</th><th>所属板块</th></tr></thead><tbody>
       ${lim.list.slice(0, 60).map(q => `<tr><td>${esc(q.name)}<span class="hh-cnt">${q.code}</span></td><td class="num hh-up">${heatPctTxt(q.pct)}</td><td class="num">${q.amount ? q.amount.toFixed(1) + ' 亿' : '—'}</td><td class="hh-tags">${(state.boardRev[q.code] || []).slice(0, 3).map(b => esc(b)).join(' · ') || '—'}</td></tr>`).join('')}
       </tbody></table></div></details>` : ''}
-    <div class="hh-foot">快照由腾讯行情直连，约 60 秒自动复用缓存；涨停按「昨收×涨幅上限」还原涨停价精确判定。</div>
+    <div class="hh-foot">数据来源：腾讯行情 qt.gtimg.cn 全市场直连快照（沪深主板 + 创业板 + 科创板 + 北交所，代码清单来自随应用发布的股票字典；约 60 秒缓存复用，每次取数都会记入「设置 → 日志」）。涨停按「昨收×涨幅上限」还原涨停价精确判定。<br>口径提示：上方「上涨/下跌」主数字为<b>沪深两市</b>（与同花顺等行情软件大盘页可直接对照）；北交所单独一行小字。其余统计（涨跌分布 / 涨停复盘 / 成交额）为全市场口径；疑似停牌（零成交且现价=昨收）会计入平盘，同花顺口径里这类被剔除，这是平盘家数对不上的主要原因。点「⬇ 全市场明细」可导出逐股 CSV 自行核对。</div>
   `;
-  box.querySelectorAll('.hh-sort').forEach(btn => {
+  box.querySelectorAll('.hh-sort[data-hsort]').forEach(btn => {
     btn.onclick = () => { state.heatSort = btn.dataset.hsort; renderHeatView(); };
+  });
+  /* v3.9.10 数据下载：把这次快照真实拿到的逐股数据导出成 CSV（Excel 可直接打开），
+     用户拿它和同花顺逐股对照，涨跌家数对不上时能自己找出是哪几只票口径不同。 */
+  box.querySelectorAll('.hh-sort[data-hexport]').forEach(btn => {
+    btn.onclick = () => {
+      if (!state.snap) return;
+      try {
+        if (btn.dataset.hexport === 'detail') heatExportDetailCsv();
+        else heatExportBoardCsv();
+      } catch (e) { toast('导出失败：' + (e && e.message || e), 'warn'); }
+    };
   });
   box.querySelectorAll('.hh-row').forEach(tr => {
     tr.onclick = () => {
@@ -779,6 +878,54 @@ function renderHeatView() {
       if (d) { d.hidden = !d.hidden; const c = tr.querySelector('.hh-caret'); if (c) c.textContent = d.hidden ? '▸' : '▾'; }
     };
   });
+}
+
+/* ---- v3.9.10 CSV 导出（零依赖：Blob + a.download；BOM 让 Excel 正确识别 UTF-8） ---- */
+function csvCell(v) { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? '"' + s.replace(/"/g, '""') + '"' : s; }
+function csvDownload(name, rows) {
+  const text = '\ufeff' + rows.map(r => r.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob([text], { type: 'text/csv;charset=utf-8' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+}
+function csvStamp() { const d = new Date(), p = n => String(n).padStart(2, '0'); return `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`; }
+function marketLabelOf(code) {
+  if (isBSE(code)) return '北交所';
+  if (/^68/.test(code)) return '科创板';
+  if (/^30/.test(code)) return '创业板';
+  if (/^60/.test(code)) return '沪主板';
+  if (/^00/.test(code)) return '深主板';
+  return '其他';
+}
+/* 全市场明细：逐股一行（按涨跌幅降序），含涨停/跌停/停牌判定列 —— 用户可直接拿去和同花顺逐股对账 */
+function heatExportDetailCsv() {
+  const h = computeMarketHeat(state.snap);
+  const rows = [['代码', '名称', '市场', '现价', '昨收', '涨跌幅%', '涨跌额', '成交额(亿)', '换手率%', '振幅%', '涨停', '跌停', '疑似停牌']];
+  const list = Object.values(state.snap).filter(q => q && q.pct != null && isFinite(q.pct)).sort((a, b) => b.pct - a.pct);
+  for (const q of list) {
+    rows.push([
+      q.code, q.name, marketLabelOf(q.code), q.price, q.prevClose, q.pct, q.chg,
+      q.amount, q.turnover, q.amp,
+      isLimitUp(q) ? '是' : '', isLimitDown(q) ? '是' : '',
+      (!q.amount && q.price != null && q.prevClose != null && q.price === q.prevClose) ? '是' : '',
+    ]);
+  }
+  rows.push([]);
+  rows.push(['# 汇总', `共${h.n}只`, `涨${h.up}`, `跌${h.down}`, `平${h.flat}`, `涨停${h.zt}`, `跌停${h.dt}`, `沪深涨${h.up - h.bse.up}跌${h.down - h.bse.down}`, `北证涨${h.bse.up}跌${h.bse.down}`, `疑似停牌${h.suspended}`]);
+  rows.push(['# 数据来源', `腾讯行情 qt.gtimg.cn 全市场快照 ${heatTimeTxt()}`, `快照共 ${h.n} 只`, '涨停=昨收×涨幅上限还原判定']);
+  csvDownload('market-snapshot-' + csvStamp() + '.csv', rows);
+}
+/* 板块汇总：全部板块（不只 TOP15），含平均涨幅/涨跌家数/涨停数/成交额 */
+function heatExportBoardCsv() {
+  if (!state.boardDict.length) { toast('板块字典未加载，板块汇总暂不可用', 'warn'); return; }
+  const rows = [['板块', '成分数', '平均涨幅%', '上涨', '下跌', '涨停', '成交额(亿)']];
+  for (const b of computeBoardHeat(state.snap, state.boardDict, { minMembers: 1 })) {
+    rows.push([b.name, b.n, Number(b.avgPct.toFixed(3)), b.up, b.down, b.zt, Number(b.amount.toFixed(2))]);
+  }
+  csvDownload('board-heat-' + csvStamp() + '.csv', rows);
 }
 
 /* ---- 刷新：拉全市场快照并重绘 ---- */
@@ -2085,6 +2232,7 @@ const KIND_LABEL = { stock: ['个股诊断', 'k-diag'], batch: ['批量诊断', 
   on('btRunBtn', runBacktest);
   on('btBasketBtn', runBtBasket);
   on('batchDiagBtn', () => runBatchDiagnose());
+  on('momRunBtn', runMomentumScan);   // v3.8.74 动量筛选（手动触发，不自动跑）
   on('heatRefreshBtn', () => refreshHeat(true));
   on('profileRunBtn', () => { renderProfileView(true); });
   const btStrat = document.getElementById('btStrat');
@@ -2100,3 +2248,251 @@ const KIND_LABEL = { stock: ['个股诊断', 'k-diag'], batch: ['批量诊断', 
   });
 })();
 let _axResizeTimer = 0;
+
+/* ============================================================
+   v3.8.74 动量筛选：连续强势 + 量能递增（候选池生成器）
+   用户需求：统计两市「涨幅连续 N 天都排在前 M 名、且成交量连续放大」的票。
+
+   ⚠ 数据口径与局限（实测确认，界面上也要如实标注）
+     · 腾讯的「涨幅榜」接口只提供**当日**快照，拿不到历史日的全市场名次。
+     · 因此：**当日名次 = 榜单真实名次**（准确）；前 N-1 日名次 =
+       用日K算出的当日涨幅在候选池内排序、再按池子规模折算到全市场（**近似值**）。
+       界面会标注「历史名次为估算」，不让人误以为是精确的全市场排名。
+     · 数据源（2026-10-14 实测）：
+        榜单 proxy.finance.qq.com .../getBoardRankList  sort_type=priceChange
+             → 每页最多 200 条，按涨跌额排序（涨幅榜）；count>200 报「count too large」
+        行情 qt.gtimg.cn 批量（fetchQuotesTencent，每批 80 只）→ 全市场快照（qSnapshot）
+        日K  web.ifzq.gtimg.cn .../newfqkline  → 逐日涨幅 + 逐日成交量（fetchKline）
+
+   筛选条件（MOM 里可调）
+     · 连续 N 日（默认 3）每日涨幅 > 0  ← 绝对门槛，必须有
+     · 这 N 日名次都在前 M 名（默认 1000）
+     · 成交量逐日递增且后一日 ≥ 前一日 × K（默认 1.1）
+     · 排除 ST / *ST、北交所、停牌；成交额 ≥ 下限（默认 0.5 亿）
+   为什么必须有「涨幅 > 0」：实测 2026-10-14 普跌日，涨幅榜第 1000 名是 0.00%，
+   若只按名次筛，会捞出一堆平盘/微跌的票，没有动量意义。加绝对门槛后，
+   普跌日命中数自然收缩 —— 这本身就是「普跌中还连涨放量」的有效信号。
+
+   耗时：全市场快照约 10-15s（命中 60s 缓存后为 0）；候选池逐只取日K约 3-6s。
+   ============================================================ */
+const MOM = {
+  n: 3,             // 连续天数
+  topN: 1000,       // 名次门槛
+  volK: 1.1,        // 量能倍数门槛
+  minAmount: 0.5,   // 成交额下限（单位：亿元，与 fetchQuotesTencent 的 amount 同一口径）
+  concurrency: 8,   // 日K并发
+};
+const momState = { running: false, stage: '', done: 0, total: 0, items: [], at: '', err: '', approx: false };
+
+/* ST / 退市整理 / 北交所：波动规则与流动性和沪深主板差异大，统一排除 */
+function momExcluded(code, name) {
+  if (/^(4|8|9)/.test(code)) return true;              // 北交所（4xx/8xx/9xx 开头，与 inferMarket 同口径）
+  return /ST|退/.test(String(name || ''));
+}
+function momCapTxt(v) {
+  if (v == null || !isFinite(v)) return '--';
+  return v >= 1e4 ? (v / 1e4).toFixed(2) + '万亿' : v.toFixed(0) + '亿';
+}
+/* 成交额：入参单位是「亿元」（fetchQuotesTencent 里 amtWan/1e4 的结果，与热度页同一口径）。
+   注意别写成「万」—— v3.8.74 初版就踩过这个坑，导致门槛值 5000 实际等于 5000 亿，全军覆没。 */
+function momAmtTxt(yi) {
+  if (yi == null || !isFinite(yi)) return '--';
+  return yi >= 1 ? yi.toFixed(yi >= 100 ? 0 : 1) + '亿' : (yi * 1e4).toFixed(0) + '万';
+}
+
+/* 第 1 步：涨幅榜前 topN 名（真实当日名次）。
+   返回 Map(code -> rank)。
+   ⚠ 该接口只给当日快照，所以只有最后一日能拿到「精确名次」，历史日只能估算。 */
+async function momTopRanked(topN) {
+  const out = new Map();
+  const page = 200;                              // 接口上限（超过报 count too large）
+  for (let off = 0; off < topN; off += page) {
+    const cnt = Math.min(page, topN - off);
+    const url = 'https://proxy.finance.qq.com/cgi/cgi-bin/rank/hs/getBoardRankList'
+      + '?_appver=11.17.0&board_code=aStock&sort_type=priceChange&direct=down'
+      + '&offset=' + off + '&count=' + cnt;
+    let j;
+    try { j = await (await fetch(url)).json(); }
+    catch (e) { NetLog.push('quote', '腾讯涨幅榜', false, 0, 'offset=' + off + ' ' + (e.message || e)); break; }
+    const list = (j && j.data && j.data.rank_list) || [];
+    if (!list.length) break;
+    list.forEach((it, i) => {
+      const c = String(it.code || '').replace(/^(sh|sz|bj)/, '');
+      if (/^\d{6}$/.test(c)) out.set(c, off + i + 1);
+    });
+    if (list.length < cnt) break;
+  }
+  return out;
+}
+
+/* 第 2 步：候选池（涨幅榜前 topN 里的沪深非 ST 票）→ 用全市场快照补市值/成交额/名称 */
+async function momPool(rankMap) {
+  const snap = await qSnapshot();               // 全市场快照（60s 缓存，复用热度页那次拉取）
+  const rows = [];
+  for (const c of rankMap.keys()) {
+    const q = snap.map[c];
+    if (!q || !(q.price > 0)) continue;
+    if (momExcluded(c, q.name)) continue;
+    if (!(q.amount > 0)) continue;              // 停牌 / 无成交
+    if (q.amount < MOM.minAmount) continue;     // 流动性下限
+    rows.push(q);
+  }
+  return { rows: rows, snapTotal: Object.keys(snap.map).length };
+}
+
+/* 第 3 步：逐只取日K，算逐日涨幅与成交量 */
+async function momOne(q) {
+  const need = MOM.n + 2;
+  const k = await fetchKline(q.code, 101, need);
+  const bars = (k && k.bars) || [];
+  if (bars.length < MOM.n + 1) throw new Error('K线不足');
+  const b = bars.slice(-(MOM.n + 1));           // b[0] 是 N 日前的收盘（基准）
+  const days = [];
+  for (let i = 1; i <= MOM.n; i++) {
+    const prev = b[i - 1].c, cur = b[i].c;
+    days.push({ d: b[i].d, pct: prev > 0 ? (cur / prev - 1) * 100 : 0, v: b[i].v });
+  }
+  const base = b[0].c, last = b[b.length - 1].c;
+  return {
+    code: q.code, name: q.name, price: q.price, amount: q.amount, totalCap: q.totalCap,
+    days: days, cum: base > 0 ? (last / base - 1) * 100 : 0,
+  };
+}
+
+/* 第 4 步：判定 + 折算历史名次 */
+function momJudge(it, pool, rankMap) {
+  const n = it.days.length;
+  /* ① 每日绝对涨幅 > 0（没有这条，普跌日会把「跌得少」的票当强势票捞出来） */
+  for (let i = 0; i < n; i++) if (!(it.days[i].pct > 0)) return null;
+  /* ② 名次：当日用榜单真实名次；历史日按「池内排名 × 全市场/池子 规模」折算近似 */
+  const totalMkt = 5574;                        // 全市场股票数（榜单 total 实测值）
+  const scale = totalMkt / Math.max(pool.length, 1);
+  for (let i = 0; i < n; i++) {
+    const d = it.days[i];
+    const isToday = (i === n - 1);
+    if (isToday && rankMap.has(it.code)) {
+      d.rank = rankMap.get(it.code);
+      d.rankExact = true;
+    } else {
+      let better = 0;
+      for (const x of pool) {
+        const xd = x.days && x.days[i];
+        if (xd && xd.pct > d.pct) better++;
+      }
+      d.rank = Math.max(1, Math.round((better + 1) * scale));
+      d.rankExact = false;
+    }
+    if (d.rank > MOM.topN) return null;
+  }
+  /* ③ 量能：逐日递增且后一日 ≥ 前一日 × volK */
+  for (let i = 1; i < n; i++) if (!(it.days[i].v >= it.days[i - 1].v * MOM.volK)) return null;
+  const v0 = it.days[0].v, vz = it.days[n - 1].v;
+  it.volRatio = v0 > 0 ? vz / v0 : 0;
+  return it;
+}
+
+async function runMomentumScan() {
+  const btn = document.getElementById('momRunBtn');
+  if (!btn) return;
+  if (momState.running) return toast('正在筛选，请稍候…');
+  momState.running = true; momState.err = ''; momState.items = []; momState.approx = false;
+  momState.stage = '① 取涨幅榜前 ' + MOM.topN + ' 名…'; momState.done = 0; momState.total = 0;
+  renderMomView();
+  btn.disabled = true; btn.textContent = '⏳ 筛选中…';
+  try {
+    const rankMap = await momTopRanked(MOM.topN);
+    if (!rankMap.size) throw new Error('涨幅榜没有返回数据（接口可能临时不可用，请稍后重试）');
+    momState.stage = '② 拉取全市场快照并粗筛…';
+    renderMomView();
+    const poolRes = await momPool(rankMap);
+    const pool = poolRes.rows;
+    if (!pool.length) throw new Error('粗筛后没有候选（可能是全市场普跌，或成交额门槛过严）');
+    momState.total = pool.length;
+    momState.stage = '③ 读取日K（' + pool.length + ' 只）…';
+    renderMomView();
+    const items = new Array(pool.length);
+    let next = 0;
+    const worker = async () => {
+      for (;;) {
+        const i = next++;
+        if (i >= pool.length) return;
+        try { items[i] = await momOne(pool[i]); } catch (e) { items[i] = null; }
+        momState.done++;
+        if (momState.done % 5 === 0 || momState.done === pool.length) renderMomView();
+      }
+    };
+    await Promise.all(Array.from({ length: Math.min(MOM.concurrency, pool.length) }, worker));
+    const valid = items.filter(Boolean);
+    const passed = [];
+    for (const it of valid) { const r = momJudge(it, valid, rankMap); if (r) passed.push(r); }
+    passed.sort((a, b) => b.cum - a.cum);
+    momState.items = passed;
+    momState.approx = passed.some(r => r.days.some(d => !d.rankExact));
+    momState.stage = '涨幅榜前 ' + MOM.topN + ' → 粗筛 ' + pool.length
+      + ' → 日K可用 ' + valid.length + ' → 命中 ' + passed.length;
+    momState.at = nowTs();
+  } catch (e) {
+    momState.err = (e && e.message) || '筛选失败';
+  }
+  momState.running = false;
+  btn.disabled = false; btn.textContent = '🔍 开始筛选';
+  renderMomView();
+}
+
+function renderMomView() {
+  const box = document.getElementById('momBox');
+  if (!box) return;
+  const st = momState;
+  if (st.err) { box.innerHTML = '<div class="hint down">筛选失败：' + esc(st.err) + '</div>'; return; }
+  const pct = st.total ? Math.round(st.done / st.total * 100) : 0;
+  const prog = (st.running || st.stage)
+    ? '<div class="mom-prog"><div class="mom-prog-bar" style="width:' + (st.running ? pct : 100) + '%"></div></div>'
+      + '<div class="hint">' + esc(st.stage) + (st.running && st.total ? '（' + st.done + '/' + st.total + '）' : '') + '</div>'
+    : '';
+  if (!st.items.length) {
+    box.innerHTML = prog + '<div class="hint">'
+      + (st.running ? '正在扫描…' : '还没有结果。点「开始筛选」扫描全市场（首次约 20 秒）。') + '</div>';
+    return;
+  }
+  const rows = st.items.map((r, i) => {
+    const dayCells = r.days.map(d => {
+      const cls = d.rankExact ? 'mom-d exact' : 'mom-d';
+      const t = d.rankExact ? '当日榜单真实名次' : '估算名次（无历史榜单，按候选池折算）';
+      return '<span class="' + cls + '" title="' + t + '">+' + d.pct.toFixed(1) + '%<i>' + d.rank + '</i></span>';
+    }).join('');
+    return '<tr>'
+      + '<td class="mom-i">' + (i + 1) + '</td>'
+      + '<td><div class="stock-cell"><span class="sc-name">' + esc(r.name || '') + '</span>'
+        + '<span class="sc-code">' + esc(r.code) + '</span></div></td>'
+      + '<td class="num up">+' + r.cum.toFixed(2) + '%</td>'
+      + '<td class="num">' + dayCells + '</td>'
+      + '<td class="num">' + r.volRatio.toFixed(2) + '×</td>'
+      + '<td class="num">' + momAmtTxt(r.amount) + '</td>'
+      + '<td class="num">' + momCapTxt(r.totalCap) + '</td>'
+      + '<td><button class="icon-btn" data-momcode="' + esc(r.code) + '">诊断</button></td>'
+      + '</tr>';
+  }).join('');
+  box.innerHTML = prog
+    + '<div class="mom-sum">命中 <b>' + st.items.length + '</b> 只'
+      + (st.approx ? '<span class="mom-warn" title="历史日没有榜单快照，名次由当日涨幅在候选池内排序后折算得到，非精确全市场排名">名次含估算</span>' : '')
+      + '<span class="batch-at">更新于 ' + esc(st.at || '') + '</span></div>'
+    + '<div class="table-wrap"><table class="batch-table mom-table"><thead><tr>'
+      + '<th>#</th><th>股票</th><th class="num">' + MOM.n + '日累计</th><th class="num">逐日涨幅<i>名次</i></th>'
+      + '<th class="num">量能</th><th class="num">成交额</th><th class="num">总市值</th><th></th>'
+      + '</tr></thead><tbody>' + rows + '</tbody></table></div>'
+    + '<div class="diag-form-row">'
+      + '<button class="btn block" id="momDiagAllBtn" type="button">📊 全部批量诊断（' + st.items.length + ' 只）</button>'
+      + '</div>';
+  box.querySelectorAll('button[data-momcode]').forEach(el => {
+    el.onclick = () => analyzeStockByCode(el.dataset.momcode);
+  });
+  const all = document.getElementById('momDiagAllBtn');
+  if (all) all.onclick = () => {
+    const extra = momState.items.map(r => ({ code: r.code, name: r.name }));
+    if (!extra.length) return toast('没有可诊断的股票');
+    switchAnalysisTab('diag');                       // 先切到诊断页，结果才看得见
+    runBatchDiagnose(extra, MOM.n + '日强势 · 量能递增（' + extra.length + ' 只）');
+    const pane = document.getElementById('batchBox');
+    if (pane) pane.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  };
+}

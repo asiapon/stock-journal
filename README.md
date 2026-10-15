@@ -21,12 +21,31 @@
 
 ### 2. 本地
 
+**一个脚本搞定** —— 双击 `start.bat`（Windows），或执行 `./start.sh`（macOS / Linux）：
+
 ```bash
-# Windows 双击 start.bat，或：
-./start.sh          # macOS / Linux
-# 本质：任意静态服务器即可
-python -m http.server 8080
+./start.sh              # macOS / Linux
+start.bat               # Windows 双击即可
+python3 serve.py        # 本质就是它（无第三方依赖，只用标准库）
 ```
+
+脚本会自动**挑一个没被占用的端口**（默认 8080，被占用就从 8081 往后找）、
+**自动打开浏览器**，并打印本机和局域网访问地址（手机/平板可同网段访问）。
+停止：按 Ctrl+C。
+
+> 数据默认仍存**云端库**（跨设备同步），本地只是换个前端入口；
+> 只有在云端不可达时才会自动切换本机存储（右上角显示「本地」徽标）。
+
+常用参数：
+
+```bash
+python3 serve.py -p 9000        # 指定起始端口
+python3 serve.py --no-browser   # 不自动开浏览器
+```
+
+> 也支持任意静态服务器（`npx serve .`、`python -m http.server` 等），
+> 但 `serve.py` 额外做了两件小事：并发处理请求（首屏更快）、
+> 关闭缓存（改完代码刷新即生效，不用清缓存）。
 
 浏览器打开 http://localhost:8080 。本地模式下云端不可达时**自动切换 localStorage 存储**（右上角显示"本地"徽标），数据仅存本机，请定期「导出 JSON 备份」。
 
@@ -49,6 +68,8 @@ WorkBuddy 云数据库（PostgreSQL）
 
 | 文件 | 说明 |
 |---|---|
-| `index.html` / `app.js` / `style.css` | 前端应用 |
+| `index.html` / `app.js` / `analysis-extra.js` / `style.css` | 前端应用（纯静态 SPA，零依赖） |
+| `stock-dict.json` / `board-dict.json` | 随应用发布的字典（股票 5573 条 / 板块 803 条） |
+| `serve.py` | 本地一键启动脚本（自动挑端口、开浏览器、免缓存） |
+| `start.bat` / `start.sh` | 上面脚本的 Windows / Unix 双击入口 |
 | `schema.sql` | 完整 PostgreSQL 设计（rounds / transactions / fee_schedules 等，分析层地基） |
-| `start.bat` / `start.sh` | 本地一键启动 |

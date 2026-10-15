@@ -23,6 +23,12 @@
   --radius-sm: 8px;
   --shadow: 0 1px 3px rgba(23, 30, 38, .06), 0 1px 2px rgba(23, 30, 38, .04);
   --nav-h: 56px;
+  /* v3.8.87 吸顶导航栏（.tabs）的高度。它也是 sticky，两块合起来构成吸顶区，
+     供 scroll-padding-top 与行情悬浮条的落位基准使用。
+     实测 PC 档为 53px（8px 上下内距 + 32px 按钮 + 1px 下边框）。
+     注意：.tabs 是 flex-wrap:wrap，窗口极窄时 Tab 会换行导致变高 —— 这个常量
+     只用于 CSS 兜底；真实高度一律由 JS 的 getBoundingClientRect() 量算。 */
+  --tabs-h: 53px;
   /* v3.8.3 兼容 tm 迁移规则的变量别名（修复蓝色按钮隐形等问题） */
   --accent: #3468D6;         /* = --blue */
   --accent-light: #EDF2FC;   /* = --blue-bg */
@@ -32,6 +38,11 @@
 }
 * { margin: 0; padding: 0; box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
+/* v3.8.87 顶栏 + 导航栏都吸顶后，页面内锚点跳转 / 浏览器自动滚动要找的
+   落点会被这两层挡住。scroll-padding-top 让「滚到某个元素」时自动留出吸顶区高度。
+   窄屏没有吸顶导航（.tabs 隐藏），用媒体查询把它归零。 */
+html { scroll-padding-top: calc(var(--nav-h) + var(--tabs-h)); }
+@media (max-width: 639px) { html { scroll-padding-top: var(--nav-h); } }
 body {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Segoe UI", sans-serif;
   background: var(--bg);
@@ -134,6 +145,12 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .auth-form input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px var(--blue-bg); }
 .pwd-wrap { position: relative; }
 .pwd-wrap input { padding-right: 42px; }
+/* v3.8.68 隐藏 Edge/IE 原生「显示密码」小眼睛（::-ms-reveal）：输入内容时浏览器会在
+   框内右侧自画一个眼睛按钮，与本页自制 .pwd-eye 重叠成两个 —— 保留自制的这个。
+   只作用于带自制眼睛的 .pwd-wrap；弹窗里没有眼睛按钮的密码框（改密 / API Key）
+   不受影响，仍可用原生眼睛。::-ms-reveal 仅 Edge/IE 存在，其他浏览器天然忽略。 */
+.pwd-wrap input::-ms-reveal,
+.pwd-wrap input::-ms-clear { display: none; }
 .pwd-eye {
   position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
   background: none; border: none; padding: 8px; color: var(--ink-3); line-height: 0;
@@ -172,9 +189,43 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 }
 
 /* ---------- 横向导航（顶栏下方一排 Tab，与旧版一致） ---------- */
+/* v3.8.87 顶栏 + 导航整排吸顶
+   用户反馈：PC 端页面滚动时「顶行菜单栏」跟着滚走了，手机端底部 Tab 却一直在。
+   旧写法 .topbar 已是 sticky，但 .tabs（总览/查询/分析中心/设置）是普通流内元素，
+   一滚就出屏。现在把它也做成 sticky，紧贴在顶栏下沿（top: var(--nav-h)）。
+   要点：
+   ① top 用 --nav-h（56px）对齐顶栏高度；窄屏顶栏是 height:auto，见 639px 档的覆盖；
+   ② z-index 39 < 顶栏的 40，保证顶栏那层（含阴影）压在导航之上；
+   ③ 必须给不透明背景，否则滚动内容会从 Tab 缝隙里透上来；
+   ④ max-width/margin:0 auto 保留 —— sticky 元素仍受自身宽度约束，居中断点不变。 */
+/* v3.8.88 导航条外观对齐下方卡片
+   用户反馈（截图）：吸顶后导航条是「通栏白带」（v3.8.87 用 ±100vw 投影把底色
+   撑满视口），比下面的卡片长一截、也没有圆角边框，看着突兀。
+   改法：直接把 .tabs 做成一张「扁卡片」—— 宽度与 .main 的内容区（去掉 main
+   左右 padding 后的卡片区）完全一致，样式复用 .card 的边框/圆角/阴影：
+   - 基础档：main 1120 - 左右 padding 40 = 卡片区 1080 → tabs max-width 1080
+   - ≥1024：main 1200 - 48 = 1152 → tabs max-width 1152
+   通栏投影删除（内容本来就都在 main 这个居中列里滚动，不会从两侧穿过；
+   tabs 自身不透明背景足以盖住从其下方滚过的卡片）。
+   与顶栏之间留 8px 缝（margin-top），静止与吸顶都成立。 */
 .tabs {
-  display: flex; gap: 4px; padding: 12px 24px;
-  max-width: 1200px; margin: 0 auto; flex-wrap: wrap;
+  position: sticky; top: var(--nav-h); z-index: 39;
+  display: flex; gap: 4px; padding: 8px 12px;
+  /* width 兜底：视口比 max-width 窄时（如 800px 中档）max-width 不起作用，
+     flex 容器会充满 body（通栏）。calc(100% - 40px) 让它永远与 main 的
+     内容区对齐（main 左右 padding 各 20）；宽视口下被 max-width 截断，
+     margin:0 auto 继续居中，两个断点都正确。 */
+  width: calc(100% - 40px);
+  max-width: 1080px; margin: 8px auto 0; flex-wrap: wrap;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+}
+@media (min-width: 1024px) {
+  /* v3.9.1 width 兜底也要跟档位走：≥1024 的 main 左右 padding 是 24（不是基础档
+     的 20），旧写法只覆盖了 max-width，width 仍是 calc(100% - 40px)。视口在
+     1024~1199 之间时 max-width 不生效 → tabs 比下面卡片宽 8px（每侧 4px），
+     左边缘明显伸出。补 width: calc(100% - 48px) 与 main 的 24px padding 对齐。 */
+  .tabs { max-width: 1152px; width: calc(100% - 48px); }
 }
 .tab {
   border: 0; background: transparent; padding: 9px 14px;
@@ -433,6 +484,69 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .bnav-item.active { color: var(--blue); }
 .bnav-item.bnav-add svg { stroke-width: 2; }   /* 仅图标略粗，颜色随选中态 */
 
+/* ---------- v3.8.65 行情悬浮条（总览页）----------
+   大盘卡右上角的「自动刷新 / 刷新行情」滚出视口后，在右上角补一个同款入口，
+   翻看长持仓 / 自选列表时随手可刷，不必再滚回顶部。
+   为什么 fixed 而不是 sticky：sticky 只在父容器（卡片）范围内生效，滚过「大盘」
+   卡就消失，而下面「持仓」「自选」两张长卡恰恰是滚动时最想刷新的区间。
+   层级：z-index 45 —— 高于 sticky 顶栏(40)、低于底部导航(50)与模态(100)；
+   visibility 一并过渡，避免淡出后仍能点到（pointer-events 方案在键盘 Tab 时不可靠）。
+
+   v3.8.66 三点改动：
+   ① 条内控件不再另调样式 —— 下拉用全局 13px/32px 原生样式（删掉了原先的
+      font-size:12px/padding 覆盖），按钮换成与大盘卡内完全相同的 .btn.ghost.sm，
+      两处入口看起来是同一个东西；
+   ② 默认落位由右下改到右上：与大盘卡右上角的原位入口同一侧，滚出去之后
+      入口仍在原来的视觉方向上，视线不用跳。落位用 CSS 兜底
+      （calc(var(--nav-h) + 12px) 正好压住 sticky 顶栏 56px 之下），
+      用户拖过之后才由内联 left/top 接管；
+   ③ 可上下拖动（手柄是显式提示，条上的空白区同样能拖），横向固定在右边不动 ——
+      只调纵向，避免条子被拖到屏幕中间挡住内容。
+      touch-action:none 让手指在条上滑动变成拖动而不是页面滚动 —— 条本身只有
+      ~180×44，挡住的滚动区域可忽略；user-select:none 避免拖动时选中文字。
+      拖动只认非交互控件处「按下」，否则点下拉/按钮会被抢走。
+      光标用 ns-resize 而不是 grab：位移只有纵向，直接提示「上下」比「可抓」更准确。 */
+.quote-fab {
+  /* v3.8.76 首屏落位修复：
+     旧写法 top:calc(var(--nav-h) + 12px) 是「按常量猜顶栏高度」，与 JS 里
+     setQuoteFabTop() 的「量顶栏真实 bottom + 8」是两套算法 —— 首次进入（尚无拖动存档）
+     只走 CSS 这套，而顶栏是 height:auto / sticky，字体或图标晚加载时实际更高，
+     常量就会偏小 → 悬浮条先压在顶栏的退出按钮上，等 JS 介入才跳到正确位置。
+     现在 CSS 只给一个「绝不会压住顶栏」的保守下界（桌面 56 + 16 = 72px，比真实值更低），
+     真实落位一律由 JS 在初始化时无条件量算并写内联 top（内联优先于这里）。
+     v3.8.87：导航栏 .tabs 也吸顶了，兜底值再让开一个导航高度 —— JS 的计算基准同步
+     改为「顶栏 + 导航的下沿」，这里的常量只保证不压住两层。
+     注意窄屏没有吸顶导航（.tabs 隐藏），但顶栏也变矮了，这个常量偏保守（偏低），
+     不影响：JS 会立刻量算校正。 */
+  position: fixed; right: 16px; top: calc(var(--nav-h) + var(--tabs-h) + 8px); z-index: 45;
+  display: flex; align-items: center; gap: 8px;
+  padding: 6px 8px; border-radius: 999px;
+  background: var(--card); border: 1px solid var(--line);
+  box-shadow: 0 8px 24px rgba(20, 40, 80, .18);
+  opacity: 0; visibility: hidden; transform: translateY(-8px);
+  transition: opacity .18s ease, transform .18s ease, visibility .18s;
+  touch-action: none;   /* 手指在条上滑动 = 拖动，不交给页面滚动 */
+  user-select: none;    /* 拖动过程中不选中条上的文字 */
+}
+.quote-fab.on { opacity: 1; visibility: visible; transform: none; }
+.quote-fab .qf-grip {
+  flex: 0 0 auto; display: inline-flex; align-items: center; justify-content: center;
+  width: 16px; height: 26px; margin-left: 2px;
+  color: var(--ink-3); border-radius: 6px; cursor: ns-resize;
+}
+.quote-fab .qf-grip svg { width: 14px; height: 14px; fill: currentColor; stroke: none; }
+.quote-fab .qf-grip:hover { color: var(--ink-2); background: var(--line); }
+.quote-fab.dragging { box-shadow: 0 14px 34px rgba(20, 40, 80, .26); }
+.quote-fab.dragging .qf-grip { cursor: ns-resize; }
+@media (max-width: 720px) {
+  /* 手机端顶栏是 height:auto（padding 8+8 + 控件 32 ≈ 48px），常量取 64px 作保守下界；
+     真实落位同样由 JS 量算。整体再收一档减少遮挡 */
+  .quote-fab { right: 12px; top: 64px; gap: 6px; padding: 5px 7px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .quote-fab { transition: none; }
+}
+
 /* ---------- 模态 ---------- */
 .modal-mask {
   position: fixed; inset: 0; z-index: 100;
@@ -474,6 +588,9 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 /* 中屏：导航横向，内容收窄 */
 @media (max-width: 1023px) {
   .main { max-width: 820px; }
+  /* v3.9.1 与 main 的 820 上限对齐：旧版 tabs 没跟这条档位，视口 860~1023 时
+     tabs(calc(100%-40px)) 比 main 卡片区(820-40=780)宽，左边缘伸出。 */
+  .tabs { max-width: 780px; }
 }
 
 /* 手机：底部五 Tab + 紧凑顶栏（当前模型 / 用户 / 退出，参考 trade-manager） */
@@ -512,18 +629,27 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
   #view-today .grid-2 { grid-template-columns: 5fr 4fr; }
 }
 
-/* ---------- 设置分类页签（参考 trade-manager） ---------- */
-.set-tabs { display: flex; gap: 6px; margin-bottom: 14px; padding-bottom: 12px; border-bottom: 1px solid var(--line); overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; }
+/* ---------- 分类页签（分析中心 / 设置共用） ----------
+   v3.9.5 卡片化：旧版按钮裸排在页面背景上（只有按钮自身的 10px 圆角小块，
+   下面一条 border-bottom 分隔线），用户反馈「背景没有 card 看着好丑」。
+   现在整条页签包进一张扁卡片 —— 复用 .card 的背景/边框/圆角/阴影（与
+   v3.8.88 吸顶导航 .tabs 同思路），分析和设置两页共用本规则同时生效。 */
+.set-tabs {
+  display: flex; gap: 6px; margin: 0 0 12px; padding: 8px;
+  background: var(--card); border: 1px solid var(--line);
+  border-radius: var(--radius); box-shadow: var(--shadow);
+  overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
 .set-tabs::-webkit-scrollbar { display: none; }
 .set-tab {
-  flex: none; border: 1px solid var(--line); background: var(--card);
+  flex: none; border: 1px solid transparent; background: transparent;
   color: var(--ink-2); padding: 8px 14px; font-size: 13.5px; font-weight: 500;
   border-radius: 10px; white-space: nowrap; transition: background .15s, color .15s, border-color .15s;
 }
-.set-tab:hover { color: var(--blue); border-color: var(--blue); }
+.set-tab:hover { color: var(--blue); background: var(--blue-bg); }
 .set-tab.active { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); font-weight: 600; }
 @media (max-width: 720px) {
-  .set-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; padding-bottom: 10px; overflow-x: visible; }
+  .set-tabs { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-bottom: 10px; overflow-x: visible; }
   .set-tab { min-width: 0; padding: 8px 4px; font-size: 12px; border-radius: 9px; text-align: center; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 }
 
@@ -726,15 +852,21 @@ input, select, textarea { font-family: inherit; font-size: 14px; color: var(--in
 .ft-kw:focus { outline: none; border-color: var(--blue); }
 .f-label { font-size: 12.5px; color: var(--ink-3); white-space: nowrap; }
 .f-chips { display: inline-flex; gap: 6px; flex-wrap: wrap; }
+/* v3.9.4 时间 chips 与自选分组 Tab（.wtab）统一观感：
+   旧选中态是「实心蓝底 + 白字」，且 28px 高 / 12.5px 字号，比 .wtab 小一号 ——
+   查询页同一屏里「默认/按股票」（.wtab，浅蓝底蓝字选中）与时间 chips 两种
+   选中样式并存，观感割裂。fchip 仅用于此处时间筛选，直接对齐 .wtab：
+   同 padding（6px 12px）、同字号（13px）、选中同「浅蓝底 + 蓝字 + 加粗」。 */
 .fchip {
-  border: 1px solid var(--line); background: #fff; color: var(--ink-2);
-  height: 28px; padding: 0 12px; border-radius: 999px; font-size: 12.5px; cursor: pointer;
+  display: inline-flex; align-items: center;
+  border: 1px solid var(--line); background: var(--card); color: var(--ink-2);
+  padding: 6px 12px; border-radius: 999px; font-size: 13px; cursor: pointer;
+  transition: background .15s, color .15s, border-color .15s;
 }
 .fchip:hover { border-color: var(--blue); color: var(--blue); }
-.fchip.on { background: var(--blue); border-color: var(--blue); color: #fff; }
+.fchip.on { background: var(--blue-bg); border-color: var(--blue); color: var(--blue); font-weight: 600; }
 @media (max-width: 639px) {
   .filters-col .filters { flex-wrap: wrap; }
-  .fchip { height: 30px; }
 }
 
 /* ---------- v3.4.7 今日清仓股保留在持仓表 ---------- */
@@ -791,6 +923,20 @@ tr.stockagg:hover td { background: #F5F8FC; }
   padding: 3px 6px; border-radius: 999px;
 }
 .wtab.on i { background: #fff; color: var(--blue); }
+/* v3.8.83 分组 Tab 的「组内涨跌幅平均值」胶囊：
+   与数量徽标同尺寸同位置，紧随其后；配色走全局 pnlCls 的 .pos/.neg（红涨绿跌）。
+   单独给个 .wtab-chg 类而不是直接复用 .pos/.neg，是因为 Tab 自带配色规则，
+   需要显式声明才能保证涨跌色不被 .wtab.on 的蓝色盖掉。 */
+.wtab-chg {
+  font-style: normal; font-size: 11px; line-height: 1;
+  padding: 3px 6px; border-radius: 999px;
+  background: rgba(23, 30, 38, .06);
+  font-variant-numeric: tabular-nums;
+}
+.wtab-chg.pos { color: var(--up); background: var(--up-bg); }
+.wtab-chg.neg { color: var(--down); background: var(--down-bg); }
+.wtab.on .wtab-chg.pos { color: var(--up); background: #FFF3F1; }
+.wtab.on .wtab-chg.neg { color: var(--down); background: #EAF7F2; }
 /* v3.8.45 分组行「动作按钮」= 图标 + 短词：
    既保留 v3.8.44 的视觉分层（无边框、透明底、色淡于 Tab，动作 ≠ 内容），
    又把语义直接写出来（folderPlus「新建分组」/ trash「删除分组」），不必靠图形去猜。
@@ -827,14 +973,13 @@ tr.stockagg:hover td { background: #F5F8FC; }
   #holdTableM .sc-mv, #tvHoldTableM .sc-mv { font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink-2, #444); }
 }
 
-/* ---------- v2.7.4 添加/编辑自选合一 · v3.8.35 列宽比例 + 操作按钮靠右 ---------- */
-/* 桌面端：股票 30% / 备注 30% / 分组 20%，剩余约 20% 留给右侧操作按钮组 */
+/* ---------- v2.7.4 添加/编辑自选合一 · v3.8.35 列宽比例 + 操作按钮靠右 ----------
+   v3.8.78：自选表单已挪进 #watchModal 弹窗，列宽改由弹窗内规则接管（见下方 #watchModal 段），
+   这里的百分比列宽规则作废，只保留旧 #watchForm（已下线的自选页）遗留写法以防万一。 */
 @media (min-width: 640px) {
-  #watchForm .add-row #wfInput,      #tvWatchForm .add-row #tvWfInput       { flex: 0 1 30%; min-width: 0; }
-  /* v3.8.53 筛选框被 .sug-stock 包裹后，30% 这块比例要落在容器上（输入框已 width:100%） */
-  #tvWatchForm .add-row .sug-stock                                          { flex: 0 1 30%; min-width: 0; }
-  #watchForm .add-row #wfNoteQuick,  #tvWatchForm .add-row #tvWfNoteQuick   { flex: 0 1 30%; min-width: 0; }
-  #watchForm .add-row .wg-quick,     #tvWatchForm .add-row .wg-quick        { flex: 0 1 20%; min-width: 0; }
+  #watchForm .add-row #wfInput  { flex: 0 1 30%; min-width: 0; }
+  #watchForm .add-row #wfNoteQuick { flex: 0 1 30%; min-width: 0; }
+  #watchForm .add-row .wg-quick { flex: 0 1 20%; min-width: 0; }
 }
 /* 操作按钮组：贴到行尾最右；编辑态「取消」在左、「保存」在最右 */
 .add-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; flex-shrink: 0; }
@@ -846,23 +991,115 @@ tr.stockagg:hover td { background: #F5F8FC; }
 /* v3.8.42 折叠开关改用 .link-btn（同「手动录入 ▸」的纯文字链接）；展开态箭头翻转、文字转淡，让位给行内主动作 */
 .ctr-actions .link-btn { margin-top: 0; padding: 2px 0; font-size: 12.5px; }
 .ctr-actions .link-btn.is-open { color: var(--ink-3); }
-/* 添加行默认收起，点「＋ 添加自选」/ 行内「编辑」时展开 */
-.watch-form { display: none; }
-.watch-form.open { display: block; animation: wfIn .2s ease; }
-@keyframes wfIn { from { opacity: 0; transform: translateY(-4px); } to { opacity: 1; transform: none; } }
-/* 收起时表单不再占据标题行下方的间距，紧接分组 Tab */
-.watch-form.open .add-row { margin-bottom: 12px; }
+/* v3.8.78 加自选改为弹窗：原来「默认收起 / 点按钮展开」的 .watch-form 规则全部作废
+   （表单已挪进 #watchModal，不再靠 display 切换显隐，改由弹窗的 hidden 控制）。
+   只保留弹窗内的排版微调。 */
+#watchModal .modal { padding: 16px 18px 18px; }
+#watchModal .modal-title-row { margin-bottom: 12px; }
+/* v3.8.80 弹窗按钮与输入框等高（36px）—— .btn.sm 全局 32px，和 36px 输入框并排差一截 */
+#watchModal .modal-actions .btn { min-width: 84px; height: 36px; }
+
+/* ---------- v3.8.79/80 加自选弹窗：三个输入框统一高度 + 宽度 ----------
+   【v3.8.79「不等高」的根因】`@media (max-width:639px)` 的
+   `.add-row input { flex: 1 1 100% }` 是为「row 方向换行」设计的，可弹窗里
+   .add-row 是 column 方向，flex-basis 100% 变成「占满容器主轴（高度）」，
+   三个子项 flex-shrink:1 均分压缩，实测备注/分组被压到 20px 高。
+   【v3.8.80「PC 端备注框不占满行」的根因】上一版把 `flex: 0 0 auto` 写在基础段
+   （文件位置靠后），同特异性下覆盖了 721px 档的 `flex: 1 1 0` → PC 端备注只剩
+   placeholder 撑起的一小截。
+   现改为：基础段只定尺寸不定 flex；flex 策略按档位写在各自媒体查询里
+   （≤720 竖排归零 / ≥721 横排备注撑满），互不越位。
+   `#watchModal #id` 双 ID 前缀压过文件里其它零散的 `.add-row input` 规则。 */
+#watchModal #tvWfInput,
+#watchModal #tvWfNoteQuick,
+#watchModal #tvWfGroupQuick {
+  height: 36px; padding: 0 12px; font-size: 13.5px; line-height: 1.4;
+  box-sizing: border-box; border-radius: var(--radius-sm);
+}
+/* 弹窗里的添加行：≤720 竖排（股票框整行，备注、分组各占一行，全部撑满） */
+#watchModal .add-row { display: flex; flex-direction: column; gap: 10px; margin-bottom: 0; }
+#watchModal .add-row .sug-stock { position: relative; min-width: 0; width: 100%; }
+@media (max-width: 720px) {
+  /* v3.8.86 手机端分组框没铺满的根因：.wg-pick 包裹层自身没定宽，
+     `#tvWfGroupQuick { width: 100% }` 是相对包裹层算的，而包裹层在 column
+     flex 里被收缩成「内容宽」（placeholder「分组」两字的宽度）→ 看着就是一条窄框。
+     这里把包裹层撑满整行，同时给 .sug-stock 之外的直系子项统一拉满。 */
+  #watchModal .add-row > * { width: 100%; }
+  #watchModal .add-row .wg-pick { flex: 0 0 auto; width: 100%; }
+  #watchModal .add-row #tvWfInput,
+  #watchModal .add-row #tvWfNoteQuick,
+  #watchModal .add-row #tvWfGroupQuick { flex: 0 0 auto; width: 100%; }
+}
+@media (min-width: 721px) {
+  /* PC：股票框独占一行，备注撑满剩余、分组固定 168px 并排 */
+  #watchModal .add-row { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  #watchModal .add-row .sug-stock { flex: 0 0 100%; width: 100%; }
+  #watchModal .add-row .wg-pick { flex: 0 0 168px; width: 168px; }
+  #watchModal .add-row #tvWfNoteQuick { flex: 1 1 0; width: auto; min-width: 0; }
+  #watchModal .add-row #tvWfGroupQuick { flex: 0 0 auto; width: 100%; }
+}
+/* ---------- v3.8.86 PC 端弹窗关掉「股票联想」下拉 ----------
+   用户反馈：弹窗总共就 3 行，股票框和分组框各带一个下拉没必要，PC 上用鼠标
+   直接敲代码更顺，联想弹层反而遮住下面两行。
+   做法：只在 PC 档隐藏 #tvWfSug（连同防护罩 .sug-shield 一起失效是无害的，
+   因为 bindSuggest 的 close() 已把 box.hidden 置回 true，只是不再显示）。
+   手机端保留（触屏敲拼音首字母的场景更需要它）。
+   注意：这里只是「不显示」，输入框仍可正常输入代码/名称/拼音，提交逻辑不变。 */
+@media (min-width: 721px) {
+  #watchModal #tvWfSug { display: none !important; }
+}
+/* 【v3.8.79「下拉把页面全挡」】旧 `.sug-box { max-height: 264px }` 在手机上
+   8 条命中时能盖住大半个屏。弹窗内收窄上限，并同时看视口高度。 */
+#watchModal .sug-box { max-height: min(196px, 32vh); }
+
+/* ---------- v3.8.82 分组自绘下拉（替代原生 datalist） ----------
+   原生 datalist 的弹层宽度由浏览器决定，PC 上远宽于分组框（截图可证），且无法用
+   CSS 约束。自绘列表与输入框同宽（left:0; width:100%），样式对齐 .sug-box。 */
+.wg-pick { position: relative; min-width: 0; }
+.wg-list {
+  position: absolute; top: calc(100% + 4px); left: 0; width: 100%; z-index: 40;
+  background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--radius-sm);
+  box-shadow: 0 8px 24px rgba(23, 30, 38, .12); max-height: 200px; overflow-y: auto;
+}
+.wg-item { padding: 9px 12px; font-size: 13px; color: var(--ink); cursor: pointer; }
+.wg-item:hover { background: var(--blue-bg); }
+.wg-item.on { color: var(--blue); font-weight: 600; }
+.wg-empty { padding: 10px 12px; font-size: 12.5px; color: var(--ink-3); }
+/* v3.8.84 键盘弹起时（<html> 挂 .kb-on，见 app.js sync）收窄弹窗内两类下拉：
+   手机键盘已占半屏，200px 的下拉整条压进键盘底下看不见，限到 120px 保证可见。 */
+@media (max-width: 639px) {
+  .kb-on #watchModal .wg-list,
+  .kb-on #watchModal .sug-box { max-height: 120px; }
+}
 
 /* ---------- v2.7.6 编辑自选时股票锁定 ---------- */
 #watchForm .add-row input.ro, #tvWatchForm .add-row input.ro { background: rgba(23, 30, 38, .04); color: var(--ink-2); cursor: not-allowed; }
 
-/* ---------- v2.8.0 添加自选行高度与分组Tab一致(32px) ---------- */
+/* ---------- v2.8.0 添加自选行高度与分组Tab一致(32px) ----------
+   v3.8.80 注：弹窗 #watchModal 内已改为 36px（见上方 v3.8.79/80 段），
+   这里的 32px 规则只影响历史挂载点，弹窗内被 ID 规则覆盖。 */
 #watchForm .add-row, #tvWatchForm .add-row { align-items: center; }
 #watchForm .add-row input, #tvWatchForm .add-row input {
   height: 32px; padding: 0 12px; font-size: 13px; line-height: 1.4;
   box-sizing: border-box;
 }
 #watchForm .add-row .btn.sm, #tvWatchForm .add-row .btn.sm { height: 32px; padding: 0 14px; font-size: 13px; box-sizing: border-box; }
+
+/* ---------- v3.8.81/82 加自选弹窗手机端位置 + 键盘适配 ----------
+   v3.8.81 上移 20px（内距上 10 下 50），v3.8.82 再上移 20px（累计 40px）→ 上 10 下 90。
+   flex 居中时「上下内距差值 ÷ 2」就是上移量，差 80px = 上移 40px。
+   不用 transform 位移：键盘弹起时 fitWatchModal 会改 max-height，位移与高度耦合易抖。
+   .modal-lg 的 max-height 预留同步提到 100px（上 10 + 下 90），避免溢出视口。 */
+@media (max-width: 639px) {
+  #watchModal { padding: 10px 10px 90px; align-items: center; }
+  #watchModal .modal-lg {
+    width: 100%; max-width: none; border-radius: 16px; padding: 14px 14px 16px;
+    /* --kb 由 JS 在键盘弹起时写入（默认 0px）；不支持 dvh 的浏览器退回 vh */
+    max-height: calc(100vh - 100px - var(--kb, 0px));
+    max-height: calc(100dvh - 100px - var(--kb, 0px));
+    overflow-y: auto; -webkit-overflow-scrolling: touch;
+  }
+}
 
 /* ---------- v2.8.1 全局统一输入框/下拉/按钮高度32px、字号13px ---------- */
 input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),
@@ -952,6 +1189,39 @@ select { padding-right: 6px; background: var(--card); color: var(--ink); }
   #holdTableM .sc-name, #tvHoldTableM .sc-name,
   #holdTableM .sc-mv, #tvHoldTableM .sc-mv { font-size: 13px; }
 }
+
+/* ---------- v3.8.67 持仓卡表格内容字号对齐表头（12px） ----------
+   用户要求：持仓卡表格里的内容字号，一律取「列名」的字号。列名（th）是全站标准
+   12px（见 v3.1.3 段），而 v3.1.8 / v3.8.49 两段把持仓表单元格内容抬到了 13px
+   （含 .sc-code 代码行与两行小字 .sub）。这里把它们降回 12px。
+   只命中持仓卡的两张表 —— PC 全列表 #tvHoldTable / 手机合并列 #tvHoldTableM；
+   交易记录表、自选表保持原样（它们仍走 v3.1.8 的 13px）。
+   选择器与既有规则同特异度，靠「位置在后」覆盖，故必须排在 v3.8.49 段之后；
+   非媒体查询写法对上一条 @media 内的 13px 同样生效（层叠只看源码顺序）。 */
+#holdTable td, #tvHoldTable td, #holdTableM td, #tvHoldTableM td,
+#holdTable .sc-code, #tvHoldTable .sc-code, #holdTableM .sc-code, #tvHoldTableM .sc-code,
+#holdTable .two-line .sub, #tvHoldTable .two-line .sub, #holdTableM .two-line .sub, #tvHoldTableM .two-line .sub,
+#holdTableM .sc-name, #tvHoldTableM .sc-name, #holdTableM .sc-mv, #tvHoldTableM .sc-mv,
+#holdTable .sc-name, #tvHoldTable .sc-name,
+#holdTable .tag, #tvHoldTable .tag, #holdTableM .tag, #tvHoldTableM .tag { font-size: 12px; }
+
+/* ---------- v3.8.72 自选卡表格内容字号对齐表头（12px） ----------
+   用户要求：总览页自选卡里，自选列表的内容字号改成「列名」的字号大小。
+   与 v3.8.67（持仓卡）同一类需求：列名（th）是全站标准 12px（见 v3.1.3 段），
+   而自选表的内容仍走 v3.1.8「表内一律 13px」—— 这里把它们降回 12px。
+   覆盖范围按 paintWatch() 实际渲染出的节点取：单元格 td 本身、股票列的
+   .sc-name / .sc-code、自选日列的 .adate、备注列的 .hint、操作列的 .icon-btn
+   与「获取失败」的 .na-tag；.row-actions 是按钮容器、无文字，不入列。
+   注：.hint 在别处（提示文案）是 12px，这里显式写 12px 是为了压过 v3.1.8 对
+   td 的 13px 继承 —— 备注列就是普通 td，必须点名。
+   选择器与既有规则同特异度，靠「位置在后」覆盖，故必须排在 v3.1.8 / v3.8.49 段之后；
+   非媒体查询写法对上一条 @media 内的 13px 同样生效（层叠只看源码顺序）。
+   另：自选页（view-watch）用的是 #watchTable，不在本次需求范围，保持原样。 */
+#tvWatchTable td,
+#tvWatchTable .sc-name, #tvWatchTable .sc-code,
+#tvWatchTable .adate, #tvWatchTable .hint,
+#tvWatchTable .icon-btn, #tvWatchTable .na-tag,
+#tvWatchTable .tm-cell .tm-sub { font-size: 12px; }
 
 /* ============================================================
    v3.7.0 分析中心 · 个股诊断（完整迁移自 trade-manager）
@@ -1088,6 +1358,24 @@ select { padding-right: 6px; background: var(--card); color: var(--ink); }
 
 .batch-table td .flat { color: #b8860b; }
 
+/* v3.8.74 动量筛选：进度条 / 汇总行 / 逐日涨幅小胶囊 / 估算提示 */
+.mom-prog { height: 6px; border-radius: 999px; background: var(--border); overflow: hidden; margin: 4px 0 6px; }
+.mom-prog-bar { height: 100%; background: var(--accent); border-radius: 999px; transition: width .25s; }
+.mom-sum { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 8px; font-size: 13px; color: var(--muted); }
+.mom-sum b { color: var(--text); font-size: 14px; }
+/* 「名次含估算」角标：用暖黄提醒这是折算值，不是精确全市场排名 */
+.mom-warn { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 11px; font-weight: 600;
+  background: #fff7e6; color: #b8860b; border: 1px solid #ecd9a8; cursor: help; }
+.mom-table { min-width: 720px; }
+.mom-table td.num, .mom-table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.mom-i { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+/* 逐日涨幅胶囊：主数值是当日涨幅，右上角小字 i 是该日全市场名次 */
+.mom-d { display: inline-flex; align-items: baseline; gap: 3px; margin-right: 6px; padding: 1px 6px;
+  border-radius: 6px; background: var(--accent-light, #eef2ff); font-variant-numeric: tabular-nums; }
+.mom-d i { font-style: normal; font-size: 10.5px; color: var(--ink-3); }
+.mom-d.exact { background: #fdecec; }            /* 当日真实名次：淡红底，和估算值区分开 */
+.mom-table th i { font-style: normal; font-weight: 400; font-size: 10.5px; color: var(--muted); margin-left: 3px; }
+
 .bd-badge { display: inline-block; padding: 2px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; white-space: nowrap; }
 
 .bd-badge.up { background: #fdecec; color: #d03030; border: 1px solid #f3b8b8; }
@@ -1155,6 +1443,10 @@ select { padding-right: 6px; background: var(--card); color: var(--ink); }
 .hh-down { color: var(--down); }
 
 .hh-foot { margin-top: 14px; font-size: 12px; color: var(--muted); line-height: 1.7; white-space: normal; }
+
+/* v3.9.10 上涨/下跌卡片里的北交所小字（主数字是沪深口径，方便和同花顺对） */
+.hh-bse { margin-left: 8px; font-size: 10.5px; font-weight: 400; color: var(--muted); }
+.hh-bse .hh-up, .hh-bse .hh-down { font-weight: 500; }
 
 .hh-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
 
@@ -1331,8 +1623,314 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
    列宽由内容自然决定、整枚换行，不套此规则以免长数值溢出卡片。
    ------------------------------------------------------------------ */
 .idx-bar-eq .idx-chip .i-val { display: inline-block; min-width: 6.5em; text-align: right; }
+/* ---------- v3.8.64 指数条名称区定宽，让「点位 / 涨跌幅」两列严格对齐 ----------
+   问题：v3.8.59 只给数值区兜了底，名称区仍随内容自适应。三大市场指数名是 4 个汉字
+   （固定 52px），而 v3.8.62 新加的宽基指数名混排数字、宽度各不相同：
+   「沪深300」48.9px、「中证500」48.9px、「中证1000」56.5px。名称一变宽，
+   紧随其后的点位（尽管自身已右对齐）整体平移 —— 窄屏单列实测涨跌幅起点
+   163.5 / 163.5 / 163.5 / 160.4 / 160.4 / 168，最大错位 7.6px，一眼可见。
+   做法：与 .i-val 同一套「定宽兜底」策略，名称区给 min-width，取 4.5em ——
+   4 个汉字恰好 4em，当前最宽的「中证1000」（2 汉字 + 4 数字）约 4.35em，
+   4.5em 覆盖全部指数名；以后出现更长的名称自然撑开、不压字不截断。
+   em 而非 px：tabular-nums 下宽度与字号成正比，日后调字号对齐关系自动保持。
+   作用域只到 #tvIdxBar：持仓快照卡（#tvHoldSummary）三个名称都是 4 汉字、本就等宽，
+   套上 4.5em 反而会平白多出 6.5px 空隙，故不纳入。
+   注意 span 默认 inline，必须 inline-block 才能吃 min-width（.i-val 同理）。 */
+#tvIdxBar .idx-chip .i-name { display: inline-block; min-width: 4.5em; }
+/* ---------- v3.8.70 指数条数值区定宽收窄（6.5em → 4.9em）----------
+   用户反馈：百分比和它前面的数值之间「隔的空太多」。
+   实测根因不在胶囊的 gap（恒为 8px，实测 valText→pct 仅 6.0px，百分比本来就紧贴点位），
+   而在 v3.8.59 给 .i-val 的 6.5em 定宽 —— 6.5em 是按持仓快照卡里「¥123,456.78」那种
+   6 位金额留的余量，而指数点位远没这么长：实测 12px tabular-nums 下
+   「3,772.67」45.1px（3.76em）、最长的「12,152.34」52.2px（4.35em），
+   盒子却被撑到 84.5px（6.5em），且因设了 text-align:right，多出的 32.5px 空白
+   全落在**文字左侧** —— 视觉上就是「名称 …… 点位」中间一大段空。
+   为什么只改 #tvIdxBar：持仓快照卡的数值确有 6 位金额（浮盈可能是 -123,456.78），
+   6.5em 对它是必要的，不能一起收窄。
+   为什么是 4.9em（58.8px）：按**实测最长点位 4.35em** 定，留 0.55em≈6.6px 余量。
+   首版试过 5.6em，实测仍富余 15px、左侧空白 22.1px，用户感知的「空」还在，故再收。
+   为什么不再往下压到 4.6em：tabular-nums 下每位数字等宽，点位破万后必然变长
+   （6 位整数 + 2 位小数 + 千分位逗号 = 9 字符 4.35em 是当前上限，若上证涨到 5 位数
+   则 10 字符 ≈ 4.9em，正好用满）。留 0.55em 是为了兼容「4,228.90」这类
+   位数虽少但不会变短的常见情形，同时给字体渲染差异留缓冲。
+   保留 text-align:right：各枚百分比起点仍严格对齐（v3.8.59 的初衷）；
+   极端值（如 123,456.78）仍会自然撑开，只是那一枚的百分比起点略偏右 ——
+   属「常见区间严格对齐、极端值自动让位」的既定取舍。 */
+#tvIdxBar .idx-chip .i-val { min-width: 4.9em; }
+/* ---------- v3.8.69 手机端指数条补「涨跌额」；v3.8.70 并入百分比；v3.8.73 字号随父级 ----------
+   背景（v3.8.69）：窄屏每行一枚胶囊（见 v3.8.46），右侧余量很大 —— 实测 360px 下
+   三枚内容分别止于 284.7 / 289.2 / 296.3px，而可用宽度 332px，空着 36px 以上。
+   用户要求把涨跌的具体数值也显示出来（原来只有百分比）。
+   演进（v3.8.70）：v3.8.69 把涨跌额做成独立的第 4 枚 span，沿用「定宽兜底」策略，
+   定宽 5.5em → 4.5em 两版实测仍分别在百分比后隔出 35.8 / 23.8px 空隙（因为定宽
+   富余 + 右对齐把空白全堆在文字左侧）。用户最终要求「直接和百分比合并，类似
+   3%(44)」，故改为拼进 .i-pct 之后的括号段 —— 不再独立成列，定宽与空隙一并消失。
+   现在只做「紧贴、跟随涨跌色」两件事：不再设 min-width / text-align，
+   gap 由父级 .idx-chip 的 8px 统一控制，括号直接咬在百分号后面。
+   字号（v3.8.73）：v3.8.70/71 曾写死 12px「弱化补充信息」，但大盘卡胶囊是
+   .idx-bar-lg（13px），于是同一枚里「名称 13 / 点位 13 / 百分比 13 / 涨跌额 12」，
+   用户反馈「百分比和数值看着感觉有差异」。改为 font-size: inherit —— 涨跌额与
+   同一胶囊内的名称/点位/百分比恒等字号，容器换档（如以后调 .idx-bar-lg）也自动跟随，
+   不会再出现「改一处漏一处」的错配。
+   注：涨跌额只在窄屏渲染（见 app.js 的 idxNarrow），宽屏下这枚 span 根本不存在，
+   所以这条规则在 PC 端是空转，不影响 6 枚一行。 */
+#tvIdxBar .idx-chip .i-chg { font-size: inherit; font-variant-numeric: tabular-nums; }
+/* 涨跌额跟随涨跌着色（与 .i-val / .i-pct 同一套红涨绿跌） */
+#tvIdxBar .idx-chip.up .i-chg { color: var(--up); }
+#tvIdxBar .idx-chip.down .i-chg { color: var(--down); }
 @media (max-width: 720px) {
   /* v3.8.46 手机档固定「每行一个胶囊」：整行宽度充裕（约 326px），标签与数值恒定同一行，
      6 位金额 + 百分比也放得下；原先「2 列半宽」只有约 160px，数字一长就得折行 */
   .idx-bar-eq { grid-template-columns: 1fr; gap: 8px; }
+}
+
+/* ============================================================
+   v3.9.0 智能问答（核心对话）
+   来源：trade-manager-97288 的 .qa-* 样式。
+   变量映射：源站 --text→--ink、--muted→--ink-3、--border→--line、
+            --accent→--blue、--accent-light→--blue-bg（stock-journal 已有这些别名，
+            这里直接用真名，避免依赖别名段）。
+   未迁移的部分（源站有、本项目不含）：妙想（mx）技能中心与凭证相关的样式。
+   v3.9.7 起 .qa-skill-tag / .qa-chart / .qa-spark / .qa-tbl* 已随工具层一并补齐，
+   见本段下方的「v3.9.7 智能问答工具层」注释块。
+   ============================================================ */
+.qa-layout { display: grid; grid-template-columns: 260px 1fr; gap: 16px; height: 640px; }
+.qa-side { display: flex; flex-direction: column; gap: 10px; overflow: hidden; }
+.qa-history { flex: 1; overflow-y: auto; display: flex; flex-direction: column; gap: 4px; }
+.qa-hist-item {
+  display: flex; align-items: center; gap: 4px; text-align: left;
+  border: 0; background: transparent; padding: 8px 10px; border-radius: 8px;
+  font-size: 13px; color: var(--ink); cursor: pointer;
+}
+.qa-hist-item:hover { background: var(--bg); }
+.qa-hist-item.active { background: var(--blue-bg); color: var(--blue); }
+.qa-hist-main { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qa-hist-del {
+  flex: none; width: 20px; height: 20px; line-height: 18px; text-align: center;
+  border-radius: 50%; font-size: 11px; color: var(--ink-3); visibility: hidden;
+}
+.qa-hist-del:hover { background: var(--up-bg); color: var(--up); }
+.qa-hist-item:hover .qa-hist-del { visibility: visible; }
+.qa-main { display: flex; flex-direction: column; padding: 0; overflow: hidden; }
+.qa-messages { flex: 1; overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.qa-composer { border-top: 1px solid var(--line); padding: 12px; }
+.qa-input-box {
+  border: 1.5px solid var(--line); border-radius: 14px; padding: 8px 10px 6px;
+  background: #fff; transition: border-color .15s;
+}
+.qa-input-box:focus-within { border-color: var(--blue); }
+.qa-input-box textarea {
+  width: 100%; border: 0; outline: none; resize: none; font: inherit;
+  line-height: 1.6; padding: 2px 4px; background: transparent; max-height: 150px;
+}
+.qa-toolbar { display: flex; align-items: center; justify-content: space-between; padding-top: 2px; }
+.qa-toolbar-right { display: flex; align-items: center; gap: 8px; }
+.qa-tool-btn {
+  width: 32px; height: 32px; border-radius: 50%; border: 0; background: transparent;
+  color: var(--ink-3); cursor: pointer; display: flex; align-items: center; justify-content: center;
+}
+.qa-tool-btn:hover { background: var(--bg); color: var(--ink); }
+.qa-tool-btn.rec { color: var(--up); animation: qaPulse 1.2s infinite; }
+@keyframes qaPulse { 0%, 100% { opacity: 1; } 50% { opacity: .45; } }
+.qa-send-btn {
+  width: 34px; height: 34px; border-radius: 50%; border: 0; background: var(--blue);
+  color: #fff; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: background .15s;
+}
+.qa-send-btn:hover { filter: brightness(1.08); }
+.qa-send-btn:disabled { background: #c9d6f2; cursor: not-allowed; filter: none; }
+.qa-send-btn.stop { background: #6b7280; }
+.qa-src-bar { margin-top: 8px; }
+.qa-src-hint { font-size: 11.5px; color: var(--ink-3); line-height: 1.5; }
+.qa-src-hint.err { color: var(--up); }
+.qa-empty-tip { color: var(--ink-3); font-size: 13px; padding: 14px 2px; line-height: 1.8; }
+.qa-empty-tip b { color: var(--blue); font-weight: 600; }
+
+/* v3.9.2 快捷提问示例（空对话态）—— 照搬 trade-manager，变量换成本项目命名
+   （--muted→--ink-3 / --accent→--blue / --accent-light→--blue-bg / --border→--line / --text→--ink）。
+   卡片背景硬编码 #fff 改为 var(--card)，深色主题下才不会白底黑字。 */
+.qa-examples { display: flex; flex-direction: column; gap: 14px; padding: 2px 0 6px; }
+.qa-ex-intro { color: var(--ink-3); font-size: 13px; line-height: 1.85; }
+.qa-ex-intro b { color: var(--blue); font-weight: 600; }
+.qa-ex-group { display: flex; flex-direction: column; gap: 7px; }
+.qa-ex-title { font-size: 12.5px; font-weight: 600; color: var(--ink); }
+.qa-ex-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 8px; }
+.qa-ex-card {
+  text-align: left; border: 1px solid var(--line); background: var(--card); border-radius: 10px;
+  padding: 9px 11px; cursor: pointer; display: flex; flex-direction: column; gap: 3px; font: inherit;
+  transition: border-color .15s, background .15s, transform .1s;
+}
+.qa-ex-card:hover { border-color: var(--blue); background: var(--blue-bg); }
+.qa-ex-card:active { transform: scale(.985); }
+.qa-ex-card b { font-size: 13px; font-weight: 600; color: var(--ink); }
+.qa-ex-card span { font-size: 11.5px; color: var(--ink-3); line-height: 1.55; }
+.qa-ex-foot { color: var(--ink-3); font-size: 12px; text-align: center; padding-top: 2px; line-height: 1.7; }
+
+/* 消息气泡 */
+.msg {
+  max-width: 82%; padding: 10px 14px; border-radius: 12px; font-size: 14px;
+  line-height: 1.7; white-space: pre-wrap; word-break: break-word;
+}
+.msg.user { align-self: flex-end; background: var(--blue); color: #fff; }
+.msg.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); }
+/* 助手气泡要渲染 Markdown（块级元素），不能保留 pre-wrap 的空白语义 */
+.msg.assistant { white-space: normal; }
+.msg.assistant p { margin: 0 0 8px; }
+.msg.assistant p:last-child { margin-bottom: 0; }
+.msg.assistant .qa-h { margin: 13px 0 6px; font-size: 14.5px; font-weight: 700; line-height: 1.5; }
+.msg.assistant .qa-h:first-child { margin-top: 0; }
+.msg.assistant ul, .msg.assistant ol { margin: 4px 0 9px; padding-left: 20px; }
+.msg.assistant li { margin: 3px 0; }
+.msg.assistant strong { font-weight: 700; }
+.msg.assistant code {
+  background: rgba(52, 104, 214, .08); color: var(--blue);
+  padding: 1px 5px; border-radius: 4px; font-size: 12.5px;
+}
+.msg.assistant blockquote {
+  margin: 7px 0; padding: 6px 11px; border-left: 3px solid var(--blue);
+  color: var(--ink-3); background: var(--blue-bg); border-radius: 0 6px 6px 0;
+}
+.msg.assistant .qa-gap { height: 5px; }
+.msg.assistant .qa-hr { border: 0; border-top: 1px solid var(--line); margin: 11px 0; }
+.msg.assistant .qa-code {
+  background: #f5f6f8; border: 1px solid var(--line); border-radius: 8px;
+  padding: 8px 10px; overflow-x: auto; font-size: 12.5px; margin: 7px 0; white-space: pre;
+}
+.qa-table-wrap { overflow-x: auto; margin: 8px 0; border-radius: 8px; }
+.qa-table { border-collapse: collapse; font-size: 12.5px; width: 100%; }
+.qa-table th, .qa-table td { border: 1px solid var(--line); padding: 5px 9px; text-align: left; white-space: nowrap; }
+.qa-table th { background: var(--bg); font-weight: 600; }
+.qa-table tbody tr:nth-child(even) { background: #fafbfd; }
+
+/* ============================================================
+   v3.9.7 智能问答工具层（qa-tools.js）的样式
+   问答流里那张「工具取数便签」= .msg.note（居中浅绿气泡），承载：
+     技能标注 .qa-skill-tag / 数据表 .qa-tbl* / 走势图 .qa-chart
+   颜色沿用 stock-journal 的语义变量（--up 涨红 / --down 跌绿），
+   不再照抄源站的硬编码色值。
+   ============================================================ */
+.msg.note {
+  align-self: center; max-width: 92%;
+  background: #f0fdf4; border: 1px solid #bbf7d0; color: #15803d;
+  font-size: 12.5px; line-height: 1.7;
+}
+/* 便签里的表格是「数据凭证」，白底才看得清，否则绿色气泡会把数字泡糊 */
+.msg.note .qa-tbl, .msg.note .qa-tbl-cap { background: #fff; }
+/* v3.9.7 表格换成白底后，文字若继续继承气泡的绿色（.msg.note 的 #15803d）会整片发绿、
+   和「红涨绿跌」抢语义（绿色的股票名看着像在涨）。所以表格内显式回到正文色，
+   只让 .up / .down 那两列带色。夹具页实测过：证券代码/名称列必须是 --ink。 */
+.msg.note .qa-tbl { color: var(--ink); }
+.msg.note .qa-tbl-cap { border-radius: 0 0 8px 8px; }
+/* 技能调用标注：让用户一眼看出这轮取到了哪些数据 */
+.qa-skill-tag {
+  display: block; margin: 5px 0 6px; padding: 4px 10px; border-radius: 8px;
+  background: var(--blue-bg); color: var(--blue); font-size: 11.5px; line-height: 1.5;
+}
+.qa-skill-ms { opacity: .7; }
+
+/* 数据表（可横向滚动）：条件选股 / 板块成分 / 行情 / 财务都用它 */
+.qa-tbl-wrap { overflow-x: auto; margin-top: 8px; border-radius: 8px; }
+.qa-tbl { border-collapse: collapse; font-size: 12px; white-space: nowrap; }
+.qa-tbl th, .qa-tbl td { border: 1px solid var(--line); padding: 4px 8px; text-align: right; }
+.qa-tbl th {
+  background: var(--blue-bg); color: var(--ink); font-weight: 600;
+  text-align: center; position: sticky; top: 0; z-index: 1;
+}
+.qa-tbl td:first-child, .qa-tbl th:first-child { text-align: left; }
+.qa-tbl td:last-child, .qa-tbl th:last-child { text-align: left; }
+.qa-tbl tbody tr:nth-child(even) { background: #fafbfd; }
+.qa-tbl .up { color: var(--up); }
+.qa-tbl .down { color: var(--down); }
+.qa-tbl-cap { font-size: 11.5px; color: var(--ink-3); margin-top: 6px; }
+
+/* 便签内的迷你走势图（内联 SVG） */
+.qa-chart { margin-top: 9px; padding-top: 8px; border-top: 1px dashed #bbf7d0; }
+.qa-chart-lg { display: flex; justify-content: space-between; align-items: center; font-size: 11.5px; margin-bottom: 3px; }
+.qa-chart-lg .up { color: var(--up); font-weight: 600; }
+.qa-chart-lg .down { color: var(--down); font-weight: 600; }
+.qa-chart-lg .lg-ma { color: #b98900; }
+.qa-spark { width: 100%; height: 126px; display: block; }
+
+/* 区间/形态选股的扫描进度条（问答流里临时插入，跑完自动移除） */
+.msg.note.form-prog { background: #eff6ff; border-color: #bfdbfe; color: #1d4ed8; width: 92%; }
+.form-prog .fp-line { font-size: 12.5px; }
+.form-prog .fp-bar { height: 6px; border-radius: 4px; background: #dbeafe; overflow: hidden; margin: 6px 0 4px; }
+.form-prog .fp-bar > i { display: block; height: 100%; width: 0; background: var(--blue); transition: width .18s linear; }
+.form-prog .fp-txt { font-size: 11.5px; color: var(--blue); text-align: right; }
+
+/* 附件 chips */
+.qa-attach-chips { display: flex; flex-wrap: wrap; gap: 6px; padding-bottom: 8px; }
+.qa-attach-chip {
+  display: inline-flex; align-items: center; gap: 6px; background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 3px 8px;
+  font-size: 12px; color: var(--ink);
+}
+.qa-attach-chip b { font-weight: 600; max-width: 180px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.qa-attach-chip span { color: var(--ink-3); }
+.qa-attach-chip button { border: 0; background: none; color: var(--ink-3); cursor: pointer; padding: 0 2px; font-size: 13px; }
+.qa-attach-chip button:hover { color: var(--up); }
+
+/* 手机档：左右变上下，历史列表收成一条横向滚动条，避免占掉整个对话高度 */
+@media (max-width: 720px) {
+  .qa-layout { grid-template-columns: 1fr; height: auto; gap: 10px; }
+  .qa-side { flex-direction: row; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .qa-side #newChatBtn { width: auto; flex: none; }
+  .qa-side .search-input { flex: 1; min-width: 120px; }
+  .qa-history {
+    flex: 1 0 100%; flex-direction: row; overflow-x: auto; overflow-y: hidden;
+    gap: 6px; padding-bottom: 2px; -webkit-overflow-scrolling: touch;
+  }
+  .qa-history::-webkit-scrollbar { display: none; }
+  .qa-hist-item { flex: none; background: var(--bg); max-width: 62vw; }
+  .qa-hist-del { visibility: visible; }
+  .qa-main { height: calc(100vh - var(--nav-h) - 190px); min-height: 300px; }
+  .msg { max-width: 92%; }
+  /* v3.9.7 工具便签在窄屏要铺满，否则嵌进去的表格横向滚不动 */
+  .msg.note { max-width: 100%; }
+  .qa-spark { height: 112px; }
+  /* v3.9.2 快捷提问：窄屏单列，卡片加高、字号加大，更好点按 */
+  .qa-ex-grid { grid-template-columns: 1fr; }
+  .qa-ex-card { padding: 10px 12px; }
+  .qa-ex-card span { font-size: 12px; }
+}
+
+/* ============================================================
+   v3.9.9 技能中心：妙想 Key 配置 + 技能卡片 + 问答页技能状态条
+   ============================================================ */
+/* Key 输入行：输入框占满、眼睛按钮固定宽 */
+.mx-key-row { display: flex; gap: 8px; margin-top: 10px; }
+.mx-key-row .search-input { flex: 1; min-width: 0; }
+.mx-key-row .btn { flex: 0 0 auto; }
+.mx-ok { color: var(--down); font-weight: 600; }   /* 「已配置」是好事 → 用正向的绿色（A 股语义相反但这是状态不是行情） */
+.mx-err { color: var(--up); font-weight: 600; }
+/* 技能卡片列表 */
+.skill-list { display: flex; flex-direction: column; gap: 8px; }
+.sk-item {
+  border: 1px solid var(--line); border-radius: var(--radius-sm);
+  padding: 10px 12px; background: #FBFCFD;
+}
+.sk-item.off { opacity: .62; }
+.sk-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; font-size: 13.5px; }
+.sk-ico { font-size: 15px; }
+.sk-badge {
+  font-size: 10.5px; line-height: 1; padding: 3px 7px; border-radius: 99px;
+  background: var(--blue-bg); color: var(--blue); white-space: nowrap;
+}
+.sk-badge.mx { background: #fff4e5; color: #b26a00; }
+.sk-badge.quota { background: #eef7ee; color: #1c7c3c; }
+.sk-badge.sup { background: #f1f0fa; color: #5b51a8; }
+.sk-badge.warn { background: #fdecec; color: var(--up); }
+.sk-desc { font-size: 12.5px; color: var(--ink-2); margin-top: 5px; line-height: 1.55; }
+.sk-src { font-size: 11.5px; color: var(--ink-3); margin-top: 4px; }
+.sk-actions { display: flex; gap: 8px; margin-top: 8px; }
+/* 问答输入框上方的技能状态条 */
+.qa-skill-hint {
+  font-size: 11px; color: var(--ink-3); line-height: 1.4;
+  padding: 0 2px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* 工具便签能力标签里的来源小字 */
+.qa-skill-src { opacity: .72; font-weight: 400; }
+
+@media (max-width: 640px) {
+  .qa-skill-hint { white-space: normal; }
 }

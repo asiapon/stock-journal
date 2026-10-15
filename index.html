@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.8.61">
+<link rel="stylesheet" href="style.css?v=3.9.11">
 </head>
 <body>
 
@@ -86,7 +86,8 @@
   <nav class="tabs" id="topNav">
     <button class="tab active" data-view="today"><span class="tab-ico">◇</span>总览</button>
     <button class="tab" data-view="trades"><span class="tab-ico">≡</span>查询</button>
-    <button class="tab" data-view="analysis"><span class="tab-ico">◎</span>分析中心</button>
+    <button class="tab" data-view="analysis"><span class="tab-ico">◎</span>分析</button>
+    <button class="tab" data-view="qa"><span class="tab-ico">💬</span>智能问答</button>
     <button class="tab" data-view="me"><span class="tab-ico">⚙</span>设置</button>
   </nav>
 
@@ -141,24 +142,9 @@
         <div class="card-title-row">
           <span class="card-title">自选</span>
           <div class="ctr-actions">
-            <button class="link-btn" id="tvWatchAddBtn" type="button" aria-expanded="false" aria-controls="tvWatchForm">＋ 添加自选</button>
+            <button class="link-btn" id="tvWatchAddBtn" type="button">＋ 加自选</button>
           </div>
         </div>
-        <form id="tvWatchForm" class="watch-form">
-          <div class="add-row">
-            <!-- v3.8.53 联想下拉改挂在筛选框自身（.sug-anchor 容器）上，见 style.css 注释 -->
-            <div class="sug-anchor sug-stock">
-              <input type="text" id="tvWfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt">
-              <div id="tvWfSug" class="sug-box" hidden></div>
-            </div>
-            <input type="text" id="tvWfNoteQuick" autocomplete="off" placeholder="备注 / 加入理由（选填）">
-            <input type="text" id="tvWfGroupQuick" class="wg-quick" list="groupList" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名">
-            <div class="add-actions">
-              <button type="button" class="btn ghost sm" id="tvWfCancel" hidden>取消</button>
-              <button type="submit" class="btn primary sm" id="tvWfSubmit">添加</button>
-            </div>
-          </div>
-        </form>
         <div class="wtabs" id="tvWatchTabs"></div>
         <div class="table-scroll">
           <table class="tbl" id="tvWatchTable">
@@ -224,6 +210,7 @@
         <button class="set-tab an-tab" data-an="profile" type="button">🧩 持仓画像</button>
         <button class="set-tab an-tab" data-an="risk" type="button">🛡️ 风险分析</button>
         <button class="set-tab an-tab" data-an="review" type="button">🔍 操作复盘</button>
+        <button class="set-tab an-tab" data-an="mom" type="button">🚀 动量筛选</button>
         <button class="set-tab an-tab" data-an="bt" type="button">🧪 策略回测</button>
       </div>
 
@@ -307,6 +294,25 @@
         </div>
       </div>
 
+      <!-- 页签：动量筛选（v3.8.74） -->
+      <div class="set-pane an-pane" data-anpane="mom" hidden>
+        <div class="card">
+          <div class="card-title-row">
+            <span class="card-title">🚀 连续强势 + 量能递增</span>
+            <button id="momRunBtn" class="btn primary sm" type="button">🔍 开始筛选</button>
+          </div>
+          <p class="hint">
+            扫描两市全市场，筛出「<b>连续 3 日涨幅 &gt; 0 且都排在全市场前 1000 名</b>」并且「<b>成交量逐日放大、每天 ≥ 前一日 1.1 倍</b>」的股票。
+            已排除 ST、北交所与成交额不足 5000 万（0.5 亿）的票。结果按 3 日累计涨幅降序，可一键批量诊断。
+          </p>
+          <p class="hint">
+            ⚠ 口径说明：腾讯涨幅榜只提供<b>当日</b>快照，所以只有最新一天的名次是榜单真实名次；前两天的名次由「当天涨幅在候选池内排序后折算到全市场」得到，
+            属于<b>估算值</b>（表中已标注）。条件都按「宁缺毋滥」设定 —— 普跌日命中数会自然收缩，这本身就是「逆势连涨放量」的信号。
+          </p>
+          <div id="momBox"><p class="hint">点「开始筛选」扫描全市场（首次约 20 秒，之后快照命中 60 秒缓存会更快）。</p></div>
+        </div>
+      </div>
+
       <!-- 页签 6：策略回测 -->
       <div class="set-pane an-pane" data-anpane="bt" hidden>
         <div class="card">
@@ -363,6 +369,45 @@
       <div id="diagHistory" class="card" style="margin-top:12px"></div>
     </section>
 
+    <!-- ============ 智能问答（v3.9.0 自 trade-manager 迁移核心对话） ============ -->
+    <section id="view-qa" class="view">
+      <div class="qa-layout">
+        <aside class="qa-side card">
+          <button id="newChatBtn" class="btn ghost sm block" type="button">＋ 新对话</button>
+          <input id="qaSearch" class="search-input" placeholder="🔍 搜索历史问答" autocomplete="off">
+          <div id="qaHistoryList" class="qa-history"></div>
+        </aside>
+        <div class="qa-main card">
+          <div id="qaMessages" class="qa-messages"></div>
+          <div class="qa-composer">
+            <div id="qaSkillHint" class="qa-skill-hint"></div>
+            <div id="qaAttachChips" class="qa-attach-chips" hidden></div>
+            <div class="qa-input-box">
+              <textarea id="qaInput" rows="2" placeholder="随便问我什么都可以，比如：帮我看看这周操作有什么问题？或者聊聊别的也行～"></textarea>
+              <div class="qa-toolbar">
+                <button id="qaAttachBtn" class="qa-tool-btn" title="上传文件（txt / csv / md / json 等）" type="button">
+                  <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.4 11.05 12.25 20.2a6 6 0 0 1-8.49-8.49l9.2-9.19a4 4 0 0 1 5.65 5.66l-9.2 9.19a2 2 0 0 1-2.82-2.83l8.49-8.48"/></svg>
+                </button>
+                <div class="qa-toolbar-right">
+                  <button id="qaMicBtn" class="qa-tool-btn" title="语音输入" type="button">
+                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 18v4"/></svg>
+                  </button>
+                  <button id="qaSendBtn" class="qa-send-btn" title="发送" type="button">
+                    <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
+                  </button>
+                  <button id="qaStopBtn" class="qa-send-btn stop" title="停止生成" type="button" hidden>
+                    <svg viewBox="0 0 24 24" width="14" height="14"><rect x="6" y="6" width="12" height="12" rx="2.5" fill="currentColor"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="qa-src-bar"><span class="qa-src-hint" id="qaSrcHint"></span></div>
+            <input type="file" id="qaFileInput" hidden multiple accept=".txt,.csv,.md,.json,.log,image/*">
+          </div>
+        </div>
+      </div>
+    </section>
+
     <!-- ============ 设置 ============ -->
     <section id="view-me" class="view">
       <!-- 设置分类页签（参考 trade-manager）：窄屏自动等分 -->
@@ -371,6 +416,7 @@
         <button class="set-tab" data-set="cost" type="button">交易费用</button>
         <button class="set-tab" data-set="user" type="button">用户管理</button>
         <button class="set-tab" data-set="data" type="button">数据管理</button>
+        <button class="set-tab" data-set="skill" type="button">技能</button>
         <button class="set-tab" data-set="log" type="button">操作日志</button>
       </div>
 
@@ -514,6 +560,63 @@
       </div>
       </div>
 
+      <!-- v3.9.9 技能中心：妙想 Key 配置 + 技能添加/删除/启停 + 数据来源一览 -->
+      <div class="set-pane" data-pane="skill" hidden>
+      <div class="card">
+        <div class="card-title-row">
+          <span class="card-title">技能中心</span>
+        </div>
+        <p class="hint" id="skillSummary">—</p>
+
+        <div class="rate-block">
+          <div class="card-title-row" style="margin-top:4px">
+            <span class="card-title" style="font-size:14px">东方财富妙想 Skills · API Key</span>
+          </div>
+          <p class="hint">妙想 Key 由东方财富「妙想 Skills 广场」免费领取（mkt_ 开头），每日限量免费额度；<b>仅保存在本机浏览器，不上传云端</b>。未配置时妙想类技能显示「待配置凭据」，问答自动只用免费公开数据源（功能略少，仍可用）。</p>
+          <div class="mx-key-row">
+            <input id="mxKeyInput" type="password" class="search-input" autocomplete="off" spellcheck="false" placeholder="粘贴妙想 Skills API KEY（形如 mkt_xxxxxxxx）">
+            <button id="mxKeyEye" class="btn ghost sm" type="button" title="显示 / 隐藏">👁</button>
+          </div>
+          <div class="form-actions">
+            <button id="mxKeyTestBtn" class="btn ghost sm" type="button">🔌 测试连接</button>
+            <button id="mxKeySaveBtn" class="btn primary sm" type="button">保存</button>
+            <button id="mxKeyClearBtn" class="btn ghost sm" type="button">清除</button>
+          </div>
+          <div id="mxKeyStatus" class="hint"></div>
+          <details class="cm-details" style="margin-top:8px">
+            <summary>免费额度怎么领？（不用买妙想 token）</summary>
+            <div class="hint">
+              1. 打开妙想 Skills 广场：<a href="https://marketing.dfcfs.com/views/finskillshub/" target="_blank" rel="noreferrer">marketing.dfcfs.com/views/finskillshub</a>；<br>
+              2. 点「API KEY 领取」，拿到一串 <b>mkt_</b> 开头的 KEY；<br>
+              3. 回到这里粘贴 → 点「测试连接」→「保存」。<br>
+              额度按自然日刷新（妙想 App「API Key 管理 → 消耗」可看各技能当日用了几次）。免费额度约 2 秒才能问一次，问太快会自动排队重试。
+            </div>
+          </details>
+        </div>
+
+        <div class="rate-block">
+          <div class="card-title-row" style="margin-top:4px">
+            <span class="card-title" style="font-size:14px">已安装技能</span>
+            <span class="hint">停用即真正关闭该能力；问答只调用已启用的技能</span>
+          </div>
+          <div id="skillListOn" class="skill-list"></div>
+        </div>
+
+        <div class="rate-block" id="skillOffBlock" hidden>
+          <div class="card-title-row" style="margin-top:4px">
+            <span class="card-title" style="font-size:14px">可添加的技能</span>
+          </div>
+          <div id="skillListOff" class="skill-list"></div>
+        </div>
+
+        <details class="cm-details">
+          <summary>📋 各技能的数据来源一览（问答里的数字从哪来）</summary>
+          <div id="skillSrcTbl" style="margin-top:8px"></div>
+          <p class="hint" style="margin-top:8px">问答时会话里每张数据表的标题下都标了「数据来源」，工具便签的能力标签也会标注来源；<b>取数原则：免费优先</b> —— 免费公开数据能取到的绝不动用妙想额度，妙想只补「资金流向 / 北向 / 两融 / 机构调研」这类免费表没有的口径。</p>
+        </details>
+      </div>
+      </div>
+
       <div class="set-pane" data-pane="log" hidden>
       <div class="card">
         <div class="card-title-row">
@@ -532,6 +635,22 @@
     </section>
   </main>
 
+  <!-- v3.8.65 行情悬浮条：大盘卡右上角那组入口（刷新行情）滚出视口后淡入，
+       翻看长持仓/自选列表时也能随手刷新，不必再滚回顶部。
+       只在总览页生效，且原控件仍在视野内时不出现（避免同一功能出现两遍）。
+       v3.8.66：① 按钮与下拉改用与大盘卡内完全相同的 .btn.ghost.sm / 原生 select 样式；
+                ② 初始落位改到右上角（与大盘卡原位入口同一侧）；
+                ③ 可按手柄上下拖动（横向固定在右边），高度记忆在本地。
+       v3.8.75：去掉悬浮条里的「自动刷新」下拉，只保留「刷新行情」按钮。
+               理由：悬浮条的定位是「随手点一下刷新」，放个下拉既占宽度又要多一步操作；
+               自动刷新在总览页大盘卡里已有入口，功能不丢。 -->
+  <div class="quote-fab" id="quoteFab">
+    <span class="qf-grip" id="quoteFabGrip" title="按住上下拖动" aria-label="按住上下拖动悬浮条">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/><circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/></svg>
+    </span>
+    <button class="btn ghost sm" id="tvRefreshFab" type="button">刷新行情</button>
+  </div>
+
   <!-- 底部 Tab（手机） -->
   <nav class="bottom-nav" id="bottomNav">
     <button class="bnav-item active" data-view="today">
@@ -544,13 +663,50 @@
     </button>
     <button class="bnav-item" data-view="analysis">
       <svg viewBox="0 0 24 24"><path d="M4 20V4m0 16h16M7 15l3.5-4.5 3 2.5L18 7" stroke-linecap="round" stroke-linejoin="round"/></svg>
-      <span>分析中心</span>
+      <span>分析</span>
+    </button>
+    <button class="bnav-item" data-view="qa">
+      <svg viewBox="0 0 24 24"><path d="M20 14.5a3 3 0 0 1-3 3H9l-4 3v-3H7a3 3 0 0 1-3-3v-7a3 3 0 0 1 3-3h10a3 3 0 0 1 3 3z" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      <span>问答</span>
     </button>
     <button class="bnav-item" data-view="me">
       <svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="3.6"/><path d="M4.5 20c1.2-3.6 4-5.4 7.5-5.4s6.3 1.8 7.5 5.4"/></svg>
       <span>设置</span>
     </button>
   </nav>
+
+  <!-- 模态：加自选（v3.8.78 从「卡片内展开」改为弹窗，与「＋ 记一笔」同一交互模式）
+       表单 id 沿用 tvWatchForm/tvWf* —— app.js 里 bindWatchCard 的挂载点不用改，
+       只把原来的「展开/收起」换成「开/关弹窗」。 -->
+  <div id="watchModal" class="modal-mask" hidden>
+    <div class="modal modal-lg">
+      <div class="modal-title-row">
+        <div class="modal-title" id="watchModalTitle">加自选</div>
+        <button class="modal-x" id="watchModalClose" type="button" title="关闭">✕</button>
+      </div>
+      <form id="tvWatchForm">
+        <div class="add-row">
+          <!-- v3.8.53 联想下拉改挂在筛选框自身（.sug-anchor 容器）上，见 style.css 注释 -->
+          <div class="sug-anchor sug-stock">
+            <input type="text" id="tvWfInput" autocomplete="off" placeholder="代码 / 名称 / 拼音首字母，如 600519、贵州茅台、gzmt">
+            <div id="tvWfSug" class="sug-box" hidden></div>
+          </div>
+          <input type="text" id="tvWfNoteQuick" autocomplete="off" placeholder="备注 / 加入理由（选填）">
+          <!-- v3.8.82 分组下拉从原生 datalist 改为自绘 .wg-pick：datalist 的弹层宽度
+               由浏览器决定（往往远宽于输入框，PC 上能铺满半个弹窗），且无法用 CSS 约束。
+               自绘列表与输入框同宽，样式与联想下拉一致。仍可手动输入新分组名。 -->
+          <div class="wg-pick">
+            <input type="text" id="tvWfGroupQuick" class="wg-quick" autocomplete="off" placeholder="分组" title="分组：可选已有，也可输入新分组名">
+            <div id="tvWfGroupList" class="wg-list" hidden></div>
+          </div>
+        </div>
+        <div class="modal-actions" style="margin-top:14px">
+          <button type="button" class="btn ghost sm" id="tvWfCancel">取消</button>
+          <button type="submit" class="btn primary sm" id="tvWfSubmit">添加</button>
+        </div>
+      </form>
+    </div>
+  </div>
 
   <!-- 模态：记一笔 -->
   <div id="recModal" class="modal-mask" hidden>
@@ -630,11 +786,14 @@
   <!-- Toast -->
   <div id="toast"></div>
   <!-- v3.8.34 分组名数据源：全局共享（总览页与自选页的分组输入框都引用它） -->
-  <datalist id="groupList"></datalist>
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.8.61"></script>
-<script src="analysis-extra.js?v=3.8.61"></script>
+<script src="app.js?v=3.9.11"></script>
+<script src="analysis-extra.js?v=3.9.11"></script>
+<!-- v3.9.7 智能问答工具层：选股 / 行情 / 财务 / 诊断 / 回测等取数能力。
+     必须排在 analysis-extra.js 之后 —— 它直接复用后者挂在全局词法作用域上的
+     state / fmtWan / parseJsonLoose / marketOf / qSnapshot / computePositions。 -->
+<script src="qa-tools.js?v=3.9.11"></script>
 </body>
 </html>
