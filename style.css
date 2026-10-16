@@ -2049,3 +2049,11 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 @media (max-width: 720px) {
   .qa-ex-grid { grid-template-columns: 1fr; }
 }
+/* v3.14.2 按住说话 */
+.qa-rec-hint {
+  position: absolute; left: 50%; transform: translateX(-50%); bottom: 100%; margin-bottom: 8px;
+  background: var(--up, #d93a2b); color: #fff; font-size: 12px; padding: 6px 14px;
+  border-radius: 999px; z-index: 210; white-space: nowrap; box-shadow: 0 6px 18px rgba(217, 58, 43, .3);
+}
+.qa-tool-btn.rec { color: var(--up, #d93a2b) !important; background: #fef2f2; animation: qaPulse 1.2s infinite; touch-action: none; user-select: none; -webkit-user-select: none; }
+.qa-plus-btn, .qa-tool-btn { touch-action: manipulation; user-select: none; -webkit-user-select: none; }

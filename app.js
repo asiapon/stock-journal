@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.14.1';
+const APP_VER = '3.14.3';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5673,31 +5673,62 @@ function initQa() {
   /* 语音输入：必须「点击时」才去取 SpeechRecognition —— 部分浏览器的兼容层
      是页面加载完成后才注入的，提前取会拿到 undefined。不支持时给出提示。 */
   let rec = null;
-  $('qaMicBtn').addEventListener('click', () => {
-    const btn = $('qaMicBtn');
-    if (rec) { try { rec.stop(); } catch (e) { /* */ } rec = null; btn.classList.remove('rec'); return; }
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!SR) { toast('当前浏览器不支持语音输入，请用键盘输入', 'warn'); return; }
-    try { rec = new SR(); } catch (e) { toast('语音输入不可用', 'warn'); return; }
-    rec.lang = 'zh-CN';
-    rec.interimResults = true;
-    rec.continuous = false;
-    const inp = $('qaInput');
-    const base = inp.value;
-    rec.onresult = ev => {
-      let txt = '';
-      for (let i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
-      inp.value = base + txt;
-      qaSyncSendState();
+  /* v3.14.2 按住说话（微信/WorkBuddy 同款交互）：按住 🎤 说话，松开自动把识别结果
+     填进输入框。按住期间实时上屏、按钮变红脉动、上方浮「松开结束」。
+     依赖浏览器 SpeechRecognition（Edge/Chrome/Android Chrome 支持；微信内置等不支持时
+     点按会给出明确提示）。 */
+  const micBtn = $('qaMicBtn');
+  if (micBtn && !micBtn.dataset.micBound) {
+    micBtn.dataset.micBound = '1';
+    /* 注意：SR 能力必须在每次按住时实时探测（v3.14.2 修复——绑定时固化会导致
+       晚于页面加载注入/晚出现的实现永远被判「不支持」） */
+    const getSR = () => window.SpeechRecognition || window.webkitSpeechRecognition;
+    const stopRec = () => {
+      if (rec) { try { rec.stop(); } catch (e) { /* */ } rec = null; }
+      micBtn.classList.remove('rec');
+      const h = document.getElementById('qaRecHint');
+      if (h) h.remove();
     };
-    rec.onerror = ev => {
-      rec = null; btn.classList.remove('rec');
-      toast(ev && ev.error === 'not-allowed' ? '麦克风权限被拒绝' : '语音识别失败', 'warn');
-    };
-    rec.onend = () => { rec = null; btn.classList.remove('rec'); };
-    try { rec.start(); btn.classList.add('rec'); }
-    catch (e) { rec = null; toast('语音输入启动失败', 'warn'); }
-  });
+    micBtn.addEventListener('contextmenu', e => e.preventDefault());   // 长按不出系统菜单
+    micBtn.addEventListener('pointerdown', e => {
+      e.preventDefault();
+      if (rec) return;
+      const SR = getSR();
+      if (!SR) { toast('当前浏览器不支持语音输入，请用 Edge / Chrome 打开', 'warn'); return; }
+      const inp = $('qaInput');
+      const base = inp.value;
+      try { rec = new SR(); } catch (e2) { toast('语音输入不可用', 'warn'); return; }
+      rec.lang = 'zh-CN';
+      rec.interimResults = true;
+      rec.continuous = false;
+      rec.onresult = ev => {
+        let txt = '';
+        for (let i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+        inp.value = (base + txt).slice(0, 2000);
+        qaSyncSendState();
+      };
+      rec.onerror = ev => {
+        stopRec();
+        toast(ev && ev.error === 'not-allowed' ? '麦克风权限被拒绝' : '语音识别失败：' + (ev && ev.error || ''), 'warn');
+      };
+      rec.onend = () => stopRec();
+      try {
+        rec.start();
+        micBtn.classList.add('rec');
+        if (!document.getElementById('qaRecHint')) {
+          const h = document.createElement('div');
+          h.id = 'qaRecHint';
+          h.className = 'qa-rec-hint';
+          h.textContent = '🎙 正在听…松开结束';
+          document.querySelector('.qa-composer').appendChild(h);
+        }
+      } catch (e3) { rec = null; toast('语音输入启动失败', 'warn'); }
+    });
+    const endHandler = e => { if (rec) { e.preventDefault(); stopRec(); } };
+    micBtn.addEventListener('pointerup', endHandler);
+    micBtn.addEventListener('pointercancel', endHandler);
+    micBtn.addEventListener('pointerleave', () => { if (rec) stopRec(); });
+  }
 }
 /* 问答历史首载：登录后拉一次（放在 boot 之后，失败不影响其它模块） */
 async function qaBoot() {
