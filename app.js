@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.17.5';
+const APP_VER = '3.17.6';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5625,22 +5625,29 @@ async function sendQa() {
     }] : baseMsgs;
     if (toolBlock) {
       /* 规则路由命中 → 原单轮流式（快路径，不受模型能力影响） */
-      answer = await qaLlmStream(baseMsgs, {
-        signal,
-        onDelta: (d) => {
-          streamed += d;
-          qaState.stream[convId] = streamed;
-          const h = streamEl();
-          if (!h) return;
-          const now = Date.now();
-          if (!lastPaint || now - lastPaint > 90) {
-            lastPaint = now;
-            h.innerHTML = qaMdToHtml(streamed);
-            if (box) box.scrollTop = box.scrollHeight;
-          }
-        },
-      });
-      answer = answer || streamed;
+      const onDeltaRr = (d) => {
+        streamed += d;
+        qaState.stream[convId] = streamed;
+        const h = streamEl();
+        if (!h) return;
+        const now = Date.now();
+        if (!lastPaint || now - lastPaint > 90) {
+          lastPaint = now;
+          h.innerHTML = qaMdToHtml(streamed);
+          if (box) box.scrollTop = box.scrollHeight;
+        }
+      };
+      answer = await qaLlmStream(baseMsgs, { signal, onDelta: onDeltaRr });
+      /* v3.17.6 模型偶发返回空流（网关/小模型抽风，一次调用零 token）——此时数据其实
+         已经取到了（上方便签就是），缺的只是模型总结。旧写法直接落「（本轮未生成回答）」，
+         用户看起来像「工具答完就没模型的事了」。现在：空流先原样重试一次（流式网关
+         偶发抽风重试即好）；仍空则给出诚实兜底文案并引导重发，不再假装「没有回答」。 */
+      if (!answer) {
+        streamed = '';
+        answer = await qaLlmStream(baseMsgs, { signal, onDelta: onDeltaRr });
+        answer = answer || streamed;
+      }
+      if (!answer) answer = '⚠️ 数据已取到（见上方结果表），但模型这次没有生成文字总结。请点此重发或换个问法再试一次。';
     } else {
       /* v3.11.1 规则路由没命中 → Agentic 回路：模型自己决定调用哪个技能，
          本地真实执行后回传，最多 4 轮，再流式/直接作答。
@@ -5674,6 +5681,8 @@ async function sendQa() {
           answer = await qaLlmStream(baseMsgs, { signal, onDelta: onDeltaAg });
           answer = answer || streamed;
         }
+        /* v3.17.6 仍空 → 同规则路由分支：诚实告知数据已取到、只缺总结，引导重发 */
+        if (!answer) answer = '⚠️ 数据已取到（见上方结果表），但模型这次没有生成文字总结。请点此重发或换个问法再试一次。';
       } catch (eAg) {
         if (eAg && eAg.name === 'AbortError') throw eAg;
         NetLog.push('llm', 'agentic 回路回退', false, 0, eAg.message || String(eAg));
@@ -5734,7 +5743,7 @@ async function sendQa() {
     qaSyncSendState();
   }
 
-  myMsgs.push({ role: 'assistant', content: answer || streamed || '（本轮未生成回答）' });
+  myMsgs.push({ role: 'assistant', content: answer || streamed || '（本轮未生成回答，可重发一次）' });
   if (onScreen()) renderQaMessages();
 
   /* 落库收尾：首问时已写入占位行，这里把它换成完整记录；

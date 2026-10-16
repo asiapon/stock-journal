@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.17.5">
+<link rel="stylesheet" href="style.css?v=3.17.6">
 </head>
 <body>
 
@@ -88,7 +88,7 @@
     <button class="tab active" data-view="today"><span class="tab-ico">◇</span>总览</button>
     <button class="tab" data-view="trades"><span class="tab-ico">≡</span>查询</button>
     <button class="tab" data-view="analysis"><span class="tab-ico">◎</span>分析</button>
-    <button class="tab" data-view="qa"><span class="tab-ico">💬</span>智能问答</button>
+    <button class="tab" data-view="qa"><span class="tab-ico">💬</span>问答</button>
     <button class="tab" data-view="me"><span class="tab-ico">⚙</span>设置</button>
   </nav>
 
@@ -923,12 +923,12 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.17.5"></script>
-<script src="kline-store.js?v=3.17.5"></script>
-<script src="analysis-extra.js?v=3.17.5"></script>
+<script src="app.js?v=3.17.6"></script>
+<script src="kline-store.js?v=3.17.6"></script>
+<script src="analysis-extra.js?v=3.17.6"></script>
 <!-- v3.9.7 智能问答工具层：选股 / 行情 / 财务 / 诊断 / 回测等取数能力。
      必须排在 analysis-extra.js 之后 —— 它直接复用后者挂在全局词法作用域上的
      state / fmtWan / parseJsonLoose / marketOf / qSnapshot / computePositions。 -->
-<script src="qa-tools.js?v=3.17.5"></script>
+<script src="qa-tools.js?v=3.17.6"></script>
 </body>
 </html>

@@ -3223,7 +3223,7 @@ async function qaRunTools(question, box, holder, signal) {
        注意：不能写 res = await withCtx(...) —— withCtx 的返回值会把闭包内
        对 res 的赋值覆盖成 undefined，工具结果就丢了。
        v3.12.4：整个工具阶段包上 fetch 中断守卫（停止按钮可随时打断取数）。 */
-    await NetLog.withCtx('智能问答·' + intent.tool + '：' + String(question).slice(0, 24), async () => {
+    await NetLog.withCtx('问答·' + intent.tool + '：' + String(question).slice(0, 24), async () => {
       await qaWithFetchGuard(signal, async () => {
     if (intent.tool === 'screener') {
       const parsed = parseScreenQuery(question);
