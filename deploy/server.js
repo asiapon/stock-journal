@@ -18,6 +18,7 @@
 'use strict';
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
 const { Pool } = require('pg');
 
@@ -243,6 +244,77 @@ app.post('/api/asr', express.raw({ type: () => true, limit: '14mb' }), async (re
   } catch (e) {
     logger.log('asr', 'transcribe', model, false, Date.now() - t0, e.message || String(e));
     res.status(502).json({ ok: false, msg: '转写失败：' + (e.message || e) });
+  }
+});
+
+/* ---------- v3.17.0 腾讯云「一句话识别」代理（≤60s 音频） ----------
+   为什么走服务端：腾讯云 API 3.0 不支持浏览器 CORS（OPTIONS 直接被拒），
+   TC3 签名又需要 SecretKey —— 只能在自托管后端签名，Key 永不出服务器。
+   Key 来源优先级：env TENCENT_SECRET_ID/KEY > 请求体里的 keys（前端设置页
+   存本机的凭据，方便不改 .env 就能用；仍是发到用户自己的服务器）。
+   前端已统一转成 16k 单声道 WAV（腾讯云不收 webm）。 */
+app.post('/api/asr/tencent', express.json({ limit: '14mb' }), async (req, res) => {
+  if (!(await requireSession(req))) return res.status(401).json({ ok: false, msg: '需要登录（token 无效）' });
+  const sid = process.env.TENCENT_SECRET_ID || (req.body && req.body.keys && req.body.keys.id) || '';
+  const skey = process.env.TENCENT_SECRET_KEY || (req.body && req.body.keys && req.body.keys.key) || '';
+  if (!sid || !skey) return res.status(501).json({
+    ok: false,
+    msg: '未配置腾讯云密钥：服务器 deploy/.env 填 TENCENT_SECRET_ID / TENCENT_SECRET_KEY，或在 设置→语音转写 里填一对保存后重试'
+  });
+  const b64 = (req.body && req.body.audio) || '';
+  const len = (req.body && req.body.len) || 0;
+  if (!b64 || !len) return res.status(400).json({ ok: false, msg: '没有收到录音' });
+  if (len > 3 * 1024 * 1024) return res.status(400).json({ ok: false, msg: '录音超过 3MB（60 秒上限），请说短一点' });
+
+  /* TC3-HMAC-SHA256 签名（腾讯云 API 3.0 标准流程） */
+  const host = 'asr.tencentcloudapi.com';
+  const service = 'asr';
+  const region = process.env.TENCENT_ASR_REGION || 'ap-shanghai';
+  const engine = process.env.TENCENT_ASR_ENGINE || '16k_zh';
+  const payload = JSON.stringify({
+    ProjectId: 0, SubServiceType: 2, EngSerViceType: engine,
+    SourceType: 1, VoiceFormat: 'wav', Data: b64, DataLen: len,
+  });
+  const ts = Math.floor(Date.now() / 1000);
+  const date = new Date(ts * 1000).toISOString().slice(0, 10);
+  const sha256hex = buf => crypto.createHash('sha256').update(buf).digest('hex');
+  const hmac = (alg, key, buf) => crypto.createHmac(alg, key).update(buf).digest();
+  const canonical = 'POST\n/\n\ncontent-type:application/json; charset=utf-8\nhost:' + host
+    + '\n\ncontent-type;host\n' + sha256hex(payload);
+  const stringToSign = 'TC3-HMAC-SHA256\n' + ts + '\n' + date + '/' + service + '/tc3_request\n' + sha256hex(canonical);
+  const kDate = hmac('sha256', 'TC3' + skey, date);
+  const kService = hmac('sha256', kDate, service);
+  const kSigning = hmac('sha256', kService, 'tc3_request');
+  const signature = crypto.createHmac('sha256', kSigning).update(stringToSign).digest('hex');
+  const auth = 'TC3-HMAC-SHA256 Credential=' + sid + '/' + date + '/' + service + '/tc3_request, '
+    + 'SignedHeaders=content-type;host, Signature=' + signature;
+
+  const t0 = Date.now();
+  try {
+    const r = await fetch('https://' + host + '/', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json; charset=utf-8',
+        'X-TC-Action': 'SentenceRecognition', 'X-TC-Version': '2019-06-14',
+        'X-TC-Region': region, 'X-TC-Timestamp': String(ts), Authorization: auth,
+      },
+      body: payload, signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => ({}));
+    const resp = j.Response || {};
+    if (resp.Error) {
+      logger.log('asr', 'tencent', engine, false, Date.now() - t0, resp.Error.Code + ': ' + resp.Error.Message);
+      const noQuota = /UserHasNo|ServiceIsolate|FailedOperation/.test(resp.Error.Code || '');
+      return res.status(502).json({
+        ok: false,
+        msg: '腾讯云：' + resp.Error.Code + ' ' + resp.Error.Message + (noQuota ? '（免费额度耗尽或服务未开通？控制台确认下；新用户默认关闭后付费，不会乱扣钱）' : '')
+      });
+    }
+    logger.log('asr', 'tencent', engine, true, Date.now() - t0, (resp.Result || '').slice(0, 80));
+    res.json({ ok: true, text: resp.Result || '' });
+  } catch (e) {
+    logger.log('asr', 'tencent', engine, false, Date.now() - t0, e.message || String(e));
+    res.status(502).json({ ok: false, msg: '腾讯云转写失败：' + (e.message || e) });
   }
 });
 

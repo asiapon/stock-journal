@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.16.1">
+<link rel="stylesheet" href="style.css?v=3.17.0">
 </head>
 <body>
 
@@ -720,6 +720,35 @@
           <p class="hint" style="margin-top:8px">问答时会话里每张数据表的标题下都标了「数据来源」，工具便签的能力标签也会标注来源；<b>取数原则：免费优先</b> —— 免费公开数据能取到的绝不动用妙想额度，妙想只补「资金流向 / 北向 / 两融 / 机构调研」这类免费表没有的口径。</p>
         </details>
       </div>
+
+      <!-- v3.17.0 语音转写（按住说话）：问答页 + 记一笔 共用的引擎B后端配置，全部存本机 -->
+      <div class="card" id="asrCard">
+        <div class="card-title-row">
+          <span class="card-title">🎙 语音转写（按住说话）</span>
+        </div>
+        <div class="quick-input-row" style="margin-top:8px">
+          <select id="asrBackend" class="search-input" style="flex:2">
+            <option value="auto">后端：自动（推荐：服务端优先，云端直连兜底）</option>
+            <option value="sf">后端：硅基流动</option>
+            <option value="tx">后端：腾讯云一句话识别</option>
+          </select>
+          <button id="asrTestBtn" class="btn ghost sm" type="button">🔌 测试</button>
+        </div>
+        <div class="quick-input-row" style="margin-top:8px">
+          <input id="asrSfKey" type="password" class="search-input" autocomplete="off" spellcheck="false" placeholder="硅基流动 Key（sfr- 开头；云端版浏览器直连必需）">
+          <button id="asrSfEye" class="btn ghost sm" type="button" title="显示 / 隐藏">👁</button>
+        </div>
+        <div class="quick-input-row" style="margin-top:8px">
+          <input id="asrTxId" type="text" class="search-input" autocomplete="off" spellcheck="false" placeholder="腾讯云 SecretId（自托管版专用）" style="flex:1">
+          <input id="asrTxKey" type="password" class="search-input" autocomplete="off" spellcheck="false" placeholder="腾讯云 SecretKey" style="flex:1">
+        </div>
+        <div class="form-actions" style="margin-top:8px">
+          <button id="asrSaveBtn" class="btn primary sm" type="button">保存语音配置</button>
+          <button id="asrClearBtn" class="btn ghost sm" type="button">清除全部</button>
+          <span class="hint" id="asrStatus"></span>
+        </div>
+        <p class="hint" style="margin-top:8px">以上<b>仅保存在本机浏览器，不上传云端</b>（腾讯云密钥只随识别请求发给你自己的自托管服务器）。免费额度：腾讯云「一句话识别」<b>每月 5000 次、逐月续发</b>（<a href="https://console.cloud.tencent.com/capi" target="_blank" rel="noopener">控制台创建密钥</a>，认准基础版引擎 16k_zh；新用户默认关闭后付费，超额自动停服不扣钱）；硅基流动 <a href="https://cloud.siliconflow.cn" target="_blank" rel="noopener">cloud.siliconflow.cn</a> 注册免费领 sfr- Key（SenseVoice 文件转写，约 3 次/分钟，个人用足够）。腾讯云接口不允许浏览器直连（无 CORS），WorkBuddy 云端版请用硅基流动；录音在浏览器内统一转成 16k WAV（≤60 秒）再上传。</p>
+      </div>
       </div>
 
       <div class="set-pane" data-pane="log" hidden>
@@ -894,12 +923,12 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.16.1"></script>
-<script src="kline-store.js?v=3.16.1"></script>
-<script src="analysis-extra.js?v=3.16.1"></script>
+<script src="app.js?v=3.17.0"></script>
+<script src="kline-store.js?v=3.17.0"></script>
+<script src="analysis-extra.js?v=3.17.0"></script>
 <!-- v3.9.7 智能问答工具层：选股 / 行情 / 财务 / 诊断 / 回测等取数能力。
      必须排在 analysis-extra.js 之后 —— 它直接复用后者挂在全局词法作用域上的
      state / fmtWan / parseJsonLoose / marketOf / qSnapshot / computePositions。 -->
-<script src="qa-tools.js?v=3.16.1"></script>
+<script src="qa-tools.js?v=3.17.0"></script>
 </body>
 </html>
