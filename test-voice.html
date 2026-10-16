@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>语音识别诊断页 · 操作日记</title>
+<style>
+  body { font-family: system-ui, sans-serif; max-width: 640px; margin: 24px auto; padding: 0 16px; color: #1a1a1a; }
+  h1 { font-size: 18px; }
+  .card { border: 1px solid #e2e8f0; border-radius: 12px; padding: 14px 16px; margin: 12px 0; }
+  .big { font-size: 15px; font-weight: 600; margin: 10px 0; }
+  button { font-size: 15px; padding: 12px 22px; border-radius: 24px; border: 1px solid #cbd5e1; background: #fff; cursor: pointer; }
+  button.rec { background: #d93a2b; color: #fff; border-color: #d93a2b; }
+  #log { font: 12px/1.7 Consolas, monospace; background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 8px; padding: 10px; max-height: 320px; overflow: auto; white-space: pre-wrap; word-break: break-all; }
+  .ok { color: #0f766e; } .fail { color: #b91c1c; } .dim { color: #64748b; }
+  .env td { padding: 4px 10px 4px 0; font-size: 13px; border-bottom: 1px solid #f1f5f9; }
+</style>
+</head>
+<body>
+<h1>语音识别诊断（语音转文字）</h1>
+<p>这个页面只测一件事：当前浏览器<b>按住说话 → 语音转文字</b>到底能不能用、失败在哪一步。把下面的日志截图发回来即可。</p>
+
+<table class="env"><tbody id="env"></tbody></table>
+
+<div class="card">
+  <div class="big" id="state">待开始</div>
+  <div id="heard" style="min-height:22px;color:#334155">（识别到的文字会显示在这里）</div>
+  <button id="btn">🎙 按住说话（松开结束）</button>
+</div>
+
+<div id="log"></div>
+
+<script>
+(function () {
+  var $ = function (id) { return document.getElementById(id); };
+  function log(msg, cls) {
+    var d = document.createElement('div');
+    if (cls) d.className = cls;
+    d.textContent = new Date().toLocaleTimeString('zh-CN', { hour12: false }) + '  ' + msg;
+    $('log').appendChild(d);
+    $('log').scrollTop = 1e9;
+  }
+  /* ① 环境探测 */
+  var rows = [
+    ['UA', navigator.userAgent],
+    ['SpeechRecognition', ('SpeechRecognition' in window) ? '存在（标准）' : ('webkitSpeechRecognition' in window ? '存在（webkit 前缀）' : '❌ 不存在——此浏览器根本没有语音识别能力（微信内置/旧内核常见）')],
+    ['MediaRecorder（录音备用引擎）', ('MediaRecorder' in window) ? '存在' : '不存在'],
+    ['是否 https/localhost', (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1') ? '是（麦克风权限允许的前提）' : '❌ 否——非 https 且非 localhost 时浏览器会直接拒绝麦克风'],
+  ];
+  rows.forEach(function (r) {
+    var tr = document.createElement('tr');
+    var a = document.createElement('td'); a.textContent = r[0];
+    var b = document.createElement('td'); b.textContent = r[1];
+    if (String(r[1]).indexOf('❌') === 0) b.className = 'fail';
+    tr.appendChild(a); tr.appendChild(b); $('env').appendChild(tr);
+  });
+
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var rec = null, holding = false;
+
+  /* ② 按住说话 */
+  var btn = $('btn');
+  function start() {
+    if (!SR) { log('FAIL：浏览器没有 SpeechRecognition，无法测试（换 Edge/Chrome 最新版再试）', 'fail'); setState('不支持'); return; }
+    try {
+      rec = new SR();
+    } catch (e) { log('FAIL：new SpeechRecognition() 抛错：' + e.message, 'fail'); setState('构造失败'); return; }
+    rec.lang = 'zh-CN';
+    rec.interimResults = true;
+    rec.continuous = false;
+    rec.onstart = function () { log('OK：onstart —— 识别服务已连接，请说话', 'ok'); setState('录音中…请说话'); };
+    rec.onaudiostart = function () { log('OK：onaudiostart —— 麦克风已打开', 'ok'); };
+    rec.onspeechstart = function () { log('OK：onspeechstart —— 检测到人声', 'ok'); };
+    rec.onresult = function (ev) {
+      var txt = '';
+      for (var i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+      $('heard').textContent = txt || '（空）';
+      log('结果：' + (ev.results[ev.results.length - 1].isFinal ? '[终稿] ' : '[中间] ') + txt);
+    };
+    rec.onerror = function (ev) {
+      var m = { 'not-allowed': '麦克风权限被拒绝（浏览器地址栏左侧重新允许，或系统设置里给 Edge 麦克风权限）', 'service-not-allowed': '浏览器的语音服务被禁用（Edge：设置→隐私→在线语音识别 打开）', 'network': '语音服务网络请求失败（代理/防火墙拦了浏览器语音服务）', 'language-not-supported': 'zh-CN 不被支持', 'audio-capture': '没有找到麦克风设备', 'aborted': '被中断' }[ev.error] || ev.error;
+      log('FAIL：onerror error="' + ev.error + '" → ' + m, 'fail');
+      setState('错误：' + ev.error);
+    };
+    rec.onend = function () { log('onend —— 本次识别结束'); if (!holding) setState('已结束'); rec = null; };
+    try { rec.start(); log('start() 已调用，等待 onstart…'); setState('连接识别服务…'); }
+    catch (e) { log('FAIL：start() 抛错：' + e.message, 'fail'); setState('启动失败'); }
+  }
+  function setState(s) { $('state').textContent = s; }
+
+  btn.addEventListener('pointerdown', function (e) {
+    e.preventDefault();
+    if (rec) return;
+    holding = true;
+    btn.classList.add('rec'); btn.textContent = '🔴 松开结束';
+    start();
+  });
+  ['pointerup', 'pointercancel', 'pointerleave'].forEach(function (evName) {
+    btn.addEventListener(evName, function () {
+      if (!holding) return;
+      holding = false;
+      btn.classList.remove('rec'); btn.textContent = '🎙 按住说话（松开结束）';
+      if (rec) { try { rec.stop(); } catch (e) { } }
+    });
+  });
+  log('诊断页就绪。按住按钮说话，然后松开——把整页日志截图发回来。', 'dim');
+  if (!SR) log('提示：此浏览器没有语音识别能力。电脑用 Edge/Chrome 最新版；手机用 Chrome/三星浏览器；微信里打开不支持。', 'dim');
+})();
+</script>
+</body>
+</html>
