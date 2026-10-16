@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.16.0';
+const APP_VER = '3.16.1';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5754,7 +5754,7 @@ function initQa() {
     micBtn.dataset.micBound = '1';
     const getSR = () => window.SpeechRecognition || window.webkitSpeechRecognition;
     let rec = null, mediaRec = null, mediaChunks = [], mediaStream = null;
-    let holding = false, srBroken = false;
+    let holding = false, srBroken = false, mediaTimer = null;
     const hint = t => {
       let h = document.getElementById('qaRecHint');
       if (!h) { h = document.createElement('div'); h.id = 'qaRecHint'; h.className = 'qa-rec-hint'; document.querySelector('.qa-composer').appendChild(h); }
@@ -5763,6 +5763,7 @@ function initQa() {
     const stopUi = () => { micBtn.classList.remove('rec'); const h = document.getElementById('qaRecHint'); if (h) h.remove(); };
     const stopSr = () => { if (rec) { try { rec.stop(); } catch (e) { } rec = null; } };
     const stopMedia = () => {
+      if (mediaTimer) { clearTimeout(mediaTimer); mediaTimer = null; }
       if (mediaRec) { try { if (mediaRec.state !== 'inactive') mediaRec.stop(); } catch (e) { } mediaRec = null; }
       if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
     };
@@ -5781,6 +5782,11 @@ function initQa() {
     async function mediaStart() {
       if (!navigator.mediaDevices || !window.MediaRecorder) { allStop(); toast('此浏览器既不支持语音识别也不支持录音，请用 Edge / Chrome', 'warn'); return; }
       mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      /* v3.16.1 修复「松开了却没停」：getUserMedia 等待授权期间用户可能已松手 ——
+         旧代码不复查 holding，回来后照样开录；而此刻 holding=false 使 endHandler
+         直接 return、pointerdown 又被 mediaRec 短路 → 这段录音永远停不下来。
+         现在发现已松手立即放弃（关掉轨道），绝不开录。 */
+      if (!holding) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; return; }
       mediaChunks = [];
       const mime = MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
       mediaRec = new MediaRecorder(mediaStream, mime ? { mimeType: mime } : undefined);
@@ -5797,6 +5803,10 @@ function initQa() {
         } catch (e) { toast('服务器转写失败：' + (e.message || e), 'warn'); }
       };
       mediaRec.start();
+      /* v3.16.1 保险丝：单次录音最长 60s，任何异常路径漏停也最多录 60s，绝不挂死 */
+      mediaTimer = setTimeout(() => {
+        if (mediaRec && mediaRec.state !== 'inactive') { try { mediaRec.stop(); } catch (e) { } }
+      }, 60000);
       micBtn.classList.add('rec');
       hint('🎙 录音中（服务器转写）… 松开结束');
     }
@@ -5804,6 +5814,10 @@ function initQa() {
     micBtn.addEventListener('contextmenu', e => e.preventDefault());
     micBtn.addEventListener('pointerdown', e => {
       e.preventDefault();
+      /* v3.16.1 指针捕获：不捕获的话，按住后鼠标移出按钮（甚至移出窗口）再松开，
+         pointerup 不会派发到本按钮 —— 旧版只靠 pointerleave 兜底，窗口外松开全丢，
+         也是「早就松手了却没停」的成因之一。捕获后松手事件必达本按钮。 */
+      try { micBtn.setPointerCapture(e.pointerId); } catch (e0) { }
       if (rec || mediaRec || holding) return;
       holding = true;
       const SR = getSR();
@@ -5813,7 +5827,7 @@ function initQa() {
         try { rec = new SR(); } catch (e2) { rec = null; srBroken = true; mediaStart().catch(err => { allStop(); toast('录音启动失败：' + err.message, 'warn'); }); return; }
         rec.lang = 'zh-CN';
         rec.interimResults = true;
-        rec.continuous = false;
+        rec.continuous = true;   /* v3.16.1：continuous=false 时停顿几秒 SR 会自动 end，表现为「按住却没在听」 */
         rec.onresult = ev => {
           let txt = '';
           for (let i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
@@ -5834,7 +5848,15 @@ function initQa() {
             toast('语音识别失败：' + err, 'warn');
           }
         };
-        rec.onend = () => { rec = null; if (!holding && !mediaRec) stopUi(); };
+        rec.onend = () => {
+          rec = null;
+          /* v3.16.1：按住期间 SR 自己断了（网络抖动/服务端超时）→ 无缝切引擎B，
+             保证「松手才停」且按住全程始终有引擎在录；正常松手路径只清 UI */
+          if (holding && !srBroken && !mediaRec) {
+            hint('⏳ 切换服务器转写…');
+            mediaStart().catch(err2 => { allStop(); toast('录音启动失败：' + err2.message, 'warn'); });
+          } else if (!holding && !mediaRec) stopUi();
+        };
         try {
           rec.start();
           micBtn.classList.add('rec');
@@ -5845,12 +5867,21 @@ function initQa() {
       }
     });
     const endHandler = e => {
-      if (!holding) return;
       e.preventDefault();
+      /* v3.16.1：不再以 holding 为前置条件 —— 无论状态如何，先把所有还活着的引擎停干净。
+         旧代码 `if (!holding) return;` 会放过「holding 已被竞态清掉但引擎还在录」的漏网情况，
+         这也是「早就松手了却没停」的成因之一 */
+      if (rec) { try { rec.stop(); } catch (e2) { } rec = null; }
+      if (mediaRec && mediaRec.state !== 'inactive') {
+        try { mediaRec.stop(); } catch (e3) { }   // onstop 里上传+清UI
+        holding = false;
+        return;
+      }
+      /* getUserMedia 还挂着（mediaStart 尚未返回）：此处先清 UI，mediaStart 内部
+         复查 !holding 后会自行放弃，不会开录 */
+      if (mediaStream) stopMedia();
+      stopUi();
       holding = false;
-      if (rec) { try { rec.stop(); } catch (e2) { } rec = null; if (!mediaRec) stopUi(); }
-      else if (mediaRec && mediaRec.state !== 'inactive') { try { mediaRec.stop(); } catch (e3) { } }   // onstop 里上传+清UI
-      else stopUi();
     };
     micBtn.addEventListener('pointerup', endHandler);
     micBtn.addEventListener('pointercancel', endHandler);
