@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.17.1';
+const APP_VER = '3.17.2';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5448,6 +5448,14 @@ function qaLocalSet(cid, title) {
 }
 
 async function sendQa() {
+  /* v3.17.2 防重发守卫：当前会话还在生成时不允许再发。按钮在 qaSyncSendState
+     里已禁用，但 Enter 键是直接调 sendQa()、绕过 disabled —— 旧代码能在上一个
+     问题没答完时再发一条，两条回答会交错写进同一个会话流。按钮和键盘统一在
+     这里拦下。 */
+  if (qaState.busyConvs && qaState.busyConvs[qaState.conversationId]) {
+    toast('上一个问题还在回答中，请等它完成，或点 ■ 停止后再发', 'warn');
+    return;
+  }
   const input = $('qaInput');
   const question = input.value.trim();
   const files = qaState.files || [];
