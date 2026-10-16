@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.17.2';
+const APP_VER = '3.17.3';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -4956,26 +4956,78 @@ async function qaLlmChat(messages, { tools, signal } = {}) {
   if (!m) throw new Error('尚未选择模型');
   const body = { model: m.custom ? m.model : m.id, messages };
   if (tools && tools.length) body.tools = tools;
+  /* v3.17.3 关键修复：本函数原先 stream:false —— 实测平台网关已拒绝一切非流式请求
+     （"stream must be true; non-streaming chat completions are not supported"），
+     agentic 回路第 1 轮就抛错 → sendQa 静默降级纯文本 baseMsgs：
+     ① 带图提问的图片被丢掉（模型说「没收到图片」）；
+     ② 所有未命中规则路由的提问，工具回路整体失效、模型再也不调技能。
+     改为内部走流式、把增量拼回完整 message（content + tool_calls），对外形状不变。 */
+  const mkAccum = () => {
+    let content = '';
+    const tcs = new Map(), order = [];
+    return {
+      feed(d) {
+        if (d && d.content) content += d.content;
+        if (d && d.tool_calls) for (const tc of d.tool_calls) {
+          const i = tc.index == null ? 0 : tc.index;
+          if (!tcs.has(i)) { tcs.set(i, { id: tc.id || '', type: 'function', function: { name: '', arguments: '' } }); order.push(i); }
+          const t = tcs.get(i);
+          if (tc.id) t.id = tc.id;
+          if (tc.function) {
+            if (tc.function.name && !t.function.name) t.function.name = tc.function.name;   // name 通常整段到达
+            if (tc.function.arguments) t.function.arguments += tc.function.arguments;       // arguments 逐段增量
+          }
+        }
+      },
+      done() {
+        const out = { content };
+        if (order.length) out.tool_calls = order.sort((a, b) => a - b).map(i => tcs.get(i));
+        return out;
+      },
+    };
+  };
   if (m.custom) {
     let url = m.baseUrl.replace(/\/+$/, '');
     if (!/\/chat\/completions$/.test(url)) url += '/chat/completions';
     const res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + m.apiKey },
-      body: JSON.stringify(body),
+      body: JSON.stringify(Object.assign({ stream: true }, body)),
       signal,
     });
     if (!res.ok) {
       const t = await res.text().catch(() => '');
       throw new Error('自定义模型请求失败 HTTP ' + res.status + (t ? '：' + t.slice(0, 160) : ''));
     }
-    const j = await res.json();
-    return (j.choices && j.choices[0] && j.choices[0].message) || {};
+    const reader = res.body.getReader(), dec = new TextDecoder();
+    let buf = '';
+    const acc = mkAccum();
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      const lines = buf.split('\n'); buf = lines.pop();
+      for (const line of lines) {
+        const s = line.trim();
+        if (!s.startsWith('data:')) continue;
+        const data = s.slice(5).trim();
+        if (!data || data === '[DONE]') continue;
+        try {
+          const j = JSON.parse(data);
+          acc.feed(j.choices && j.choices[0] && j.choices[0].delta);
+        } catch (e) { /* 忽略无法解析的行 */ }
+      }
+    }
+    return acc.done();
   }
   if (!cloudLlm) throw new Error('云端模型服务不可用');
   const llm = cloudLlm.llm || cloudLlm;
-  const resp = await llm.chat.completions.create(Object.assign({ stream: false }, body));
-  return (resp.choices && resp.choices[0] && resp.choices[0].message) || {};
+  const acc = mkAccum();
+  for await (const chunk of llm.chat.completions.create(Object.assign({ stream: true }, body))) {
+    if (signal && signal.aborted) break;
+    acc.feed(chunk.choices && chunk.choices[0] && chunk.choices[0].delta);
+  }
+  return acc.done();
 }
 async function qaAgentLoop(baseMsgs, { signal, onNote, onDelta } = {}) {
   /* v3.12.4 轮间 + 工具执行阶段的可中断性（此前取数阶段停止无效） */
