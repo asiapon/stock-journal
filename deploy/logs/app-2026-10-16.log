@@ -440,3 +440,4 @@
 2026-10-16T03:32:48.589Z | web | quote | 东财 push2.eastmoney.com | OK | 177ms | 4/4 只 | 总览/行情·刷新(强刷)
 2026-10-16T03:32:48.589Z | web | quote | 东财 指数快照 | OK | 48ms | 6/6 个 | 总览/行情·刷新(强刷)
 2026-10-16T03:32:48.589Z | web | rpc | app_list_users | OK | 82ms | 
+2026-10-16T04:30:52.095Z | rpc | app_has_users | app_has_users | OK | 23ms | ok | {}

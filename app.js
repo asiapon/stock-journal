@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.15.0';
+const APP_VER = '3.15.1';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -437,6 +437,12 @@ function quoteMap() {
    src（触发来源：功能·操作，由 NetLog.withCtx 压栈自动带上）
    url（请求地址）req（请求参数摘要）resp（返回摘要）err（失败原因）
    取不到数据时如实记 FAIL + 原因，绝不静默编造。 */
+/* v3.15.1 自托管 API 统一带会话 token（公网部署时服务端校验 x-sj-token） */
+function sjTokenHeaders(extra) {
+  const h = Object.assign({ 'Content-Type': 'application/json' }, extra || {});
+  if (typeof S !== 'undefined' && S.token) h['x-sj-token'] = S.token;
+  return h;
+}
 const NetLog = {
   buf: [],
   max: 800,
@@ -491,7 +497,7 @@ const NetLog = {
     if (this._upDisabled || location.protocol === 'file:') return;
     if (!this._outbox.length) return;
     const entries = this._outbox.splice(0, this._outbox.length);
-    fetch('/api/log', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    fetch('/api/log', { method: 'POST', headers: sjTokenHeaders(),
       body: JSON.stringify({ entries: entries.map(x => ({ t: x.t, kind: x.kind, name: x.name, ok: x.ok, ms: x.ms, detail: x.detail, src: x.src })) }) })
       .then(r => { if (!r.ok) this._upDisabled = true; })
       .catch(() => { this._upDisabled = true; });
@@ -2626,7 +2632,7 @@ function renderNetLogUI() {
   if (!isSelf) { el.textContent = '云端托管版没有日志文件；数据调用明细仅自托管后端有（deploy/logs/app-日期.log）。'; if (list) list.innerHTML = ''; return; }
   el.textContent = '日志文件：deploy/logs/app-' + new Date().toISOString().slice(0, 10) + '.log（每 2.5 秒批量上报一次调用明细）';
   if (list) list.textContent = '加载中…';
-  fetch('/api/logs/tail?n=200').then(r => r.json()).then(j => {
+  fetch('/api/logs/tail?n=200', { headers: sjTokenHeaders() }).then(r => r.json()).then(j => {
     if (list) list.innerHTML = '<pre class="srv-log">' + esc((j.lines || []).join('\n') || '(空)') + '</pre>';
   }).catch(e => { if (list) list.textContent = '读取失败：' + (e.message || e); });
 }
@@ -3242,9 +3248,19 @@ function bindEvents() {
   for (const m of WATCH_MOUNTS) bindWatchCard(m);
 
   /* v3.8.23 网络日志：下载 / 清空 */
-  $('netLogDlBtn').addEventListener('click', () => {
+  $('netLogDlBtn').addEventListener('click', async () => {
     if (location.hostname.endsWith('workbuddy.host') || location.protocol === 'file:') return toast('云端托管版没有日志文件（仅自托管后端有）', 'warn');
-    location.href = '/api/logs/download';
+    /* v3.15.1 下载走 fetch 带 token（location.href 无法带自定义头） */
+    try {
+      const r = await fetch('/api/logs/download', { headers: sjTokenHeaders() });
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const blob = await r.blob();
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'app-' + new Date().toISOString().slice(0, 10) + '.log';
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(a.href), 3000);
+    } catch (e) { toast('下载失败：' + (e.message || e), 'warn'); }
   });
   $('netLogClearBtn').addEventListener('click', () => { renderNetLogUI(); });
 
@@ -3259,7 +3275,7 @@ function bindEvents() {
       sum.textContent = 'K线库（服务端 PostgreSQL）：每只股票一行，bars 数组每天一条 [日期,开,收,高,低,量,额]——按交易日可查任意一天的涨跌幅排名。';
       daily.innerHTML = '<p class="hint">交易日覆盖统计加载中…</p>';
       try {
-        const j = await fetch('/api/klib/daily').then(r => r.json());
+        const j = await fetch('/api/klib/daily', { headers: sjTokenHeaders() }).then(r => r.json());
         if (!j.ok) throw new Error(j.msg || '统计失败');
         const pct = d => j.total ? (d.stocks / j.total * 100).toFixed(1) + '%' : '--';
         daily.innerHTML = '<div class="table-wrap"><table class="batch-table"><thead><tr>'

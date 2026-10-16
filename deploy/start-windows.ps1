@@ -6,7 +6,12 @@
 # ============================================================================
 $ErrorActionPreference = "Stop"
 $DeployDir = Split-Path -Parent $MyInvocation.MyCommand.Path
+# v3.15.1 端口从 .env 的 PORT 读取（默认 3000）
 $Port = 3000
+$envFile = Join-Path $DeployDir ".env"
+if (Test-Path $envFile) {
+  Get-Content $envFile | ForEach-Object { if ($_ -match '^\s*PORT\s*=\s*(\d+)\s*$') { $Port = [int]$Matches[1] } }
+}
 
 # 1. 停掉旧实例（3000 端口的监听者）
 $killed = 0

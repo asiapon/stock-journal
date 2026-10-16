@@ -97,7 +97,19 @@ app.post('/api/pack/install', async (req, res) => {
     res.json(Object.assign({ ok: true }, r));
   } catch (e) { res.status(500).json({ ok: false, msg: e.message || String(e) }); }
 });
+/* v3.15.1 公网加固：敏感端点必须携带有效会话 token（前端登录后随 x-sj-token 头发送）。
+   背景：这些端点此前无鉴权 —— 内网无所谓，暴露公网后任何人都能看日志、跑 Python 技能。 */
+async function requireSession(req) {
+  const t = req.get('x-sj-token') || '';
+  if (!t || !pool) return false;
+  try {
+    const { rows } = await pool.query('SELECT 1 FROM app_sessions WHERE token = $1 AND expires_at > now()', [t]);
+    return rows.length > 0;
+  } catch (e) { return false; }
+}
+
 app.post('/api/pack/execute', async (req, res) => {
+  if (!(await requireSession(req))) return res.status(401).json({ ok: false, msg: '需要登录（token 无效）' });
   try {
     const { pack, fn, args } = req.body || {};
     if (!pack || !fn) return res.status(400).json({ ok: false, msg: '缺少 pack / fn' });
@@ -113,8 +125,10 @@ app.post('/api/pack/execute', async (req, res) => {
   } catch (e) { res.status(500).json({ ok: false, msg: e.message || String(e) }); }
 });
 
-/* v3.12.4 前端调用日志上报：页面里的每一次外部接口调用（东财/腾讯等）批量落日志文件 */
-app.post('/api/log', express.json({ limit: '2mb' }), (req, res) => {
+/* v3.12.4 前端调用日志上报：页面里的每一次外部接口调用（东财/腾讯等）批量落日志文件
+   v3.15.1 日志上报也要求会话（日志里含 token 摘录，公网不能裸奔） */
+app.post('/api/log', express.json({ limit: '2mb' }), async (req, res) => {
+  if (!(await requireSession(req))) return res.status(401).json({ ok: false, msg: '需要登录（token 无效）' });
   const entries = (req.body && Array.isArray(req.body.entries)) ? req.body.entries.slice(0, 100) : [];
   for (const e of entries) {
     logger.log('web', e.kind || 'fetch', e.name || '', e.ok !== false, e.ms || 0, e.detail || '', e.meta || e.src || '');
@@ -123,10 +137,12 @@ app.post('/api/log', express.json({ limit: '2mb' }), (req, res) => {
 });
 /* 日志查看：最近 n 行 / 下载当天文件 */
 app.get('/api/logs/tail', async (req, res) => {
+  if (!(await requireSession(req))) return res.status(401).json({ ok: false, msg: '需要登录（token 无效）' });
   const n = Math.min(2000, Math.max(1, parseInt(req.query.n, 10) || 200));
   res.json({ ok: true, file: logger.todayFile(), lines: await logger.tail(n) });
 });
-app.get('/api/logs/download', (req, res) => {
+app.get('/api/logs/download', async (req, res) => {
+  if (!(await requireSession(req))) return res.status(401).json({ ok: false, msg: '需要登录（token 无效）' });
   res.download(logger.todayFile());
 });
 /* v3.12.6 按交易日的 K 线覆盖统计（对账视图）：
@@ -135,6 +151,7 @@ app.get('/api/logs/download', (req, res) => {
    全量展开约 153 万元素（2-5 秒），结果缓存 10 分钟。 */
 let _klibDailyCache = null;
 app.get('/api/klib/daily', async (req, res) => {
+  if (!(await requireSession(req))) return res.status(401).json({ ok: false, msg: '需要登录（token 无效）' });
   if (!pool) return res.status(500).json({ ok: false, msg: '服务端未配置 DATABASE_URL' });
   if (_klibDailyCache && Date.now() - _klibDailyCache.at < 600000)
     return res.json(Object.assign({ ok: true, cached: true }, _klibDailyCache.data));
@@ -149,7 +166,8 @@ app.get('/api/klib/daily', async (req, res) => {
     res.json(Object.assign({ ok: true, cached: false }, data));
   } catch (e) { res.status(500).json({ ok: false, msg: e.message }); }
 });
-app.post('/api/pack/remove', (req, res) => {
+app.post('/api/pack/remove', async (req, res) => {
+  if (!(await requireSession(req))) return res.status(401).json({ ok: false, msg: '需要登录（token 无效）' });
   const { name } = req.body || {};
   if (!name) return res.status(400).json({ ok: false, msg: '缺少 name' });
   res.json(Object.assign({ ok: true }, skillpack.remove(name)));
@@ -198,6 +216,7 @@ app.get('/api/sync/status', (req, res) => {
 app.post('/api/sync/run', async (req, res) => {
   if (REQUIRE_KEY && req.get('x-wb-webapp-access-key') !== ACCESS_KEY)
     return res.status(401).json({ ok: false, msg: 'access key 不匹配' });
+  if (!(await requireSession(req))) return res.status(401).json({ ok: false, msg: '需要登录（token 无效）' });
   const r = await runSync('manual');
   res.json(Object.assign({ ok: true }, r));
 });

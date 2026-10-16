@@ -3570,7 +3570,8 @@ async function skillPackExec(packId, fn, args) {
     /* 未在清单里也放行（清单是安装时快照），但给个提示词头 */
   }
   const res = await fetch(base + '/api/pack/execute', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    /* v3.15.1 公网部署：带上会话 token（服务端校验 x-sj-token） */
+    method: 'POST', headers: { 'Content-Type': 'application/json', ...(typeof S !== 'undefined' && S.token ? { 'x-sj-token': S.token } : {}) },
     body: JSON.stringify({ pack: (p && p.packName) || String(packId).replace(/^pack-/, ''), fn: fn, args: args || {} }),
   });
   const j = await res.json().catch(() => ({}));
@@ -3890,7 +3891,7 @@ function skillUninstall(id) {
     const p = skillPackById(id);
     skillPackDelete(id);
     /* 后端文件也一并移除（尽力而为；跨域失败不阻断本机记录删除） */
-    if (p) fetch(runtimeBase() + '/api/pack/remove', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: p.packName }) }).catch(() => { });
+    if (p) fetch(runtimeBase() + '/api/pack/remove', { method: 'POST', headers: { 'Content-Type': 'application/json', ...(typeof S !== 'undefined' && S.token ? { 'x-sj-token': S.token } : {}) }, body: JSON.stringify({ name: p.packName }) }).catch(() => { });
     return;
   }
   const r = skillReg();
