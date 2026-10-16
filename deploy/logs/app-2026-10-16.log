@@ -71,3 +71,88 @@
 2026-10-15T23:06:03.188Z | web | quote | 东财 指数快照 | FAIL | 133ms | Failed to fetch | 总览/行情·刷新(强刷)
 2026-10-15T23:06:03.188Z | web | quote | 腾讯 指数快照 | OK | 21ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新(强刷)
 2026-10-15T23:06:03.188Z | web | rpc | app_list_users | OK | 91ms | 
+2026-10-16T00:58:55.786Z | rpc | app_list_users | app_list_users | OK | 12ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T00:58:58.270Z | rpc | app_has_users | app_has_users | OK | 3ms | ok | {}
+2026-10-16T00:58:58.292Z | rpc | app_query | trades | OK | 12ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-16T00:58:58.464Z | rpc | app_query | watchlist | OK | 183ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-16T00:58:58.467Z | rpc | app_query | op_logs | OK | 179ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-16T00:58:58.468Z | rpc | app_query | settings | OK | 184ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-16T00:58:58.494Z | rpc | app_query | quotes | OK | 211ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-16T00:58:58.506Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-16T00:58:58.520Z | rpc | app_list_users | app_list_users | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T00:58:58.901Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T00:59:00.733Z | rpc | app_has_users | app_has_users | OK | 0ms | ok | {}
+2026-10-16T00:59:00.751Z | rpc | app_query | trades | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-16T00:59:00.751Z | rpc | app_query | watchlist | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-16T00:59:00.753Z | rpc | app_query | quotes | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-16T00:59:00.754Z | rpc | app_query | op_logs | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-16T00:59:00.755Z | rpc | app_query | settings | OK | 6ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-16T00:59:00.787Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-16T00:59:00.805Z | rpc | app_list_users | app_list_users | OK | 7ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T00:59:01.197Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T00:59:05.216Z | rpc | app_has_users | app_has_users | OK | 1ms | ok | {}
+2026-10-16T00:59:05.227Z | rpc | app_query | watchlist | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-16T00:59:05.227Z | rpc | app_query | trades | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-16T00:59:05.228Z | rpc | app_query | quotes | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-16T00:59:05.228Z | rpc | app_query | op_logs | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-16T00:59:05.229Z | rpc | app_query | settings | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-16T00:59:05.240Z | rpc | app_query | qa_history | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-16T00:59:05.263Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T00:59:05.616Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T00:59:08.124Z | web | rpc | app_has_users | FAIL | 9ms | 
+2026-10-16T00:59:08.124Z | web | rpc | app_query | OK | 7ms | 
+2026-10-16T00:59:08.124Z | web | rpc | app_query | OK | 8ms | 
+2026-10-16T00:59:08.124Z | web | rpc | app_query | OK | 7ms | 
+2026-10-16T00:59:08.124Z | web | rpc | app_query | OK | 7ms | 
+2026-10-16T00:59:08.124Z | web | rpc | app_query | OK | 7ms | 
+2026-10-16T00:59:08.124Z | web | rpc | app_query | OK | 113ms |  | 总览/行情·刷新
+2026-10-16T00:59:08.124Z | web | rpc | app_list_users | OK | 87ms |  | 总览/行情·刷新
+2026-10-16T00:59:08.124Z | web | quote | 东财 push2.eastmoney.com | FAIL | 165ms | Failed to fetch | 总览/行情·刷新
+2026-10-16T00:59:08.124Z | web | quote | 腾讯 qt.gtimg.cn | OK | 18ms | 4/4 只 | 总览/行情·刷新
+2026-10-16T00:59:08.124Z | web | quote | 东财 指数快照 | FAIL | 157ms | Failed to fetch | 总览/行情·刷新
+2026-10-16T00:59:08.124Z | web | quote | 腾讯 指数快照 | OK | 10ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新
+2026-10-16T00:59:08.124Z | web | rpc | app_list_users | OK | 5ms | 
+2026-10-16T00:59:56.450Z | rpc | app_list_users | app_list_users | OK | 84ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T00:59:58.958Z | web | quote | 东财 push2.eastmoney.com | FAIL | 239ms | Failed to fetch | 总览/行情·刷新(强刷)
+2026-10-16T00:59:58.958Z | web | quote | 腾讯 qt.gtimg.cn | OK | 12ms | 4/4 只 | 总览/行情·刷新(强刷)
+2026-10-16T00:59:58.958Z | web | quote | 东财 指数快照 | FAIL | 63ms | Failed to fetch | 总览/行情·刷新(强刷)
+2026-10-16T00:59:58.958Z | web | quote | 腾讯 指数快照 | OK | 9ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新(强刷)
+2026-10-16T00:59:58.958Z | web | rpc | app_list_users | OK | 88ms | 
+2026-10-16T01:00:17.415Z | rpc | app_list_users | app_list_users | OK | 81ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T01:00:19.919Z | web | quote | 东财 push2.eastmoney.com | FAIL | 120ms | Failed to fetch | 总览/行情·刷新(强刷)
+2026-10-16T01:00:19.919Z | web | quote | 东财熔断→切腾讯 | OK | 0ms | 连续失败 3 次，10 分钟后重试东财 | 总览/行情·刷新(强刷)
+2026-10-16T01:00:19.919Z | web | quote | 腾讯 qt.gtimg.cn | OK | 11ms | 4/4 只 | 总览/行情·刷新(强刷)
+2026-10-16T01:00:19.919Z | web | quote | 腾讯 指数快照 | OK | 9ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新(强刷)
+2026-10-16T01:00:19.919Z | web | rpc | app_list_users | OK | 85ms | 
+2026-10-16T01:00:32.816Z | rpc | app_insert | qa_history | OK | 141ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmva9f3iqo33t8","question":"把唐奇安通道突破策略在我持仓股上跑一遍，按总收益排名看哪只最适合做突破。","answer":""}}
+2026-10-16T01:00:32.821Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-16T01:00:36.908Z | web | rpc | app_insert | OK | 145ms | 
+2026-10-16T01:00:36.908Z | web | rpc | app_query | OK | 5ms | 
+2026-10-16T01:00:36.908Z | web | llm | 云端模型 glm-5.3-flash | OK | 1726ms | 64 字
+2026-10-16T01:00:36.908Z | web | llm | agentic 回路回退 | FAIL | 0ms | stream must be true; non-streaming chat completions are not supported
+2026-10-16T01:00:42.327Z | rpc | app_delete | qa_history | OK | 5ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":31}
+2026-10-16T01:00:42.336Z | rpc | app_insert | qa_history | OK | 5ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmva9f3iqo33t8","question":"把唐奇安通道突破策略在我持仓股上跑一遍，按总收益排名看哪只最适合做突破。","answer":"这个需求我没法直接跑出来，得先说清楚 limitation：\n\n**缺什么数据**\n- 你持仓里只有成本价（如中兴通讯 44.81），没有近期最高价/最低价序列，而唐奇安通道的核心参数（比如 N=20 日最高价、突破位）必须用日线行情算。
+2026-10-16T01:00:42.340Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-16T01:00:44.853Z | web | rpc | app_delete | OK | 8ms | 
+2026-10-16T01:00:44.853Z | web | rpc | app_insert | OK | 8ms | 
+2026-10-16T01:00:44.853Z | web | rpc | app_query | OK | 5ms | 
+2026-10-16T01:02:27.467Z | rpc | app_list_users | app_list_users | OK | 88ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T01:02:29.971Z | web | quote | 腾讯 qt.gtimg.cn | OK | 32ms | 4/4 只 | 总览/行情·刷新(强刷)
+2026-10-16T01:02:29.971Z | web | quote | 腾讯 指数快照 | OK | 14ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新(强刷)
+2026-10-16T01:02:29.971Z | web | rpc | app_list_users | OK | 92ms | 
+2026-10-16T01:02:43.323Z | rpc | app_insert | qa_history | OK | 127ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmva9f3iqo33t8","question":"解析下\n📎 附件：操作日记备份-2026-10-14.json","answer":""}}
+2026-10-16T01:02:43.331Z | rpc | app_query | qa_history | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-16T01:02:47.016Z | web | rpc | app_insert | OK | 132ms | 
+2026-10-16T01:02:47.016Z | web | rpc | app_query | OK | 7ms | 
+2026-10-16T01:02:47.016Z | web | llm | 云端模型 glm-5.3-flash | OK | 1316ms | 68 字
+2026-10-16T01:02:47.016Z | web | llm | agentic 回路回退 | FAIL | 0ms | stream must be true; non-streaming chat completions are not supported
+2026-10-16T01:02:51.058Z | rpc | app_delete | qa_history | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_id":33}
+2026-10-16T01:02:51.065Z | rpc | app_insert | qa_history | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history","p_data":{"conversation_id":"cmva9f3iqo33t8","question":"解析下\n📎 附件：操作日记备份-2026-10-14.json","answer":"解析完了，这份备份内容和你 App 里现有数据一致，没发现问题。要点如下：\n\n**基本信息**\n- 导出时间：2026-10-14（云端模式）\n- 数据版本 v2，共 4 笔交易、自选股为空、无行情缓存\n\n**持仓明细**\n\n| 股票
+2026-10-16T01:02:51.069Z | rpc | app_query | qa_history | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-16T01:02:53.574Z | web | rpc | app_delete | OK | 4ms | 
+2026-10-16T01:02:53.574Z | web | rpc | app_insert | OK | 8ms | 
+2026-10-16T01:02:53.574Z | web | rpc | app_query | OK | 4ms | 
+2026-10-16T01:04:03.729Z | rpc | app_list_users | app_list_users | OK | 89ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T01:04:06.343Z | web | quote | 腾讯 qt.gtimg.cn | OK | 32ms | 4/4 只 | 总览/行情·刷新(强刷)
+2026-10-16T01:04:06.343Z | web | quote | 腾讯 指数快照 | OK | 9ms | 补齐 6 个（腾讯共返回 6 个） | 总览/行情·刷新(强刷)
+2026-10-16T01:04:06.343Z | web | rpc | app_list_users | OK | 92ms | 

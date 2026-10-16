@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.13.4';
+const APP_VER = '3.14.1';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5044,7 +5044,7 @@ function bindQaExamples() {
     if (!btn) return;
     qaUseExample(btn.dataset.q);
   });
-  /* v3.13.0 「＋」弹出菜单（WorkBuddy 同款）：文件 / 示例 / 技能搜索列表 */
+  /* v3.14.0 「＋」弹出菜单：文件 / 技能搜索列表（示例问题恢复独立 💡 按钮） */
   const plus = $('qaPlusBtn'), menu = $('qaPlusMenu'), skMenu = $('qaSkillMenu');
   if (!plus || !menu || plus.dataset.plusBound) return;
   plus.dataset.plusBound = '1';
@@ -5059,14 +5059,10 @@ function bindQaExamples() {
   menu.addEventListener('click', e => {
     const item = e.target.closest('.qa-plus-item');
     if (!item) return;
+    e.stopPropagation();   /* v3.14.0 关键修复：阻止冒泡到 document 的「点外关闭」监听——
+                              否则刚打开的技能面板会被同一次点击立刻关掉（面板闪一下即逝） */
     const act = item.dataset.act;
     if (act === 'attach') { closeAll(); $('qaFileInput').click(); }
-    else if (act === 'examples') {
-      closeAll();
-      const p = $('qaExPanel');
-      if (!p.innerHTML) p.innerHTML = '<div class="qa-ex-head"><b>💡 示例问题</b><button type="button" class="qa-ex-close" title="收起">✕</button></div>' + qaEmptyHtml();
-      p.hidden = !p.hidden;                   // 开关语义：已开则收起
-    }
     else if (act === 'skills') { menu.hidden = true; skMenu.hidden = false; $('qaSkillSearch').value = ''; renderQaSkillPick(''); setTimeout(() => $('qaSkillSearch').focus(), 30); }
   });
   skMenu.addEventListener('click', e => {
@@ -5096,12 +5092,30 @@ function bindQaExamples() {
     }
   });
   $('qaSkillSearch').addEventListener('input', e => renderQaSkillPick(e.target.value));
+  /* v3.14.0 恢复独立 💡 按钮（用户要求示例问题独立出来，回到 v3.12.7 逻辑） */
+  const exBtn = $('qaExBtn'), panel = $('qaExPanel');
+  if (exBtn && panel && !exBtn.dataset.exBound) {
+    exBtn.dataset.exBound = '1';
+    exBtn.addEventListener('click', e => {
+      e.stopPropagation();
+      closeAll();
+      if (!panel.innerHTML) panel.innerHTML = '<div class="qa-ex-head"><b>💡 示例问题</b><button type="button" class="qa-ex-close" title="收起">✕</button></div>' + qaEmptyHtml();
+      panel.hidden = !panel.hidden;
+    });
+    panel.addEventListener('click', e => {
+      if (e.target.closest('.qa-ex-close')) { panel.hidden = true; return; }
+      const btn = e.target.closest('.qa-ex-card');
+      if (!btn) return;
+      qaUseExample(btn.dataset.q);
+      panel.hidden = true;
+    });
+  }
   document.addEventListener('click', e => {
     if (!menu.hidden && !menu.contains(e.target) && e.target !== plus && !plus.contains(e.target)) menu.hidden = true;
     if (!skMenu.hidden && !skMenu.contains(e.target) && e.target !== plus && !plus.contains(e.target)) skMenu.hidden = true;
     /* 示例面板：点外部收起（面板内的卡片/关闭按钮不触发） */
     const p = $('qaExPanel');
-    if (p && !p.hidden && !p.contains(e.target)) p.hidden = true;
+    if (p && !p.hidden && !p.contains(e.target) && e.target !== exBtn && !exBtn.contains(e.target)) p.hidden = true;
   });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeAll(); });
   /* 示例面板内：✕ 收起 / 点卡片填入并收起（v3.13.0 重构时丢了面板的点击绑定，这里补回） */
