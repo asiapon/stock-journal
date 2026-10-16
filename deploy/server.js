@@ -213,6 +213,39 @@ app.post('/.cloud/database/rest/rpc/:fn', async (req, res) => {
 app.get('/api/sync/status', (req, res) => {
   res.json({ ok: true, syncAt: SYNC_AT, running: _syncing, last: _lastSync });
 });
+/* v3.16.0 语音转写代理：手机录音（raw audio）→ 转发硅基流动 SenseVoice → 文字。
+   .env 配置：ASR_API_KEY（硅基流动 Key，sfr- 开头；未配置时本接口 501 并给指引）
+             ASR_BASE_URL（默认 https://api.siliconflow.cn/v1）
+             ASR_MODEL（默认 FunAudioLLM/SenseVoiceSmall） */
+app.post('/api/asr', express.raw({ type: () => true, limit: '14mb' }), async (req, res) => {
+  if (!(await requireSession(req))) return res.status(401).json({ ok: false, msg: '需要登录（token 无效）' });
+  const key = process.env.ASR_API_KEY || '';
+  if (!key) return res.status(501).json({ ok: false, msg: '服务器未配置 ASR_API_KEY：请在 deploy/.env 填入硅基流动 Key（sfr- 开头）后重启' });
+  if (!req.body || !req.body.length) return res.status(400).json({ ok: false, msg: '没有收到录音' });
+  const base = (process.env.ASR_BASE_URL || 'https://api.siliconflow.cn/v1').replace(/\/+$/, '');
+  const model = process.env.ASR_MODEL || 'FunAudioLLM/SenseVoiceSmall';
+  const t0 = Date.now();
+  try {
+    const fd = new FormData();
+    fd.append('file', new Blob([req.body], { type: req.headers['content-type'] || 'audio/webm' }), 'speech.webm');
+    fd.append('model', model);
+    const r = await fetch(base + '/audio/transcriptions', {
+      method: 'POST', headers: { Authorization: 'Bearer ' + key }, body: fd,
+      signal: AbortSignal.timeout(30000),
+    });
+    const j = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      logger.log('asr', 'transcribe', model, false, Date.now() - t0, 'HTTP ' + r.status + ': ' + (j.message || j.error || ''));
+      return res.status(502).json({ ok: false, msg: 'ASR 服务返回 ' + r.status + (j.message ? '：' + j.message : '') });
+    }
+    logger.log('asr', 'transcribe', model, true, Date.now() - t0, (j.text || '').slice(0, 80));
+    res.json({ ok: true, text: j.text || '' });
+  } catch (e) {
+    logger.log('asr', 'transcribe', model, false, Date.now() - t0, e.message || String(e));
+    res.status(502).json({ ok: false, msg: '转写失败：' + (e.message || e) });
+  }
+});
+
 app.post('/api/sync/run', async (req, res) => {
   if (REQUIRE_KEY && req.get('x-wb-webapp-access-key') !== ACCESS_KEY)
     return res.status(401).json({ ok: false, msg: 'access key 不匹配' });

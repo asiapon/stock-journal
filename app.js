@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.15.2';
+const APP_VER = '3.16.0';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5745,61 +5745,116 @@ function initQa() {
   /* 语音输入：必须「点击时」才去取 SpeechRecognition —— 部分浏览器的兼容层
      是页面加载完成后才注入的，提前取会拿到 undefined。不支持时给出提示。 */
   let rec = null;
-  /* v3.14.2 按住说话（微信/WorkBuddy 同款交互）：按住 🎤 说话，松开自动把识别结果
-     填进输入框。按住期间实时上屏、按钮变红脉动、上方浮「松开结束」。
-     依赖浏览器 SpeechRecognition（Edge/Chrome/Android Chrome 支持；微信内置等不支持时
-     点按会给出明确提示）。 */
+  /* v3.16.0 按住说话 · 双引擎：
+     引擎A 浏览器原生识别（电脑 Edge/Chrome 体验最好：实时上屏）
+     引擎B 录音上传服务器转写（/api/asr → 硅基流动 SenseVoice；手机无谷歌服务时 SR
+     会立刻 aborted —— 引擎A 一失败自动无缝切引擎B 继续录，同一次按住不中断） */
   const micBtn = $('qaMicBtn');
   if (micBtn && !micBtn.dataset.micBound) {
     micBtn.dataset.micBound = '1';
-    /* 注意：SR 能力必须在每次按住时实时探测（v3.14.2 修复——绑定时固化会导致
-       晚于页面加载注入/晚出现的实现永远被判「不支持」） */
     const getSR = () => window.SpeechRecognition || window.webkitSpeechRecognition;
-    const stopRec = () => {
-      if (rec) { try { rec.stop(); } catch (e) { /* */ } rec = null; }
-      micBtn.classList.remove('rec');
-      const h = document.getElementById('qaRecHint');
-      if (h) h.remove();
+    let rec = null, mediaRec = null, mediaChunks = [], mediaStream = null;
+    let holding = false, srBroken = false;
+    const hint = t => {
+      let h = document.getElementById('qaRecHint');
+      if (!h) { h = document.createElement('div'); h.id = 'qaRecHint'; h.className = 'qa-rec-hint'; document.querySelector('.qa-composer').appendChild(h); }
+      h.textContent = t; return h;
     };
-    micBtn.addEventListener('contextmenu', e => e.preventDefault());   // 长按不出系统菜单
+    const stopUi = () => { micBtn.classList.remove('rec'); const h = document.getElementById('qaRecHint'); if (h) h.remove(); };
+    const stopSr = () => { if (rec) { try { rec.stop(); } catch (e) { } rec = null; } };
+    const stopMedia = () => {
+      if (mediaRec) { try { if (mediaRec.state !== 'inactive') mediaRec.stop(); } catch (e) { } mediaRec = null; }
+      if (mediaStream) { mediaStream.getTracks().forEach(t => t.stop()); mediaStream = null; }
+    };
+    const allStop = () => { stopSr(); stopMedia(); stopUi(); holding = false; };
+
+    async function asrUpload(blob) {
+      hint('⏳ 转写中…');
+      const fd = new FormData();
+      fd.append('audio', blob, 'speech.webm');
+      const r = await fetch('/api/asr', { method: 'POST', headers: (typeof sjTokenHeaders === 'function' ? sjTokenHeaders() : {}), body: fd });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok || !j.ok) throw new Error(j.msg || ('HTTP ' + r.status));
+      return j.text || '';
+    }
+
+    async function mediaStart() {
+      if (!navigator.mediaDevices || !window.MediaRecorder) { allStop(); toast('此浏览器既不支持语音识别也不支持录音，请用 Edge / Chrome', 'warn'); return; }
+      mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaChunks = [];
+      const mime = MediaRecorder.isTypeSupported && MediaRecorder.isTypeSupported('audio/webm') ? 'audio/webm' : '';
+      mediaRec = new MediaRecorder(mediaStream, mime ? { mimeType: mime } : undefined);
+      mediaRec.ondataavailable = e => { if (e.data && e.data.size) mediaChunks.push(e.data); };
+      mediaRec.onstop = async () => {
+        const blob = new Blob(mediaChunks, { type: (mediaRec && mediaRec.mimeType) || 'audio/webm' });
+        stopMedia(); stopUi();
+        if (blob.size < 2000) { toast('没录到声音，请重试', 'warn'); return; }
+        try {
+          const text = await asrUpload(blob);
+          const inp = $('qaInput');
+          if (inp && text) { inp.value = (inp.value ? inp.value + ' ' : '') + text; qaSyncSendState(); toast('语音已转文字，可修改后发送'); }
+          else if (!text) toast('未识别到内容，请重试', 'warn');
+        } catch (e) { toast('服务器转写失败：' + (e.message || e), 'warn'); }
+      };
+      mediaRec.start();
+      micBtn.classList.add('rec');
+      hint('🎙 录音中（服务器转写）… 松开结束');
+    }
+
+    micBtn.addEventListener('contextmenu', e => e.preventDefault());
     micBtn.addEventListener('pointerdown', e => {
       e.preventDefault();
-      if (rec) return;
+      if (rec || mediaRec || holding) return;
+      holding = true;
       const SR = getSR();
-      if (!SR) { toast('当前浏览器不支持语音输入，请用 Edge / Chrome 打开', 'warn'); return; }
-      const inp = $('qaInput');
-      const base = inp.value;
-      try { rec = new SR(); } catch (e2) { toast('语音输入不可用', 'warn'); return; }
-      rec.lang = 'zh-CN';
-      rec.interimResults = true;
-      rec.continuous = false;
-      rec.onresult = ev => {
-        let txt = '';
-        for (let i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
-        inp.value = (base + txt).slice(0, 2000);
-        qaSyncSendState();
-      };
-      rec.onerror = ev => {
-        stopRec();
-        toast(ev && ev.error === 'not-allowed' ? '麦克风权限被拒绝' : '语音识别失败：' + (ev && ev.error || ''), 'warn');
-      };
-      rec.onend = () => stopRec();
-      try {
-        rec.start();
-        micBtn.classList.add('rec');
-        if (!document.getElementById('qaRecHint')) {
-          const h = document.createElement('div');
-          h.id = 'qaRecHint';
-          h.className = 'qa-rec-hint';
-          h.textContent = '🎙 正在听…松开结束';
-          document.querySelector('.qa-composer').appendChild(h);
-        }
-      } catch (e3) { rec = null; toast('语音输入启动失败', 'warn'); }
+      if (SR && !srBroken) {
+        const inp = $('qaInput');
+        const base = inp.value;
+        try { rec = new SR(); } catch (e2) { rec = null; srBroken = true; mediaStart().catch(err => { allStop(); toast('录音启动失败：' + err.message, 'warn'); }); return; }
+        rec.lang = 'zh-CN';
+        rec.interimResults = true;
+        rec.continuous = false;
+        rec.onresult = ev => {
+          let txt = '';
+          for (let i = ev.resultIndex; i < ev.results.length; i++) txt += ev.results[i][0].transcript;
+          inp.value = (base + txt).slice(0, 2000);
+          qaSyncSendState();
+        };
+        rec.onerror = ev => {
+          const err = ev && ev.error || '';
+          /* 权限拒绝在任何引擎下都一样，直接终止；服务性错误（aborted/network 等）
+             且仍按住 → 无缝切引擎B 继续录，同一次按住不浪费 */
+          if (err === 'not-allowed' || err === 'audio-capture') { allStop(); toast('麦克风权限被拒绝', 'warn'); return; }
+          if (holding) {
+            stopSr(); srBroken = true;
+            hint('⏳ 切换服务器转写…');
+            mediaStart().catch(err2 => { allStop(); toast('录音启动失败：' + err2.message, 'warn'); });
+          } else {
+            allStop();
+            toast('语音识别失败：' + err, 'warn');
+          }
+        };
+        rec.onend = () => { rec = null; if (!holding && !mediaRec) stopUi(); };
+        try {
+          rec.start();
+          micBtn.classList.add('rec');
+          hint('🎙 正在听…松开结束');
+        } catch (e3) { rec = null; srBroken = true; mediaStart().catch(err2 => { allStop(); toast('录音启动失败：' + err2.message, 'warn'); }); }
+      } else {
+        mediaStart().catch(err => { allStop(); toast('录音启动失败：' + err.message, 'warn'); });
+      }
     });
-    const endHandler = e => { if (rec) { e.preventDefault(); stopRec(); } };
+    const endHandler = e => {
+      if (!holding) return;
+      e.preventDefault();
+      holding = false;
+      if (rec) { try { rec.stop(); } catch (e2) { } rec = null; if (!mediaRec) stopUi(); }
+      else if (mediaRec && mediaRec.state !== 'inactive') { try { mediaRec.stop(); } catch (e3) { } }   // onstop 里上传+清UI
+      else stopUi();
+    };
     micBtn.addEventListener('pointerup', endHandler);
     micBtn.addEventListener('pointercancel', endHandler);
-    micBtn.addEventListener('pointerleave', () => { if (rec) stopRec(); });
+    micBtn.addEventListener('pointerleave', () => { if (holding) endHandler({ preventDefault() { } }); });
   }
 }
 /* 问答历史首载：登录后拉一次（放在 boot 之后，失败不影响其它模块） */
