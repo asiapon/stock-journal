@@ -1796,6 +1796,9 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
   line-height: 1.7; white-space: pre-wrap; word-break: break-word;
 }
 .msg.user { align-self: flex-end; background: var(--blue); color: #fff; }
+/* v3.17.1 图片提问：用户气泡里展示附件图片缩略图（点击看原图） */
+.qa-user-imgs { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.qa-user-img { width: 120px; max-height: 120px; object-fit: cover; border-radius: 8px; display: block; cursor: zoom-in; border: 1px solid rgba(255, 255, 255, .35); }
 .msg.assistant { align-self: flex-start; background: var(--bg); border: 1px solid var(--line); }
 /* 助手气泡要渲染 Markdown（块级元素），不能保留 pre-wrap 的空白语义 */
 .msg.assistant { white-space: normal; }

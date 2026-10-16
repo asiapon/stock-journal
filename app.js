@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.17.0';
+const APP_VER = '3.17.1';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -5232,6 +5232,29 @@ function renderQaSkillPick(filter) {
       + `<span class="sk-toggle${on ? ' on' : ''}" data-sid="${esc(s.id)}" title="点击${on ? '停用' : '启用'}">${on ? '启用中' : '已停用'}</span></button>`;
   }).join('');
 }
+/* v3.17.1 修复：v3.13.3 图片提问时把用户消息 content 存成了多模态数组
+   （text + image_url），但渲染层还在当纯字符串 esc(m.content) → 气泡显示
+   「[object Object],[object Object]」，renderQaJump 的 m.content.split 更是直接
+   TypeError。这里统一出口：文本取 text 段拼接，图片段转成 <img> 缩略图。 */
+function qaUserMsgParts(m) {
+  if (!Array.isArray(m.content)) return { text: String(m.content == null ? '' : m.content), imgs: [] };
+  return {
+    text: m.content.filter(p => p.type === 'text').map(p => p.text).join('\n'),
+    imgs: m.content.filter(p => p.type === 'image_url' && p.image_url && p.image_url.url)
+      .map(p => p.image_url.url),
+  };
+}
+function qaUserMsgText(m) {
+  return qaUserMsgParts(m).text;
+}
+function qaUserMsgHtml(m) {
+  const { text, imgs } = qaUserMsgParts(m);
+  const imgsHtml = imgs.map(u =>
+    /* v3.17.1 不用 <a target=_blank>：浏览器禁止顶层导航到 data: URL，点了没反应 */
+    `<img class="qa-user-img" src="${esc(u)}" alt="附件图片">`
+  ).join('');
+  return esc(text) + (imgsHtml ? `<div class="qa-user-imgs">${imgsHtml}</div>` : '');
+}
 function renderQaMessages() {
   const box = $('qaMessages');
   if (!box) return;
@@ -5245,7 +5268,8 @@ function renderQaMessages() {
        的凭证，所以单独走 toolNoteHtml 渲染，并用 .msg.note 的居中浅绿气泡样式区分开。 */
     if (m.role === 'tool') return `<div class="msg note">${toolNoteHtml(m)}</div>`;
     if (m.role === 'assistant') return `<div class="msg assistant">${qaMdToHtml(m.content)}</div>`;
-    if (m.role === 'user') { uidx += 1; return `<div class="msg ${m.role}" data-uidx="${uidx - 1}">${esc(m.content)}</div>`; }
+    /* v3.17.1 用户气泡走 qaUserMsgHtml：数组 content 正确显示文本+图片缩略图 */
+    if (m.role === 'user') { uidx += 1; return `<div class="msg ${m.role}" data-uidx="${uidx - 1}">${qaUserMsgHtml(m)}</div>`; }
     return `<div class="msg ${m.role}">${esc(m.content)}</div>`;
   }).join('');
   /* 正在生成的会话补一个流式气泡：切走再切回来，已生成的部分接着显示
@@ -5276,7 +5300,8 @@ function renderQaJump() {
   list.innerHTML = shown.length
     ? shown.map((m, i) => {
         const idx = qs.length - shown.length + i;
-        const t = m.content.split('\n')[0].replace(/📎.*$/, '').trim() || '（附件提问）';
+        /* v3.17.1 数组 content（图片提问）不能直接 split —— 走统一文本出口 */
+        const t = qaUserMsgText(m).split('\n')[0].replace(/📎.*$/, '').trim() || '（附件提问）';
         return `<button type="button" class="qa-jump-item" data-uidx="${idx}" title="${esc(t)}">${esc(t.length > 42 ? t.slice(0, 42) + '…' : t)}</button>`;
       }).join('')
       : '<div class="qa-jump-item" style="cursor:default">本会话还没有提问</div>';
@@ -5527,9 +5552,11 @@ async function sendQa() {
       toolBlock = '';
     }
     const sys = qaSysPrompt() + qaBuildContext() + (toolBlock ? '\n\n' + toolBlock : '');
+    /* v3.17.1 历史里的图片消息（数组 content）统一抽出纯文本：baseMsgs 走的是
+       非多模态请求，原样塞数组会让不支持多模态的模型报错或看不懂 */
     const history = myMsgs
       .filter(m => m.role === 'user' || m.role === 'assistant')
-      .slice(-9, -1).map(m => ({ role: m.role, content: m.content }));
+      .slice(-9, -1).map(m => ({ role: m.role, content: Array.isArray(m.content) ? qaUserMsgText(m) : m.content }));
     const baseMsgs = [{ role: 'system', content: sys }, ...history, { role: 'user', content: fullQuestion }];
     /* v3.13.3 带图版消息（多模态模型直接支持；不支持时顶层 catch 降级重试纯文本） */
     const withImgMsgs = imgFiles.length ? [{ role: 'system', content: sys }, ...history, {
