@@ -462,3 +462,57 @@
 2026-10-16T04:39:23.169Z | rpc | app_list_users | app_list_users | OK | 138ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
 2026-10-16T04:41:14.577Z | rpc | app_has_users | app_has_users | OK | 85ms | ok | {}
 2026-10-16T04:41:20.841Z | rpc | app_has_users | app_has_users | OK | 1ms | ok | {}
+2026-10-16T09:06:21.327Z | rpc | app_list_users | app_list_users | OK | 104ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T09:06:24.447Z | rpc | app_has_users | app_has_users | OK | 2ms | ok | {}
+2026-10-16T09:06:24.490Z | rpc | app_query | watchlist | OK | 15ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"watchlist"}
+2026-10-16T09:06:24.494Z | rpc | app_query | trades | OK | 18ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"trades"}
+2026-10-16T09:06:24.511Z | rpc | app_query | op_logs | OK | 3ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"op_logs"}
+2026-10-16T09:06:24.572Z | rpc | app_query | settings | OK | 93ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"settings"}
+2026-10-16T09:06:24.593Z | rpc | app_query | quotes | OK | 113ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"quotes"}
+2026-10-16T09:06:24.635Z | rpc | app_query | qa_history | OK | 5ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"qa_history"}
+2026-10-16T09:06:24.643Z | rpc | app_list_users | app_list_users | OK | 5ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T09:06:24.720Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T09:06:27.266Z | web | rpc | app_has_users | FAIL | 34ms | 
+2026-10-16T09:06:27.266Z | web | rpc | app_query | OK | 40ms | 
+2026-10-16T09:06:27.266Z | web | rpc | app_query | OK | 46ms | 
+2026-10-16T09:06:27.266Z | web | rpc | app_query | OK | 80ms | 
+2026-10-16T09:06:27.266Z | web | rpc | app_query | OK | 120ms | 
+2026-10-16T09:06:27.266Z | web | rpc | app_query | OK | 145ms | 
+2026-10-16T09:06:27.266Z | web | rpc | app_list_users | OK | 34ms |  | 总览/行情·刷新
+2026-10-16T09:06:27.266Z | web | quote | 东财 push2.eastmoney.com | OK | 38ms | 4/4 只 | 总览/行情·刷新
+2026-10-16T09:06:27.266Z | web | quote | 东财 指数快照 | OK | 35ms | 6/6 个 | 总览/行情·刷新
+2026-10-16T09:06:27.266Z | web | rpc | app_query | OK | 94ms | 
+2026-10-16T09:06:27.267Z | web | rpc | app_list_users | OK | 31ms | 
+2026-10-16T09:06:31.090Z | rpc | app_has_users | app_has_users | OK | 3ms | ok | {}
+2026-10-16T09:06:31.131Z | rpc | app_query | settings | OK | 2ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"settings"}
+2026-10-16T09:06:31.133Z | rpc | app_query | trades | OK | 1ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"trades"}
+2026-10-16T09:06:31.134Z | rpc | app_query | quotes | OK | 2ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"quotes"}
+2026-10-16T09:06:31.135Z | rpc | app_query | watchlist | OK | 2ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"watchlist"}
+2026-10-16T09:06:31.137Z | rpc | app_query | op_logs | OK | 2ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"op_logs"}
+2026-10-16T09:06:31.176Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"qa_history"}
+2026-10-16T09:06:31.188Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T09:06:31.265Z | rpc | app_list_users | app_list_users | OK | 2ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T09:06:33.803Z | web | rpc | app_has_users | FAIL | 39ms | 
+2026-10-16T09:06:33.803Z | web | rpc | app_query | OK | 32ms | 
+2026-10-16T09:06:33.803Z | web | rpc | app_query | OK | 44ms | 
+2026-10-16T09:06:33.803Z | web | rpc | app_query | OK | 45ms | 
+2026-10-16T09:06:33.803Z | web | rpc | app_query | OK | 45ms | 
+2026-10-16T09:06:33.803Z | web | rpc | app_query | OK | 44ms | 
+2026-10-16T09:06:33.803Z | web | quote | 东财 push2.eastmoney.com | OK | 39ms | 4/4 只 | 总览/行情·刷新
+2026-10-16T09:06:33.803Z | web | rpc | app_list_users | OK | 42ms |  | 总览/行情·刷新
+2026-10-16T09:06:33.803Z | web | rpc | app_query | OK | 70ms |  | 总览/行情·刷新
+2026-10-16T09:06:33.803Z | web | quote | 东财 指数快照 | OK | 39ms | 6/6 个 | 总览/行情·刷新
+2026-10-16T09:06:33.803Z | web | rpc | app_list_users | OK | 36ms | 
+2026-10-16T09:06:36.806Z | rpc | app_update | settings | OK | 85ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"settings","p_id":1,"p_data":{"value":"{\"cur\":\"c:mvah7h2rpdsq\"}"}}
+2026-10-16T09:06:39.349Z | web | rpc | app_update | OK | 127ms | 
+2026-10-16T09:06:51.082Z | rpc | app_insert | qa_history | OK | 128ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"qa_history","p_data":{"conversation_id":"cmvaqtxlxq42f3","question":"中兴通讯今天的行情和最新一期财务怎么样？和它的估值水平匹配吗？","answer":""}}
+2026-10-16T09:06:51.132Z | rpc | app_query | qa_history | OK | 3ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"qa_history"}
+2026-10-16T09:06:52.056Z | rpc | app_query | qa_history | OK | 2ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"qa_history"}
+2026-10-16T09:06:54.715Z | web | rpc | app_insert | OK | 167ms |  | 智能问答·market：中兴通讯今天的行情和最新一期财务怎么样？和它的估
+2026-10-16T09:06:54.716Z | web | dc | 腾讯批量行情(问答工具层) | OK | 0ms | 1/1 只 | 智能问答·market：中兴通讯今天的行情和最新一期财务怎么样？和它的估
+2026-10-16T09:06:54.716Z | web | dc | 腾讯分时 000063 | OK | 225ms | 267 行 | 智能问答·market：中兴通讯今天的行情和最新一期财务怎么样？和它的估
+2026-10-16T09:06:54.716Z | web | rpc | app_query | OK | 97ms |  | 智能问答·market：中兴通讯今天的行情和最新一期财务怎么样？和它的估
+2026-10-16T09:06:54.716Z | web | dc | 东财估值 000063 | OK | 234ms | 1 行 | 智能问答·market：中兴通讯今天的行情和最新一期财务怎么样？和它的估
+2026-10-16T09:06:54.716Z | web | dc | 东财评级预期 000063 | OK | 233ms | 1 行 | 智能问答·market：中兴通讯今天的行情和最新一期财务怎么样？和它的估
+2026-10-16T09:06:54.716Z | web | dc | 东财财务 000063 | OK | 276ms | 1 行 | 智能问答·market：中兴通讯今天的行情和最新一期财务怎么样？和它的估
+2026-10-16T09:06:54.716Z | web | rpc | app_query | OK | 47ms | 

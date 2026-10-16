@@ -108,12 +108,42 @@ const KLib = {
   },
 
   /* ---------- 取数 ---------- */
-  /* 最新已收盘交易日：拿一只活跃票的日K末根日期当「锚」（比日历推算可靠，避开节假日） */
+  /* v3.17.5 已收盘规则（用户明确约定）：≥15:00 收盘后 → 最新交易日含当天；
+     <15:00（盘中/午休）→ 当天的日 K 是没走完的「半根」（东财/腾讯盘中都会返回），
+     最新交易日 = 上一交易日。三个方法配合：todayStr / isPartial / pickClosed */
+  todayStr(now) {
+    now = now || new Date();
+    const p = n => String(n).padStart(2, '0');
+    return now.getFullYear() + '-' + p(now.getMonth() + 1) + '-' + p(now.getDate());
+  },
+  /* d（YYYY-MM-DD）是否为「今天盘中半根 K」 */
+  isPartial(d, now) {
+    now = now || new Date();
+    return now.getHours() < 15 && d === this.todayStr(now);
+  },
+  /* bars（紧凑数组，日期在下标 0）末根若是今天盘中半根 → 截掉，否则原样返回 */
+  stripPartial(bars, now) {
+    if (bars && bars.length && this.isPartial(bars[bars.length - 1][0], now)) return bars.slice(0, -1);
+    return bars;
+  },
+  /* 最新「已收盘」交易日：拿一只活跃票的日K末根日期当「锚」（比日历推算可靠，避开节假日），
+     再按已收盘规则修正 —— 盘中锚票末根=今天的半根，退回前一根。
+     bars 为对象形态（{d,...}）。旧写法直接返回末根日期，盘中会把 targetDate 抬到今天，
+     导致同步把半根写进库、筛选窗口整体前移一天。 */
+  pickClosed(bars, now) {
+    now = now || new Date();
+    if (!bars || !bars.length) return '';
+    const last = bars[bars.length - 1].d;
+    if (this.isPartial(last, now)) return bars.length > 1 ? bars[bars.length - 2].d : '';
+    return last;
+  },
   async targetDate() {
     const k = await fetchKlineEast('600519', 101, 5);
     const b = (k && k.bars) || [];
     if (!b.length) throw new Error('无法确定最新交易日（参考票 K 线未返回）');
-    return b[b.length - 1].d;
+    const d = this.pickClosed(b);
+    if (!d) throw new Error('无法确定最新已收盘交易日（参考票数据不足）');
+    return d;
   },
   /* 单只：东财优先（带成交额），腾讯兜底（无成交额 → 按 (O+H+L+C)/4×量 近似，入库时注明口径）。
      统一输出紧凑数组 [d,o,c,h,l,v,a] —— 库里只存这一种形状，算量/排序都吃数组。 */
@@ -155,11 +185,14 @@ const KLib = {
 
     const target = await this.targetDate();
 
-    /* ② 找出缺当日 / 数据不足 250 根的票 → 逐只补 */
+    /* ② 找出缺当日 / 数据不足 250 根的票 → 逐只补。
+       v3.17.5 追加：末根是「今天盘中半根」（旧版盘中同步留下的污染）的票也重拉 ——
+       拉回来 strip 掉半根后落库 = 干净地停在上一交易日，收盘后再同步自然补上全根。 */
     const need = [];
     for (const code of Object.keys(StockDict.d)) {
       const rec = map.get(code);
-      if (!rec || !rec.bars.length || rec.bars[rec.bars.length - 1][0] < target || rec.bars.length < 250) {
+      if (!rec || !rec.bars.length || rec.bars[rec.bars.length - 1][0] < target || rec.bars.length < 250
+        || this.isPartial(rec.bars[rec.bars.length - 1][0])) {
         need.push(code);
       }
     }
@@ -175,7 +208,10 @@ const KLib = {
           const code = need[i];
           try {
             const rec = await this.fetchOne(code);
-            if (rec.bars && rec.bars.length) { map.set(code, rec); okCnt++; }
+            /* v3.17.5 盘中拉回来的末根可能是今天半根（收盘价=当时最新价）→ 截掉不落库；
+               库里最多到上一交易日，收盘后再同步自然补全。 */
+            rec.bars = this.stripPartial(rec.bars || []);
+            if (rec.bars.length >= 30) { map.set(code, rec); okCnt++; }
             else failed.push(code);
           } catch (e) { failed.push(code); }
           fetched++;
@@ -274,7 +310,12 @@ const KLib = {
   async statusLine() {
     const meta = await this.metaGet();
     if (!meta.n) return { txt: '本机没有 K 线库，首次使用会自动回补（约 3-5 分钟）', n: 0 };
-    const stale = meta.targetDate && meta.targetDate < new Date().toISOString().slice(0, 10) ? '（可能缺最近交易日，建议同步）' : '';
+    /* v3.17.5 stale 提示按已收盘规则：15:00 前今天本来就没有收盘数据，不提示；
+       15:00 后库未到今天才提示。旧写法还误用了 UTC 日期（toISOString）比较，
+       东八区早上 8 点前会拿「昨天」当今天。 */
+    const nowD = new Date();
+    const stale = nowD.getHours() >= 15 && meta.targetDate && meta.targetDate < this.todayStr(nowD)
+      ? '（可能缺最近交易日，建议同步）' : '';
     return { txt: `本机 ${meta.n} 只 · 已到 ${meta.targetDate} · 同步于 ${new Date(meta.at).toLocaleString('zh-CN')}${stale}`, n: meta.n };
   },
 };

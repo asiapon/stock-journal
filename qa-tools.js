@@ -1401,12 +1401,19 @@ async function emScreener(query) {
         let mkt = null;
         try { mkt = await KLib.targetDate(); } catch (eK2) { mkt = null; }
         if (mkt) {
+          /* v3.17.5 盘中半根剔除：15:00 前末根=今天的 K 没走完，不能当已收盘数据
+             （库里的旧污染或盘中实时口径都一样处理）→ 剔除后再判「够根数、末根新鲜」 */
+          const nowD = new Date();
+          const inSession = nowD.getHours() < 15 && typeof KLib !== 'undefined' && KLib.todayStr;
+          const tdPartial = inSession ? KLib.todayStr(nowD) : '';
           const needOnline = [];
           const pre = {};
           for (const c of pool) {
             const rec = klibMap.get(c);
-            if (rec && rec.bars.length >= formBars && rec.bars[rec.bars.length - 1][0] >= mkt) {
-              pre[c] = rec.bars.slice(-formBars).map(b => ({ d: b[0], o: b[1], c: b[2], h: b[3], l: b[4], v: b[5] }));
+            let lb = rec && rec.bars;
+            if (lb && tdPartial && lb.length && lb[lb.length - 1][0] === tdPartial) lb = lb.slice(0, -1);
+            if (lb && lb.length >= formBars && lb[lb.length - 1][0] >= mkt) {
+              pre[c] = lb.slice(-formBars).map(b => ({ d: b[0], o: b[1], c: b[2], h: b[3], l: b[4], v: b[5] }));
             } else needOnline.push(c);
           }
           klibHit = Object.keys(pre).length;
@@ -1418,6 +1425,20 @@ async function emScreener(query) {
         }
       }
       if (!bk) bk = await fetchKlineBatch(pool, formBars, prog.update);
+      /* v3.17.5 在线拉回的数据同样剔除今天盘中半根（东财/腾讯盘中末根都是未完成 K），
+         必须在日历投票与 formMetric 之前做，否则排名口径前移一天 */
+      try {
+        if (typeof KLib !== 'undefined' && KLib.todayStr) {
+          const nowD2 = new Date();
+          if (nowD2.getHours() < 15) {
+            const td2 = KLib.todayStr(nowD2);
+            for (const c of Object.keys(bk.map)) {
+              const bs = bk.map[c];
+              if (bs.length && bs[bs.length - 1].d === td2) bk.map[c] = bs.slice(0, -1);
+            }
+          }
+        }
+      } catch (eS) { /* 剔除失败不影响主流程 */ }
       if (klibMap && klibMap.size > 500 && !klibHit) klibStaleHint = true;   // 有库但一只都没接上 = 库没跟上最新交易日
     }
     finally { prog.end(); }

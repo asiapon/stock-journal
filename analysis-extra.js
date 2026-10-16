@@ -2572,6 +2572,22 @@ const momOpts = { n: 3, topN: 1000, volK: 1.1, minAmountYi: 0.5, rpsMin: 0, near
 /* data: Map(code -> {name, bars})，bars 紧凑数组 [d,o,c,h,l,v,a]
    返回 {hits, stats:{universe, targetDate}}，hits 按 N 日累计涨幅降序 */
 function momComputeLocal(data, o) {
+  /* v3.17.5 盘中半根剔除（用户规则：≥15:00 才算收盘，<15:00 最新交易日=上一交易日）：
+     15:00 前，末根=今天的 K 是没走完的半根（东财/腾讯盘中都返回，旧版盘中同步也可能
+     已把它写进库）——绝不能当已收盘数据参与排名/日历投票。入口统一剔除（建副本，
+     不动 KLib 内存快照本体）。 */
+  const nowD = new Date();
+  if (nowD.getHours() < 15 && typeof KLib !== 'undefined' && KLib.todayStr) {
+    const td = KLib.todayStr(nowD);
+    let cut = false;
+    const m2 = new Map();
+    for (const [c, rec] of data) {
+      let b = rec.bars;
+      if (b.length && b[b.length - 1][0] === td) { b = b.slice(0, -1); cut = true; }
+      m2.set(c, { name: rec.name, bars: b });
+    }
+    if (cut) data = m2;
+  }
   /* ① 确定目标交易日 = 全库最晚末根日期；只统计「当天有交易」的票（停牌票名次无法对齐） */
   let targetDate = '';
   for (const rec of data.values()) {
