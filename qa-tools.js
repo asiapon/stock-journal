@@ -872,7 +872,8 @@ function parseFormConds(t) {
 }
 
 // 单只股票的某个形态指标值（null = 数据不够，直接淘汰）
-function formMetric(c, bars) {
+// calTail（可选）：市场交易日历（降序，[0]=最新），由池内全票末段日期投票得出 —— 「连续 N 日」用
+function formMetric(c, bars, calTail) {
   const n = bars.length;
   if (!n || n < 5) return null;
   const i = n - 1;
@@ -900,6 +901,14 @@ function formMetric(c, bars) {
       return a / b;
     }
     case 'streak': {
+      /* v3.17.4 连续 N 日按「市场交易日历」对齐：本票在窗口内任一交易日缺 bar（停牌）
+         → 直接淘汰，绝不把跨了停牌日的「伪连涨」当真。无日历可考（旧数据形状）时退回旧行为。 */
+      if (calTail) {
+        for (let j = 0; j <= c.n; j++) {
+          const b2 = bars[bars.length - 1 - j];
+          if (!b2 || b2.d !== calTail[j]) return null;
+        }
+      }
       let cnt = 0;
       for (let k = i; k > 0; k--) {
         const up = closes[k] > closes[k - 1], dn = closes[k] < closes[k - 1];
@@ -1360,7 +1369,7 @@ async function emScreener(query) {
   }
   // ---- 形态 / 区间条件：逐只拉日 K 逐个股算（免费、无需 Key）----
   forms.forEach(function (c, i) { c._id = 'f' + i; });
-  let hits = hit, formFail = [], formScanned = 0, formBars = 0;
+  let hits = hit, formFail = [], formScanned = 0, formBars = 0, klibHit = 0, klibStaleHint = false;
   if (forms.length) {
     const pool = hit.map(function (x) { return x.code; });
     if (pool.length > FORM_MAX) {
@@ -1381,18 +1390,67 @@ async function emScreener(query) {
       }, 0) + 60));
     const prog = formProgressStart(pool.length);
     let bk;
-    try { bk = await fetchKlineBatch(pool, formBars, prog.update); }
+    try {
+      /* v3.17.4 K 线库优先：本机/云端 KLib 已覆盖所需根数且末根不旧于市场最新交易日
+         → 零外呼直算（整库在内存，5573 只也是毫秒级）；缺票 / 根数不足（如「历史新高」
+         要 500 根 > 库的 280）/ 未同步到最新交易日 → 仅这些票回落在线拉。
+         库读取或对日失败都整体回落全在线路径，绝不因库挂掉阻断选股。 */
+      let klibMap = null;
+      try { if (typeof KLib !== 'undefined') klibMap = await KLib.all(); } catch (eK) { klibMap = null; }
+      if (klibMap && klibMap.size > 500) {
+        let mkt = null;
+        try { mkt = await KLib.targetDate(); } catch (eK2) { mkt = null; }
+        if (mkt) {
+          const needOnline = [];
+          const pre = {};
+          for (const c of pool) {
+            const rec = klibMap.get(c);
+            if (rec && rec.bars.length >= formBars && rec.bars[rec.bars.length - 1][0] >= mkt) {
+              pre[c] = rec.bars.slice(-formBars).map(b => ({ d: b[0], o: b[1], c: b[2], h: b[3], l: b[4], v: b[5] }));
+            } else needOnline.push(c);
+          }
+          klibHit = Object.keys(pre).length;
+          prog.update(klibHit, pool.length);
+          const rest = needOnline.length
+            ? await fetchKlineBatch(needOnline, formBars, (d, t) => prog.update(klibHit + d, pool.length))
+            : { map: {}, fail: [] };
+          bk = { map: Object.assign(pre, rest.map), fail: rest.fail, total: pool.length };
+        }
+      }
+      if (!bk) bk = await fetchKlineBatch(pool, formBars, prog.update);
+      if (klibMap && klibMap.size > 500 && !klibHit) klibStaleHint = true;   // 有库但一只都没接上 = 库没跟上最新交易日
+    }
     finally { prog.end(); }
     formScanned = Object.keys(bk.map).length;
     formFail = bk.fail;
     if (!formScanned) throw new Error('日 K 接口本次一只都没取到（可能是网络波动或临时限流），请稍后重试');
+    /* v3.17.4 市场交易日历（供「连续 N 日」对齐）：按「尾位逐位投票」—— 第 j 位（末根
+       往前数）取池内出现最多的日期，停牌票的错位日期票数少赢不了多数。降序，[0]=最新。 */
+    const streakMax = forms.reduce(function (s, c) { return c.k === 'streak' ? Math.max(s, c.n) : s; }, 0);
+    let calTail = null;
+    if (streakMax) {
+      calTail = [];
+      for (let j = 0; j <= streakMax; j++) {
+        const f = new Map();
+        for (const bars2 of Object.values(bk.map)) {
+          const p = bars2.length - 1 - j;
+          if (p < 0) continue;
+          const d = bars2[p].d;
+          f.set(d, (f.get(d) || 0) + 1);
+        }
+        let bd = '', bc = -1;
+        for (const e of f) if (e[1] > bc || (e[1] === bc && e[0] > bd)) { bd = e[0]; bc = e[1]; }
+        if (!bd) { calTail = null; break; }
+        calTail.unshift(bd);
+      }
+    }
     const passed = [];
     hit.forEach(function (rec) {
       const bars = bk.map[rec.code];
       if (!bars) return;
       const val = {};
       for (const fc of forms) {
-        const v = formMetric(fc, bars);
+        const v = formMetric(fc, bars, calTail);
         if (v == null) return;                    // 数据不足 → 淘汰，不猜
         val[fc._id] = v;
         if (fc.sortOnly) continue;                // 只作排序键的条件不参与筛选
@@ -1459,13 +1517,16 @@ async function emScreener(query) {
   if (qMap) dataNote += '腾讯实时行情（' + todayStr() + '）';
   if (valDate) dataNote += (dataNote ? ' ＋ ' : '') + '估值 ' + valDate;
   if (perfDate) dataNote += (dataNote ? ' ＋ ' : '') + '业绩 ' + perfDate;
-  if (forms.length) dataNote += (dataNote ? ' ＋ ' : '') + '腾讯日 K（每只 ' + formBars + ' 根）';
+  if (forms.length) dataNote += (dataNote ? ' ＋ ' : '') + (klibHit
+    ? 'K线库直算 ' + klibHit + ' 只' + (formScanned > klibHit ? '＋在线补 ' + (formScanned - klibHit) + ' 只' : '')
+    : '腾讯日 K（每只 ' + formBars + ' 根）');
   const cap = '命中 ' + Math.min(hits.length, p.top) + ' 只（共命中 ' + hits.length + ' 只 / 候选 ' + wholeMkt + ' 只'
     + (dataNote ? ' · ' + dataNote : '') + '）｜范围：' + mktLabel
     + '\n筛选条件：' + desc + '｜数据来源：免费公开接口（东方财富数据中心 + 腾讯行情），不需要任何 Key'
     + (forms.length ? '\n形态口径：涨幅 / 均线 / 均量 / 连阳 / 新高 / 回撤均按前复权日 K 收盘价算，均线取最新一根；本次扫描 '
       + formScanned + ' 只' + (formFail.length ? '（' + formFail.length + ' 只取数失败已跳过）' : '') : '')
-    + (p.unsupported.length ? '\n⚠️ 未纳入筛选：' + p.unsupported.join('、') + '（当前数据源不覆盖这些指标，本次结果未考虑它们）' : '');
+    + (p.unsupported.length ? '\n⚠️ 未纳入筛选：' + p.unsupported.join('、') + '（当前数据源不覆盖这些指标，本次结果未考虑它们）' : '')
+    + (klibStaleHint ? '\n💡 本机K线库没跟上最新交易日（本次全部在线拉）。到「分析 → 动量筛选」同步一次K线库后，这类问题即可秒出' : '');
   return {
     proto: 'SCREEN', text: '',
     tables: [{

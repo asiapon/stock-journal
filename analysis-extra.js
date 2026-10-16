@@ -2580,11 +2580,43 @@ function momComputeLocal(data, o) {
   }
   if (!targetDate) return { hits: [], stats: { universe: 0, targetDate: '' } };
   const minLen = Math.max(o.n + 2, o.rpsMin > 0 ? 121 : 0, o.nearHighPct < 0 ? 61 : 0, o.maBull ? 61 : 0);
+  /* v3.17.4 市场交易日历：连续 N 日必须对齐「同一组交易日」。
+     旧写法按「各票自己的末 N 根」取索引，窗口内停牌的票日期错位 —— 会把不同交易日的
+     涨幅混进同一个名次 cohort（比如拿周三的涨幅跟周四的全市场比，名次是假的）。
+     现按「尾位逐位投票」选日历：第 j 位（末根往前数）取全库出现最多的日期 ——
+     停牌缺位的票日期错位但票数少，赢不了多数。得到窗口 N+1 个交易日
+     （N 个窗口日 + 窗口前一日）。用户明确约定：窗口内任一天缺数据的票直接剔除，
+     绝不静默错位。 */
+  const wd = [];
+  for (let j = 0; j <= o.n; j++) {
+    const f = new Map();
+    for (const rec of data.values()) {
+      const b = rec.bars, p = b.length - 1 - j;
+      if (p < 0) continue;
+      const d = b[p][0];
+      f.set(d, (f.get(d) || 0) + 1);
+    }
+    if (!f.size) return { hits: [], stats: { universe: 0, targetDate } };
+    let bd = '', bc = -1;
+    for (const [d, c] of f) if (c > bc || (c === bc && d > bd)) { bd = d; bc = c; }
+    wd.unshift(bd);
+  }
+  if (wd[o.n] !== targetDate) return { hits: [], stats: { universe: 0, targetDate } };
   const uni = [];
   for (const [code, rec] of data) {
     const b = rec.bars;
     if (!b.length || b[b.length - 1][0] !== targetDate || b.length < minLen) continue;
-    uni.push({ code, name: rec.name || '', bars: b });
+    /* v3.17.4 窗口内任一交易日缺 bar（停牌）→ 剔除；ix = 各日历日在本票 bars 里的下标 */
+    const ix = new Array(o.n + 1);
+    let full = true;
+    for (let j = 0; j <= o.n; j++) {
+      let lo = 0, hi = b.length - 1, found = -1;
+      while (lo <= hi) { const mid = (lo + hi) >> 1; if (b[mid][0] === wd[j]) { found = mid; break; } if (b[mid][0] < wd[j]) lo = mid + 1; else hi = mid - 1; }
+      if (found < 0) { full = false; break; }
+      ix[j] = found;
+    }
+    if (!full) continue;
+    uni.push({ code, name: rec.name || '', bars: b, ix });
   }
   const uniN = uni.length;
   if (!uniN) return { hits: [], stats: { universe: 0, targetDate } };
@@ -2595,8 +2627,8 @@ function momComputeLocal(data, o) {
   for (let k = 0; k < o.n; k++) {
     const arr = [];
     for (const s of uni) {
-      const i = s.bars.length - o.n + k;
-      const prev = s.bars[i - 1][2], cur = s.bars[i][2];
+      /* v3.17.4 按日历取收盘：第 k 个窗口日 = wd[k+1]（升序），其前一日 = wd[k] */
+      const prev = s.bars[s.ix[k]][2], cur = s.bars[s.ix[k + 1]][2];
       arr.push([s.code, prev > 0 ? (cur / prev - 1) * 100 : -1e9]);
     }
     arr.sort((a, b) => b[1] - a[1]);
@@ -2631,17 +2663,17 @@ function momComputeLocal(data, o) {
     const days = [];
     let pass = true;
     for (let k = 0; k < o.n; k++) {
-      const i = L - o.n + k;
-      const pct = b[i - 1][2] > 0 ? (b[i][2] / b[i - 1][2] - 1) * 100 : -1e9;
+      const ic = s.ix[k + 1], ip = s.ix[k];
+      const pct = b[ip][2] > 0 ? (b[ic][2] / b[ip][2] - 1) * 100 : -1e9;
       const rank = dayRank[k].get(s.code);
       if (!(rank <= o.topN)) { pass = false; break; }
-      days.push({ d: b[i][0], pct, rank, rankExact: true });
+      days.push({ d: b[ic][0], pct, rank, rankExact: true });
     }
     if (!pass) continue;
-    /* 量能递增 */
+    /* 量能递增（v3.17.4 同样按日历对齐，停牌错位票进不到这里） */
     for (let k = 1; k < o.n; k++) {
-      const i = L - o.n + k;
-      if (o.volK > 0 && !(b[i][5] >= b[i - 1][5] * o.volK)) { pass = false; break; }
+      const ic = s.ix[k + 1], ip = s.ix[k];
+      if (o.volK > 0 && !(b[ic][5] >= b[ip][5] * o.volK)) { pass = false; break; }
     }
     if (!pass) continue;
     /* RPS 门槛 */
@@ -2662,11 +2694,11 @@ function momComputeLocal(data, o) {
       if (!(c > ma(5) && ma(5) > ma(10) && ma(10) > ma(20) && ma(20) > ma(60))) continue;
     }
 
-    const base = b[L - o.n - 1][2];
+    const base = b[s.ix[0]][2];   /* v3.17.4 窗口前一日（日历对齐）；旧 b[L-n-1] 在窗口内停牌的票上会错位 */
     hits.push({
       code: s.code, name: s.name, price: last[2], amount: amtYi, targetDate,
       days, cum: base > 0 ? (last[2] / base - 1) * 100 : 0,
-      volRatio: b[L - o.n][5] > 0 ? last[5] / b[L - o.n][5] : 0,
+      volRatio: b[s.ix[0]][5] > 0 ? last[5] / b[s.ix[0]][5] : 0,
       rps, distHigh,
     });
   }
