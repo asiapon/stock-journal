@@ -8,7 +8,7 @@
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
 <title>操作日记</title>
-<link rel="stylesheet" href="style.css?v=3.14.3">
+<link rel="stylesheet" href="style.css?v=3.15.0">
 </head>
 <body>
 
@@ -397,6 +397,10 @@
           <div id="qaHistoryList" class="qa-history"></div>
         </aside>
         <div class="qa-main card">
+          <div class="qa-mtop">
+            <button id="qaDrawerBtn" class="btn ghost sm" type="button">☰ 会话<span id="qaDrawerBadge" class="qa-drawer-badge" hidden></span></button>
+            <button id="qaNewBtnM" class="btn ghost sm" type="button">＋ 新对话</button>
+          </div>
           <div id="qaMessages" class="qa-messages"></div>
           <div class="qa-composer">
             <div id="qaExPanel" class="qa-ex-panel" hidden></div>
@@ -419,8 +423,9 @@
                 <button id="qaPlusBtn" class="qa-tool-btn qa-plus-btn" title="添加：文件 / 技能" type="button">＋</button>
                 <button id="qaExBtn" class="qa-tool-btn" title="示例问题（随时点开）" type="button">💡</button>
                 <div class="qa-toolbar-right">
-                  <button id="qaMicBtn" class="qa-tool-btn" title="语音输入" type="button">
-                    <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 18v4"/></svg>
+                  <button id="qaMicBtn" class="qa-tool-btn" title="语音输入：按住说话" type="button">
+                    <svg class="mic-glyph" viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10v1a7 7 0 0 0 14 0v-1"/><path d="M12 18v4"/></svg>
+                    <span class="mic-bars"><i></i><i></i><i></i><i></i></span>
                   </button>
                   <button id="qaSendBtn" class="qa-send-btn" title="发送" type="button">
                     <svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 19V5"/><path d="M5 12l7-7 7 7"/></svg>
@@ -431,7 +436,6 @@
                 </div>
               </div>
             </div>
-            <div class="qa-src-bar"><span class="qa-src-hint" id="qaSrcHint"></span></div>
             <input type="file" id="qaFileInput" hidden multiple accept=".txt,.csv,.md,.json,.log,.yml,.yaml,.xml,.html,.htm,.py,.js,.ts,.sql,.ini,.conf,image/*">
           </div>
         </div>
@@ -443,6 +447,17 @@
           <div id="qaJumpList" class="qa-jump-list"></div>
         </aside>
       </div>
+      <!-- v3.15.0 手机抽屉：≤720px 时左侧会话列表隐藏，点顶栏 ☰ 滑出 -->
+      <div id="qaDrawerMask" hidden></div>
+      <aside id="qaDrawer" hidden>
+        <div class="qa-drawer-head">
+          <b>会话</b>
+          <button id="qaDrawerClose" class="qa-ex-close" type="button" title="收起">✕</button>
+        </div>
+        <input id="qaSearchM" class="search-input" placeholder="🔍 搜索历史问答" autocomplete="off">
+        <button id="qaNewBtnM" class="btn ghost sm block" type="button">＋ 新对话</button>
+        <div id="qaHistoryListM" class="qa-history"></div>
+      </aside>
     </section>
 
     <!-- ============ 设置 ============ -->
@@ -879,12 +894,12 @@
 </div>
 
 <script src="https://cdn.jsdelivr.net/npm/@tencent-ai/workbuddy-cloud-sdk@dev/lib/index.global.js"></script>
-<script src="app.js?v=3.14.3"></script>
-<script src="kline-store.js?v=3.14.3"></script>
-<script src="analysis-extra.js?v=3.14.3"></script>
+<script src="app.js?v=3.15.0"></script>
+<script src="kline-store.js?v=3.15.0"></script>
+<script src="analysis-extra.js?v=3.15.0"></script>
 <!-- v3.9.7 智能问答工具层：选股 / 行情 / 财务 / 诊断 / 回测等取数能力。
      必须排在 analysis-extra.js 之后 —— 它直接复用后者挂在全局词法作用域上的
      state / fmtWan / parseJsonLoose / marketOf / qSnapshot / computePositions。 -->
-<script src="qa-tools.js?v=3.14.3"></script>
+<script src="qa-tools.js?v=3.15.0"></script>
 </body>
 </html>

@@ -399,3 +399,44 @@
 2026-10-16T02:22:19.113Z | web | kline | 腾讯K线 | OK | 45ms | sz002343 week 180根 | 个股诊断·002343
 2026-10-16T02:22:26.128Z | web | dict | 板块字典 board-dict.json | OK | 37ms | 803 个板块 | 分析页·市场热度
 2026-10-16T02:22:26.128Z | web | quote | 腾讯 全市场快照(qt.gtimg.cn) | OK | 320ms | 5573/5573 只 · 70 批 | 分析页·市场热度
+2026-10-16T03:00:26.361Z | rpc | app_has_users | app_has_users | OK | 230ms | ok | {}
+2026-10-16T03:00:26.394Z | rpc | app_query | trades | OK | 29ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-16T03:00:26.567Z | rpc | app_query | settings | OK | 199ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-16T03:00:26.633Z | rpc | app_query | quotes | OK | 266ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-16T03:00:26.647Z | rpc | app_query | watchlist | OK | 281ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-16T03:00:26.658Z | rpc | app_query | op_logs | OK | 287ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-16T03:00:26.668Z | rpc | app_query | qa_history | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-16T03:00:26.695Z | rpc | app_list_users | app_list_users | OK | 7ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T03:00:27.182Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T03:00:27.851Z | rpc | app_has_users | app_has_users | OK | 1ms | ok | {}
+2026-10-16T03:00:27.862Z | rpc | app_query | watchlist | OK | 1ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"watchlist"}
+2026-10-16T03:00:27.866Z | rpc | app_query | trades | OK | 5ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"trades"}
+2026-10-16T03:00:27.871Z | rpc | app_query | quotes | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"quotes"}
+2026-10-16T03:00:27.872Z | rpc | app_query | settings | OK | 3ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"settings"}
+2026-10-16T03:00:27.877Z | rpc | app_query | op_logs | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"op_logs"}
+2026-10-16T03:00:27.888Z | rpc | app_query | qa_history | OK | 4ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d","p_table":"qa_history"}
+2026-10-16T03:00:27.904Z | rpc | app_list_users | app_list_users | OK | 6ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T03:00:28.087Z | rpc | app_list_users | app_list_users | OK | 2ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T03:00:30.592Z | web | rpc | app_has_users | FAIL | 10ms | 
+2026-10-16T03:00:30.592Z | web | rpc | app_query | OK | 18ms | 
+2026-10-16T03:00:30.592Z | web | rpc | app_query | OK | 17ms | 
+2026-10-16T03:00:30.592Z | web | rpc | app_query | OK | 17ms | 
+2026-10-16T03:00:30.592Z | web | rpc | app_query | OK | 9ms | 
+2026-10-16T03:00:30.592Z | web | rpc | app_query | OK | 7ms | 
+2026-10-16T03:00:30.592Z | web | rpc | app_query | OK | 72ms |  | 总览/行情·刷新
+2026-10-16T03:00:30.592Z | web | rpc | app_list_users | OK | 59ms |  | 总览/行情·刷新
+2026-10-16T03:00:30.592Z | web | quote | 东财 push2.eastmoney.com | OK | 122ms | 4/4 只 | 总览/行情·刷新
+2026-10-16T03:00:30.592Z | web | quote | 东财 指数快照 | OK | 58ms | 6/6 个 | 总览/行情·刷新
+2026-10-16T03:00:30.592Z | web | rpc | app_list_users | OK | 5ms | 
+2026-10-16T03:20:22.690Z | rpc | app_list_users | app_list_users | OK | 210ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T03:20:25.196Z | web | quote | 东财 push2.eastmoney.com | OK | 135ms | 4/4 只 | 总览/行情·刷新(强刷)
+2026-10-16T03:20:25.196Z | web | quote | 东财 指数快照 | OK | 73ms | 6/6 个 | 总览/行情·刷新(强刷)
+2026-10-16T03:20:25.196Z | web | rpc | app_list_users | OK | 213ms | 
+2026-10-16T03:30:09.287Z | rpc | app_list_users | app_list_users | OK | 105ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T03:30:11.808Z | web | quote | 东财 push2.eastmoney.com | OK | 104ms | 4/4 只 | 总览/行情·刷新(强刷)
+2026-10-16T03:30:11.808Z | web | quote | 东财 指数快照 | OK | 15ms | 6/6 个 | 总览/行情·刷新(强刷)
+2026-10-16T03:30:11.808Z | web | rpc | app_list_users | OK | 125ms | 
+2026-10-16T03:32:46.085Z | rpc | app_list_users | app_list_users | OK | 78ms | ok | {"p_token":"d6cfa5bd864840cc6af5848763c54705128d"}
+2026-10-16T03:32:48.589Z | web | quote | 东财 push2.eastmoney.com | OK | 177ms | 4/4 只 | 总览/行情·刷新(强刷)
+2026-10-16T03:32:48.589Z | web | quote | 东财 指数快照 | OK | 48ms | 6/6 个 | 总览/行情·刷新(强刷)
+2026-10-16T03:32:48.589Z | web | rpc | app_list_users | OK | 82ms | 

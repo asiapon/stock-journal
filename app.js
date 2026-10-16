@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.14.3';
+const APP_VER = '3.15.0';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -4641,6 +4641,7 @@ const qaState = {
   stream: {},        // cid -> 已生成的文本
   files: [],         // 待发送附件 [{name, text, image}]
   loaded: false,
+  unread: new Set(), // v3.15.0 手机抽屉角标：非当前会话生成完成、还没看过的
 };
 
 function qaNewId() {
@@ -5216,6 +5217,14 @@ function bindQaJump() {
 }
 
 /* ---------- 渲染：左侧历史列表 ---------- */
+/* v3.15.0 手机抽屉未读角标（顶层：sendQa 与抽屉开关都要调） */
+function qaRenderDrawerBadge() {
+  const b = $('qaDrawerBadge');
+  if (!b) return;
+  const n = qaState.unread ? qaState.unread.size : 0;
+  b.hidden = !n;
+  b.textContent = n;
+}
 function renderQaHistory() {
   const list = $('qaHistoryList');
   if (!list) return;
@@ -5241,11 +5250,16 @@ function renderQaHistory() {
     .sort((a, b) => b.at - a.at)
     .map(c => ({ id: c.id, title: c.title }));
   const finalList = extra.concat(convs);
-  list.innerHTML = finalList.length
+  const html = finalList.length
     ? finalList.map(c => `<div class="qa-hist-item${c.id === qaState.conversationId ? ' active' : ''}">`
         + `<span class="qa-hist-main" data-qa-open="${esc(c.id)}">💬 ${esc(c.title)}</span>`
         + `<span class="qa-hist-del" title="删除该会话" data-qa-del="${esc(c.id)}">✕</span></div>`).join('')
     : '<div class="qa-empty-tip" style="font-size:12.5px">暂无历史问答</div>';
+  list.innerHTML = html;
+  /* v3.15.0 手机抽屉里的会话列表同步渲染（桌面隐藏，≤720px 显示） */
+  const listM = $('qaHistoryListM');
+  if (listM) listM.innerHTML = html;
+  qaRenderDrawerBadge();
 }
 
 /* ---------- 附件 ---------- */
@@ -5305,13 +5319,7 @@ function qaSyncSendState() {
   const has = !!(inp && inp.value.trim()) || qaState.files.length > 0;
   btn.disabled = busy || !has;
   if (stop) stop.hidden = !busy;
-  const hint = $('qaSrcHint');
-  if (hint) {
-    hint.classList.remove('err');
-    if (busy) hint.textContent = '正在生成…可点右侧 ■ 中断';
-    else if (!ModelMgr.cur) hint.textContent = '尚未选择模型，请到「设置 → AI 模型」选择后再提问';
-    else hint.textContent = `当前模型：${ModelMgr.shortLabel ? ModelMgr.shortLabel(ModelMgr.cur) : (ModelMgr.cur.id || '')}`;
-  }
+  /* v3.15.0 「当前模型」行按需求删除：qa-src-bar 已从页面移除，这里不再填充 */
 }
 function qaLocalSet(cid, title) {
   /* 顺手清掉之前建过、但一直没用过的空会话，免得「新对话」项越堆越多 */
@@ -5547,6 +5555,12 @@ async function sendQa() {
     delete qaState.busyConvs[convId];
     delete qaState.controllers[convId];
     delete qaState.stream[convId];
+    /* v3.15.0 非当前会话生成完成 → 计入抽屉未读角标 */
+    if (qaState.conversationId !== convId && answer) {
+      qaState.unread = qaState.unread || new Set();
+      qaState.unread.add(convId);
+      qaRenderDrawerBadge();
+    }
     qaSyncSendState();
   }
 
@@ -5642,6 +5656,32 @@ function initQa() {
     const inp = $('qaInput');
     if (inp) inp.focus();
   });
+  /* v3.15.0 手机抽屉：☰ 开关 / 遮罩关闭 / 新对话（角标渲染函数在顶层，sendQa 也要用） */
+  const drawer = $('qaDrawer'), mask = $('qaDrawerMask');
+  function qaOpenDrawer() {
+    if (!drawer) return;
+    drawer.hidden = false;
+    if (mask) mask.hidden = false;
+    qaState.unread.clear();
+    qaRenderDrawerBadge();
+    renderQaHistory();
+  }
+  function qaCloseDrawer() {
+    if (drawer) drawer.hidden = true;
+    if (mask) mask.hidden = true;
+  }
+  $('qaDrawerBtn').addEventListener('click', () => { drawer.hidden ? qaOpenDrawer() : qaCloseDrawer(); });
+  if (mask) mask.addEventListener('click', qaCloseDrawer);
+  $('qaDrawerClose').addEventListener('click', qaCloseDrawer);
+  $('qaNewBtnM').addEventListener('click', () => {
+    qaAttach(qaNewId());
+    renderQaMessages();
+    renderQaHistory();
+    qaSyncSendState();
+    qaCloseDrawer();
+    const inp = $('qaInput');
+    if (inp) { inp.focus(); }
+  });
   $('qaSearch').addEventListener('input', renderQaHistory);
   $('qaSendBtn').addEventListener('click', sendQa);
   const stopBtn = $('qaStopBtn');
@@ -5650,13 +5690,16 @@ function initQa() {
   $('qaInput').addEventListener('keydown', e => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendQa(); }
   });
-  /* 历史列表：事件委托（内容随渲染重建） */
-  $('qaHistoryList').addEventListener('click', e => {
+  /* 历史列表：事件委托（内容随渲染重建）—— 桌面列表与手机抽屉列表共用同一委托 */
+  const histHandler = e => {
     const open = e.target.closest('[data-qa-open]');
-    if (open) { qaLoadConversation(open.dataset.qaOpen); return; }
+    if (open) { qaLoadConversation(open.dataset.qaOpen); qaCloseDrawer(); return; }
     const del = e.target.closest('[data-qa-del]');
     if (del) { qaDeleteConversation(del.dataset.qaDel); }
-  });
+  };
+  $('qaHistoryList').addEventListener('click', histHandler);
+  const listM = $('qaHistoryListM');
+  if (listM) listM.addEventListener('click', histHandler);
   /* 附件（v3.13.1 起入口在「＋」菜单里，独立 📎 按钮已移除） */
   $('qaFileInput').addEventListener('change', async e => {
     for (const f of Array.from(e.target.files || [])) await qaAddFile(f);

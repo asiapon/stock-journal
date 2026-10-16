@@ -2057,3 +2057,27 @@ select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px v
 }
 .qa-tool-btn.rec { color: var(--up, #d93a2b) !important; background: #fef2f2; animation: qaPulse 1.2s infinite; touch-action: none; user-select: none; -webkit-user-select: none; }
 .qa-plus-btn, .qa-tool-btn { touch-action: manipulation; user-select: none; -webkit-user-select: none; }
+/* v3.15.0 输入区重排 + 手机抽屉 */
+.qa-src-bar { display: none; }
+.qa-mtop { display: none; align-items: center; gap: 8px; margin-bottom: 6px; }
+.qa-drawer-badge { display: inline-flex; min-width: 16px; height: 16px; padding: 0 4px; border-radius: 8px; background: #185FA5; color: #fff; font-size: 10px; align-items: center; justify-content: center; margin-left: 4px; }
+.qa-tool-btn .mic-glyph { display: block; }
+.qa-tool-btn .mic-bars { display: none; align-items: flex-end; gap: 2.5px; height: 16px; }
+.qa-tool-btn.rec .mic-glyph { display: none; }
+.qa-tool-btn.rec .mic-bars { display: inline-flex; }
+.qa-tool-btn.rec .mic-bars i { width: 3.5px; background: #E24B4A; border-radius: 2px; animation: micbar 0.9s ease-in-out infinite; }
+.qa-tool-btn.rec .mic-bars i:nth-child(1) { height: 8px; }
+.qa-tool-btn.rec .mic-bars i:nth-child(2) { height: 15px; animation-delay: 0.15s; }
+.qa-tool-btn.rec .mic-bars i:nth-child(3) { height: 11px; animation-delay: 0.3s; }
+.qa-tool-btn.rec .mic-bars i:nth-child(4) { height: 16px; animation-delay: 0.45s; }
+@keyframes micbar { 0%, 100% { transform: scaleY(0.45); } 50% { transform: scaleY(1); } }
+.qa-tool-btn.rec { color: #E24B4A; background: #FCEBEB; border-color: #F09595; }
+#qaDrawerMask { position: fixed; inset: 0; background: rgba(15, 23, 42, 0.35); z-index: 300; }
+#qaDrawer { position: fixed; top: 0; left: 0; bottom: 0; width: min(78vw, 320px); background: var(--card, #fff); z-index: 310; box-shadow: 0 0 40px rgba(15, 23, 42, 0.2); display: flex; flex-direction: column; gap: 10px; padding: 14px 12px; overflow-y: auto; }
+.qa-drawer-head { display: flex; align-items: center; justify-content: space-between; }
+#qaHistoryListM { flex: 1; display: flex; flex-direction: column; gap: 4px; }
+@media (max-width: 720px) {
+  .qa-mtop { display: flex; }
+  .qa-side { display: none; }
+  .qa-main { height: calc(100vh - var(--nav-h) - 110px); }
+}
