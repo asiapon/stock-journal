@@ -441,3 +441,24 @@
 2026-10-16T03:32:48.589Z | web | quote | 东财 指数快照 | OK | 48ms | 6/6 个 | 总览/行情·刷新(强刷)
 2026-10-16T03:32:48.589Z | web | rpc | app_list_users | OK | 82ms | 
 2026-10-16T04:30:52.095Z | rpc | app_has_users | app_has_users | OK | 23ms | ok | {}
+2026-10-16T04:34:07.258Z | rpc | app_has_users | app_has_users | OK | 10ms | ok | {}
+2026-10-16T04:34:15.177Z | rpc | app_has_users | app_has_users | OK | 1ms | ok | {}
+2026-10-16T04:34:25.341Z | rpc | app_login | app_login | OK | 129ms | ok | {"p_username":"admin","p_password":"admin123"}
+2026-10-16T04:34:25.425Z | rpc | app_query | trades | OK | 14ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"trades"}
+2026-10-16T04:34:25.464Z | rpc | app_query | quotes | OK | 4ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"quotes"}
+2026-10-16T04:34:25.495Z | rpc | app_query | watchlist | OK | 81ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"watchlist"}
+2026-10-16T04:34:25.496Z | rpc | app_query | settings | OK | 5ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"settings"}
+2026-10-16T04:34:25.530Z | rpc | app_query | op_logs | OK | 4ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"op_logs"}
+2026-10-16T04:34:25.573Z | rpc | app_query | qa_history | OK | 4ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"qa_history"}
+2026-10-16T04:34:25.598Z | rpc | app_list_users | app_list_users | OK | 3ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T04:34:26.825Z | rpc | app_list_users | app_list_users | OK | 1ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T04:35:29.882Z | rpc | app_list_users | app_list_users | OK | 85ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T04:36:34.937Z | rpc | app_list_users | app_list_users | OK | 73ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T04:36:48.214Z | rpc | app_list_users | app_list_users | OK | 81ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T04:37:04.410Z | rpc | app_list_users | app_list_users | OK | 97ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T04:37:06.678Z | rpc | app_insert | settings | OK | 95ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003","p_table":"settings","p_data":{"key":"model_custom","value":"[{\"key\":\"mvah7h2rpdsq\",\"name\":\"ds\",\"baseUrl\":\"https://api.deepseek.com\",\"model\":\"deepseek-flash\",\"apiKey\":\"sk-4d5643b9dd744d18b5af9248d97ff9a2\"}]"}}
+2026-10-16T04:37:46.542Z | rpc | app_list_users | app_list_users | OK | 87ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T04:39:01.593Z | rpc | app_list_users | app_list_users | OK | 78ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T04:39:23.169Z | rpc | app_list_users | app_list_users | OK | 138ms | ok | {"p_token":"a56f222d378c7977ba90898ca5e94ee5d003"}
+2026-10-16T04:41:14.577Z | rpc | app_has_users | app_has_users | OK | 85ms | ok | {}
+2026-10-16T04:41:20.841Z | rpc | app_has_users | app_has_users | OK | 1ms | ok | {}

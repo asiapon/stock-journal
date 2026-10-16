@@ -88,7 +88,7 @@ function inferMarket(code) {
   return 'sz';
 }
 const MKT_NAME = { sh: '沪市', sz: '深市', bj: '北交所', bse: '北交所' };
-const APP_VER = '3.15.1';
+const APP_VER = '3.15.2';
 
 /* v3.8.44 分组行「动作按钮」图标：与导航图标同一套线框风格（24 格 / 1.6 描边 / 圆角）
    folderPlus = 新建分组，trash = 删除当前分组。v3.8.45 起与短词并排使用。 */
@@ -916,7 +916,8 @@ const ModelMgr = {
     } else if (saved && !this.loaded) {
       this.cur = null;          // 目录还没就绪：保留 savedId，等 reload 后再解析
     } else {
-      this.cur = all[0] || null;
+      /* v3.15.2 没有保存选择时：优先选第一个「自定义模型」（用户自己的 Key），否则第一个可用 */
+      this.cur = this.custom[0] || all[0] || null;
       if (this.cur) { this.savedId = this.modelId(this.cur); localStorage.setItem('sj_model_cur', this.savedId); }
     }
   },
@@ -980,16 +981,22 @@ const ModelMgr = {
         : '';
       inner = grp(this.platform.map(m => Object.assign({ platform: true }, m)), 'WorkBuddy 平台模型（消耗平台积分）')
             + grp(this.custom.map(c => Object.assign({ custom: true }, c)), '自定义模型（自己的 API Key）');
+      /* v3.15.2 未选择时放一个占位项，别让浏览器默认选中第一项造成「看起来选了」 */
+      if (!this.cur) inner = '<option value="" selected>— 请选择模型 —</option>' + inner;
     }
     for (const selId of ['modelCurSel']) {
       const sel = $(selId); if (!sel) continue;
       sel.innerHTML = inner;
-      if (this.cur) sel.value = this.modelId(this.cur);
+      sel.value = this.cur ? this.modelId(this.cur) : '';
       sel.disabled = !all.length;
     }
-    /* 顶栏：只读展示当前模型，未配置时提示 */
+    /* 顶栏：只读展示当前模型，未配置时提示（v3.15.2 点击直达 设置 → 模型） */
     const badge = $('modelBadge');
-    if (badge) badge.textContent = this.cur ? this.shortLabel(this.cur) : '未配置';
+    if (badge) {
+      badge.textContent = this.cur ? this.shortLabel(this.cur) : '未配置';
+      badge.style.cursor = 'pointer';
+      badge.onclick = () => { switchView('me'); switchSetPane('model'); };
+    }
     const st = $('modelStatus');
     if (st) st.textContent = this.loaded
       ? `云端模型 ${this.platform.length} 个、自定义 ${this.custom.length} 个。模型用于「记一笔」AI 解析，云端模型免密钥直接调用。`
@@ -1363,11 +1370,14 @@ async function enterApp(user) {
     ? '数据存储：WorkBuddy 云数据库（按账号隔离，跨设备同步）'
     : '数据存储：浏览器 localStorage（仅本机，请定期导出备份）';
   await loadAll();
-  /* 模型初始化：先同步云端配置 → 缓存渲染 → 后台刷新目录（云端为权威，同 trade-manager） */
-  if (!cloudLlm) cloudLlm = initCloudLlm();
+  /* 模型初始化：先同步云端配置 → 缓存渲染 → 后台刷新目录（云端为权威，同 trade-manager）
+     v3.15.2 每一步独立容错 —— 此前 initCloudLlm 在自托管域名抛错会让整个模型初始化中断，
+     徽章永远停在 HTML 默认的「未配置」（设置页里模型明明已添加/选中）。 */
+  if (!cloudLlm) { try { cloudLlm = initCloudLlm(); } catch (e) { console.warn('[model] 云端 LLM 初始化失败（自托管部署属正常现象，自定义模型不受影响）'); } }
   ModelMgr.loadCache(); ModelMgr.loadCustom();
-  ModelMgr.applyCloudConfig();
-  ModelMgr.loadCur(); ModelMgr.render();
+  try { ModelMgr.applyCloudConfig(); } catch (e) { console.warn('[model] 云端配置合并失败', e); }
+  try { ModelMgr.loadCur(); } catch (e) { console.warn('[model] 当前模型恢复失败', e); }
+  try { ModelMgr.render(); } catch (e) { console.warn('[model] 渲染失败', e); }
   /* v3.9.0 智能问答初始化：必须在 loadAll 之后 —— 它要读 S.trades / S.watchlist
      组织上下文。initQa 里绑事件只做一次（重复登录不能重复绑），
      qaBoot 拉云端历史，失败不影响应用其它部分。
@@ -2833,9 +2843,12 @@ function bindEvents() {
     };
     ModelMgr.custom.push(m);
     ModelMgr.saveCustom();
-    if (!ModelMgr.cur) ModelMgr.setCur(ModelMgr.modelId(m)); else ModelMgr.render();
+    /* v3.15.2 添加后自动启用。注意必须用 'c:' + key 字符串 —— 此前传原始对象给
+       modelId()，对象上没有 custom 标记，生成的是 'p:undefined'，setCur 永远找不到，
+       「配了 DeepSeek 却还在用旧模型/显示未配置」的真凶就是它 */
+    ModelMgr.setCur('c:' + m.key);
     $('cmName').value = $('cmBaseUrl').value = $('cmModel').value = $('cmApiKey').value = '';
-    toast('自定义模型已添加');
+    toast('自定义模型已添加并启用：' + m.name);
   });
   $('customModelList').addEventListener('click', e => {
     const b = e.target.closest('.cm-del');
